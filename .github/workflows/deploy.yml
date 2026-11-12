@@ -1,4 +1,4 @@
-name: Bootstrap, build and deploy FALA English
+name: Bootstrap and deploy FALA English
 
 on:
   push:
@@ -25,20 +25,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore complete FALA source tree
+      - name: Restore FALA source tree when the transfer bundle is present
         run: |
-          mkdir -p /tmp/fala-v2
-          cat bootstrap/fala-source-*.b64 | base64 --decode > /tmp/fala-v2.zip
-          unzip -q /tmp/fala-v2.zip -d /tmp/fala-v2
-          cp -a /tmp/fala-v2/fala-superapp/. .
-          rm -f bootstrap/fala-source-*.b64
-          rmdir bootstrap || true
+          if compgen -G "bootstrap/fala-source-*.b64" > /dev/null; then
+            mkdir -p /tmp/fala-v2
+            cat bootstrap/fala-source-*.b64 | base64 --decode > /tmp/fala-v2.zip
+            unzip -q /tmp/fala-v2.zip -d /tmp/fala-v2
+            cp -a /tmp/fala-v2/fala-superapp/. .
+            rm -f bootstrap/fala-source-*.b64
+            rmdir bootstrap || true
+          else
+            echo "Source tree already restored; continuing to build."
+          fi
 
-      - name: Publish normal source tree to GitHub
+      - name: Commit the restored source tree
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
+          git reset -- .github/workflows/deploy.yml || true
           if ! git diff --cached --quiet; then
             git commit -m "chore: publish FALA SuperApp source tree"
             git push origin HEAD:main
