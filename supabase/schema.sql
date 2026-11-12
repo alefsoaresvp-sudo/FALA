@@ -135,3 +135,33 @@ alter table public.learner_insights enable row level security;
 drop policy if exists "Learners can manage their own insights" on public.learner_insights;
 create policy "Learners can manage their own insights" on public.learner_insights for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 grant select, insert, update, delete on public.learner_insights to authenticated;
+
+
+-- Interactive situation-based learning paths. One row per learner and module.
+create table if not exists public.track_progress (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  track_id text not null check (char_length(track_id) between 1 and 80),
+  completed_lessons integer[] not null default '{}',
+  exam_score integer check (exam_score is null or (exam_score between 0 and 100)),
+  exam_passed boolean not null default false,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, track_id)
+);
+
+create index if not exists track_progress_user_updated_idx
+  on public.track_progress(user_id, updated_at desc);
+
+alter table public.track_progress enable row level security;
+drop policy if exists "Learners can manage their own track progress" on public.track_progress;
+create policy "Learners can manage their own track progress"
+  on public.track_progress for all to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+grant select, insert, update, delete on public.track_progress to authenticated;
+
+-- Keep AI mode accounting compatible with image-based writing review on existing projects.
+alter table public.ai_usage_events drop constraint if exists ai_usage_events_mode_check;
+alter table public.ai_usage_events
+  add constraint ai_usage_events_mode_check
+  check (mode in ('conversation', 'writing', 'writing_image', 'plan', 'activity', 'evaluate'));
