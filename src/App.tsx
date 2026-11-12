@@ -947,8 +947,9 @@ function App() {
   const recommendedTrack = learningTracks.find(item => item.goals.includes(profile?.goal ?? 'conversation')) ?? learningTracks[0]
   const musicSet = useMemo(() => profile ? readMusicSet(profile) : null, [profile])
   const dailyCompleteCount = dailyChecks.filter(Boolean).length
-  const dailyStepMinutes = [Math.max(1,Math.round(profile.minutes*.25)),Math.max(1,Math.round(profile.minutes*.42)),0]
-  dailyStepMinutes[2] = Math.max(1,profile.minutes-dailyStepMinutes[0]-dailyStepMinutes[1])
+  const dailyMinutes = profile?.minutes ?? 10
+  const dailyStepMinutes = [Math.max(1,Math.round(dailyMinutes*.25)),Math.max(1,Math.round(dailyMinutes*.42)),0]
+  dailyStepMinutes[2] = Math.max(1,dailyMinutes-dailyStepMinutes[0]-dailyStepMinutes[1])
 
   const toggleDailyCheck = (index: number) => {
     const updated = [...dailyChecks]
