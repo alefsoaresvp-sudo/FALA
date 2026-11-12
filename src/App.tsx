@@ -445,6 +445,25 @@ function App() {
   const [learnerStats, setLearnerStats] = useState<LearnerStats>({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
   const [recentMistakes, setRecentMistakes] = useState<string[]>([])
   const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
+  const [darkTheme, setDarkTheme] = useState(() => localStorage.getItem(themeKey) === 'dark')
+  const [trackProgress, setTrackProgress] = useState<Record<string, TrackProgress>>(() => readTrackProgress())
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
+  const [trackMode, setTrackMode] = useState<'overview' | 'lesson' | 'exam'>('overview')
+  const [trackLessonIndex, setTrackLessonIndex] = useState(0)
+  const [trackChoice, setTrackChoice] = useState<number | null>(null)
+  const [trackResponse, setTrackResponse] = useState('')
+  const [trackFeedback, setTrackFeedback] = useState('')
+  const [trackEvaluation, setTrackEvaluation] = useState<ActivityEvaluation | null>(null)
+  const [trackBusy, setTrackBusy] = useState(false)
+  const [trackExamAnswers, setTrackExamAnswers] = useState<Record<number, number>>({})
+  const [trackExamScore, setTrackExamScore] = useState<number | null>(null)
+  const [dailyChecks, setDailyChecks] = useState<boolean[]>(() => readDailyAgenda())
+  const [musicAnswer, setMusicAnswer] = useState('')
+  const [musicFeedback, setMusicFeedback] = useState('')
+  const [writingPhoto, setWritingPhoto] = useState<File | null>(null)
+  const [writingPhotoPreview, setWritingPhotoPreview] = useState<string | null>(null)
+  const [writingPhotoFeedback, setWritingPhotoFeedback] = useState('')
+  const [photoBusy, setPhotoBusy] = useState(false)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -619,6 +638,17 @@ function App() {
       if (insights?.length) setLearnerInsights(insights as LearnerInsight[])
       const { data: messages } = await supabase.from('chat_messages').select('role,content,metadata').eq('user_id', userId).order('created_at', { ascending: true }).limit(30)
       if (messages?.length) setChat(messages.map(item => ({ role: item.role as 'user' | 'assistant', text: item.content, note: item.metadata?.correction })))
+      const { data: savedTracks, error: tracksError } = await supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', userId)
+      if (!tracksError && savedTracks?.length) {
+        const restoredTracks: Record<string, TrackProgress> = { ...trackProgress }
+        for (const row of savedTracks) restoredTracks[row.track_id] = { completed_lessons: row.completed_lessons ?? [], exam_score: row.exam_score ?? null, exam_passed: !!row.exam_passed }
+        setTrackProgress(restoredTracks)
+        localStorage.setItem(trackProgressKey, JSON.stringify(restoredTracks))
+      } else if (!tracksError) {
+        for (const [trackId, progress] of Object.entries(trackProgress)) {
+          await supabase.from('track_progress').upsert({ user_id: userId, track_id: trackId, ...progress, updated_at: new Date().toISOString() }, { onConflict: 'user_id,track_id' })
+        }
+      }
       setAccountReady(true)
     } catch (error) {
       console.error('Account hydration failed', error)
@@ -651,6 +681,13 @@ function App() {
     setAuthMessage(error ? error.message : 'Você saiu da conta. O modo demonstração continua disponível.')
   }
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat])
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkTheme ? 'dark' : 'light'
+    localStorage.setItem(themeKey, darkTheme ? 'dark' : 'light')
+  }, [darkTheme])
+  useEffect(() => {
+    localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: dailyChecks }))
+  }, [dailyChecks])
   useEffect(() => {
     if (!supabase) return
     void supabase.auth.getSession().then(({ data }) => {
@@ -903,6 +940,135 @@ function App() {
   }
 
   const resetProfile = () => { localStorage.removeItem(profileKey); setProfile(null); setShowSettings(false) }
+
+  const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
+  const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? { completed_lessons: [], exam_score: null, exam_passed: false }) : { completed_lessons: [], exam_score: null, exam_passed: false }
+  const musicSet = useMemo(() => profile ? readMusicSet(profile) : null, [profile])
+  const dailyCompleteCount = dailyChecks.filter(Boolean).length
+
+  const toggleDailyCheck = (index: number) => {
+    const updated = [...dailyChecks]
+    updated[index] = !updated[index]
+    setDailyChecks(updated)
+    localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: updated }))
+  }
+  const updateTrackProgress = (trackId: string, nextProgress: TrackProgress) => {
+    const updated = { ...trackProgress, [trackId]: nextProgress }
+    setTrackProgress(updated)
+    localStorage.setItem(trackProgressKey, JSON.stringify(updated))
+    const backend = supabase
+    if (backend) void backend.auth.getUser().then(({ data }) => {
+      if (data.user) return backend.from('track_progress').upsert({
+        user_id: data.user.id, track_id: trackId, ...nextProgress, updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,track_id' })
+    }).then(result => { if (result?.error) console.error('Track progress sync failed', result.error) })
+  }
+  const openTrack = (trackId: string) => {
+    setActiveTrackId(trackId); setTrackMode('overview'); setTrackFeedback('')
+    setTrackEvaluation(null); setTrackExamAnswers({}); setTrackExamScore(null)
+  }
+  const startTrackLesson = (index: number) => {
+    setTrackLessonIndex(index); setTrackMode('lesson'); setTrackChoice(null)
+    setTrackResponse(''); setTrackFeedback(''); setTrackEvaluation(null); setTranscript('')
+  }
+  const completeTrackLesson = async () => {
+    if (!activeTrack) return
+    const lesson = activeTrack.lessons[trackLessonIndex]
+    if (lesson.kind === 'choice') {
+      if (trackChoice === null) { setTrackFeedback('Escolha uma resposta para continuar.'); return }
+      if (trackChoice !== lesson.correct_index) { setTrackFeedback('Ainda não. Releia a situação e tente outra opção.'); return }
+    } else {
+      const answer = lesson.kind === 'speak' ? transcript.trim() : trackResponse.trim()
+      if (lesson.kind === 'speak' && !answer) { setTrackFeedback('Grave sua tentativa antes de concluir esta etapa.'); return }
+      if (lesson.kind === 'write' && answer.split(/\s+/).filter(Boolean).length < 5) { setTrackFeedback('Escreva pelo menos cinco palavras para praticar uma resposta completa.'); return }
+      const backend = supabase
+      if (backend) {
+        const { data: session } = await backend.auth.getSession()
+        if (session.session?.access_token) {
+          setTrackBusy(true); setTrackFeedback('A Lumi está avaliando esta resposta...')
+          try {
+            const { data, error } = await backend.functions.invoke('tutor', { body: {
+              mode: 'evaluate', message: answer,
+              activity: { activity_type: lesson.kind === 'speak' ? 'roleplay' : 'complete_sentence', title: lesson.title, question: lesson.question, expected_answer: lesson.expected_answer || lesson.target_phrase, target_phrase: lesson.target_phrase, context: lesson.scenario },
+              profile, learningEvidence: { skillScores: learnerStats.skillScores, recentMistakes, previousInsights: learnerInsights.map(item => item.observation) },
+            } })
+            if (error) throw error
+            const evaluation = data?.structured as ActivityEvaluation | undefined
+            if (!evaluation || typeof evaluation.score !== 'number') throw new Error('Invalid evaluation')
+            setTrackEvaluation(evaluation)
+            if (evaluation.score < 55) { setTrackFeedback('Revise a correção da Lumi e tente novamente. A etapa ainda não foi liberada.'); return }
+            await backend.from('activity_attempts').insert({
+              user_id: session.session.user.id, activity_type: lesson.kind, skill: lesson.kind === 'write' ? 'writing' : 'speaking',
+              interest_context: activeTrack.title, prompt: lesson.question, learner_answer: answer, correction: evaluation, score: evaluation.score,
+            })
+            await backend.from('learning_sessions').insert({ user_id: session.session.user.id, activity_type: lesson.kind === 'write' ? 'writing' : 'speaking', duration_seconds: 240, score: evaluation.score, details: { track_id: activeTrack.id, lesson: lesson.title } })
+          } catch (error) {
+            console.error('Track lesson evaluation failed', error)
+            setTrackFeedback('A avaliação da Lumi falhou. Você pode tentar novamente ou concluir a prática sem nota no modo local.')
+            return
+          } finally { setTrackBusy(false) }
+        } else {
+          setTrackFeedback('Prática local: a resposta foi feita, mas a correção detalhada exige uma conta conectada.')
+        }
+      } else {
+        setTrackFeedback('Prática local concluída. A correção automática será ativada quando a conta e a IA estiverem conectadas.')
+      }
+    }
+    const completed = [...new Set([...activeTrackProgress.completed_lessons, trackLessonIndex])].sort((a,b)=>a-b)
+    updateTrackProgress(activeTrack.id, { ...activeTrackProgress, completed_lessons: completed })
+    if (supabase) void supabase.auth.getUser().then(({ data }) => {
+      if (data.user) return supabase.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 240, details: { track_id: activeTrack.id, lesson: lesson.title } })
+    })
+    setTrackMode('overview')
+  }
+  const submitTrackExam = () => {
+    if (!activeTrack) return
+    if (Object.keys(trackExamAnswers).length !== activeTrack.exam.length) { setTrackFeedback('Responda às cinco questões antes de enviar a mini prova.'); return }
+    const correct = activeTrack.exam.filter((item,index) => trackExamAnswers[index] === item.correct_index).length
+    const score = Math.round(correct / activeTrack.exam.length * 100)
+    setTrackExamScore(score)
+    const passed = score >= 70
+    updateTrackProgress(activeTrack.id, { ...activeTrackProgress, exam_score: score, exam_passed: passed })
+    setTrackFeedback(passed ? 'Módulo concluído. Você atingiu o mínimo de 70% nesta mini prova.' : 'Você ainda não atingiu 70%. Revise as etapas e tente novamente.')
+    if (supabase) void supabase.auth.getUser().then(({ data }) => {
+      if (data.user) return supabase.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 300, score, details: { track_id: activeTrack.id, exam: true } })
+    })
+  }
+  const analyzeWritingPhoto = async () => {
+    if (!writingPhoto) { setWritingPhotoFeedback('Escolha ou fotografe uma página do seu exercício primeiro.'); return }
+    const backend = supabase
+    if (!backend) { setWritingPhotoFeedback('A análise por imagem exige a conta conectada e a função da Lumi implantada.'); return }
+    const { data: session } = await backend.auth.getSession()
+    if (!session.session?.access_token) { setWritingPhotoFeedback('Entre na sua conta para enviar a foto com segurança à Lumi.'); return }
+    setPhotoBusy(true); setWritingPhotoFeedback('Preparando a imagem e enviando para análise segura...')
+    try {
+      if (!['image/jpeg','image/png','image/webp'].includes(writingPhoto.type)) throw new Error('Use uma imagem JPG, PNG ou WEBP. Converta fotos HEIC para JPG antes de enviar.')
+      const bitmap = await createImageBitmap(writingPhoto)
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Não foi possível preparar a imagem neste navegador.')
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      bitmap.close()
+      const blob = await new Promise<Blob>((resolve,reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Falha ao comprimir a foto.')), 'image/jpeg', 0.84))
+      const imageDataUrl = await new Promise<string>((resolve,reject) => {
+        const reader = new FileReader()
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Falha ao ler a imagem.'))
+        reader.onerror = () => reject(new Error('Falha ao ler a imagem.'))
+        reader.readAsDataURL(blob)
+      })
+      const { data, error } = await backend.functions.invoke('tutor', { body: { mode:'writing_image', imageDataUrl, profile, message: writingText.trim() } })
+      if (error) throw error
+      if (typeof data?.reply !== 'string' || !data.reply.trim()) throw new Error('A Lumi não retornou uma análise válida.')
+      setWritingPhotoFeedback(data.reply)
+      await backend.from('learning_sessions').insert({ user_id: session.session.user.id, activity_type:'writing', duration_seconds:300, details:{ source:'photo', mime_type:'image/jpeg' } })
+    } catch (error) {
+      console.error('Photo writing analysis failed', error)
+      setWritingPhotoFeedback(error instanceof Error ? error.message : 'Não foi possível analisar a foto. Tente outra imagem, com melhor iluminação e foco.')
+    } finally { setPhotoBusy(false) }
+  }
 
   if (!profile) return <Onboarding onComplete={completeOnboarding} />
 
