@@ -943,6 +943,8 @@ function App() {
 
   const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
   const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? { completed_lessons: [], exam_score: null, exam_passed: false }) : { completed_lessons: [], exam_score: null, exam_passed: false }
+  const activeTrackLesson = activeTrack ? activeTrack.lessons[trackLessonIndex] ?? null : null
+  const recommendedTrack = learningTracks.find(item => item.goals.includes(profile?.goal ?? 'conversation')) ?? learningTracks[0]
   const musicSet = useMemo(() => profile ? readMusicSet(profile) : null, [profile])
   const dailyCompleteCount = dailyChecks.filter(Boolean).length
 
@@ -1089,6 +1091,11 @@ function App() {
         {page === 'home' && <>
           <div className="welcome-row"><div><div className="eyebrow muted">{todayLabel} · SUA ROTINA DE INGLÊS</div><h1>Olá, {firstName}. <em>Vamos praticar?</em></h1><p>Um passo de cada vez. Hoje, foque no que você quer conseguir falar.</p></div><div className="daily-target"><span className="target-icon"><Target size={19} /></span><span><small>SUA META DIÁRIA</small><strong>{profile.minutes} minutos</strong></span></div></div>
           <section className="hero-practice"><div className="hero-copy"><div className="hero-tag"><Sparkles size={13} /> SUGERIDO PARA VOCÊ</div><h2>Seu inglês precisa<br />sair do papel.</h2><p>A Lumi transforma seus interesses em situações reais, acompanha suas dificuldades e adapta o próximo passo.</p><div className="hero-actions"><button className="primary-button" onClick={() => setPage('learn')}>Começar prática <ArrowRight size={17} /></button><span className="duration"><Clock3 size={14} /> {profile.minutes} min</span></div></div><div className="hero-visual"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="chat-bubble bubble-a">How was your day?</div><div className="voice-visual"><AudioLines size={48} strokeWidth={1.2} /></div><div className="chat-bubble bubble-b">Pretty good, thanks!</div><span className="visual-caption">SPEAK · LISTEN · LEARN</span></div></section>
+          <section className="panel daily-agenda-panel">
+            <div className="panel-heading"><div><span className="eyebrow muted">ROTINA DE HOJE</span><h3>Três passos para usar inglês de verdade</h3></div><span className="panel-badge">{dailyCompleteCount}/3 concluídos</span></div>
+            <div className="daily-agenda-progress"><i style={{width:(dailyCompleteCount/3*100)+'%'}}/></div>
+            <div className="daily-agenda-grid">{dailySteps.map((step,index)=>{const Icon=step.icon;return <article className={'daily-agenda-step'+(dailyChecks[index]?' done':'')} key={step.title}><div className="daily-step-top"><span className="daily-step-icon"><Icon size={17}/></span><small>{step.minutes} MIN</small></div><strong>{step.title}</strong><p>{step.detail}</p><div className="daily-step-actions"><button className="text-link" onClick={()=>{if(index===1)openTrack(recommendedTrack.id);setPage(step.page)}}>{index===1?'Abrir trilha':'Começar'} <ArrowRight size={13}/></button><button className="daily-check-button" onClick={()=>toggleDailyCheck(index)}>{dailyChecks[index]?<CheckCircle2 size={16}/>:<Check size={16}/>} {dailyChecks[index]?'Feito':'Marcar feito'}</button></div></article>})}</div>
+          </section>
           <section className="panel lumi-plan-card">
             <div className="lumi-card-avatar lumi-mascot" aria-label="Lumi"><span>L</span><i /></div>
             <div className="lumi-card-content"><span className="eyebrow muted">A LUMI PERSONALIZOU PARA VOCÊ</span><h3>{dailyActivity?.title || `Sua trilha começa com ${profile.interests[0] || 'seus objetivos'}`}</h3><p>{planSummary || `Vamos praticar inglês usando temas como ${profile.customInterest || profile.interests.join(', ') || 'situações reais'}.`}</p><div className="interest-chips">{profile.interests.slice(0,4).map(item=><span key={item}>{interestOptions.find(x=>x.id===item)?.title || item}</span>)}{profile.customInterest && <span>{profile.customInterest}</span>}</div></div>
