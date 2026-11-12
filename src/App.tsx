@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, AudioLines, Award, BookOpen, Bookmark, BriefcaseBusiness,
-  CalendarDays, Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, CircleHelp,
-  Clock3, Flame, GraduationCap, Headphones, Home, ImagePlus, Languages, Lightbulb,
+  Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, CircleHelp,
+  Clock3, Flame, Headphones, Home, Languages, Lightbulb,
   LockKeyhole, Map, MessageCircle, Mic, MicOff, Moon, Music2, PlayCircle, Plus,
   RotateCcw, Send, Settings2, ShoppingBag, Sparkles, Sun, Target, Trophy, Utensils,
   Users, Volume2, WandSparkles, X,
@@ -102,12 +102,12 @@ function readProfile(): Profile | null {
     }
   } catch { return null }
 }
-function speakText(text: string, accent: 'us' | 'uk' = 'us') {
+function speakText(text: string, accent: 'us' | 'uk' = 'us', rate = 0.88) {
   if (!('speechSynthesis' in window)) return
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = accent === 'uk' ? 'en-GB' : 'en-US'
-  utterance.rate = 0.88
+  utterance.rate = Math.max(0.55, Math.min(1.15, rate))
   window.speechSynthesis.speak(utterance)
 }
 function greetingName(name: string) { return name.trim() ? name.trim().split(' ')[0] : 'estudante' }
@@ -1018,8 +1018,9 @@ function App() {
     }
     const completed = [...new Set([...activeTrackProgress.completed_lessons, trackLessonIndex])].sort((a,b)=>a-b)
     updateTrackProgress(activeTrack.id, { ...activeTrackProgress, completed_lessons: completed })
-    if (supabase) void supabase.auth.getUser().then(({ data }) => {
-      if (data.user) return supabase.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 240, details: { track_id: activeTrack.id, lesson: lesson.title } })
+    const backendForSession = supabase
+    if (backendForSession) void backendForSession.auth.getUser().then(({ data }) => {
+      if (data.user) return backendForSession.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 240, details: { track_id: activeTrack.id, lesson: lesson.title } })
     })
     setTrackMode('overview')
   }
