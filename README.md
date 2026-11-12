@@ -6,7 +6,9 @@ O FALA é um MVP de aprendizagem de inglês com interface responsiva. Esta prime
 
 ## Abrir o aplicativo
 
-Depois que o deploy do GitHub Pages terminar, acesse:
+Para publicar pela primeira vez, abra **Settings → Pages** neste repositório e, em **Build and deployment → Source**, selecione **GitHub Actions**. O workflow `.github/workflows/deploy.yml` já está no repositório e fará a publicação automática nos próximos pushes.
+
+Depois que a execução do workflow terminar com sucesso, acesse:
 
 https://alefsoaresvp-sudo.github.io/FALA/
 
