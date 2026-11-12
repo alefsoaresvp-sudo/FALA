@@ -1,4 +1,4 @@
-name: Build and deploy FALA English
+name: Deploy FALA English
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -24,76 +24,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Remove temporary transfer bundle and apply Supabase type guards
-        run: |
-          rm -f bootstrap/fala-source-*.b64
-          rmdir bootstrap 2>/dev/null || true
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/App.tsx")
-          source = path.read_text()
-
-          replacements = [
-              (
-                  "    if (supabase && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {",
-                  "    const backend = supabase\n    if (backend && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {",
-              ),
-              (
-                  "await supabase.functions.invoke('transcribe', { body: form })",
-                  "await backend.functions.invoke('transcribe', { body: form })",
-              ),
-              (
-                  "const { data: userData } = await supabase.auth.getUser()\n              if (userData.user) await supabase.from('learning_sessions')",
-                  "const { data: userData } = await backend.auth.getUser()\n              if (userData.user) await backend.from('learning_sessions')",
-              ),
-              (
-                  "    if (supabase) void supabase.auth.getUser().then(async ({ data }) => {\n      if (data.user) {\n        const { error } = await supabase.from('vocabulary_items')",
-                  "    const backend = supabase\n    if (backend) void backend.auth.getUser().then(async ({ data }) => {\n      if (data.user) {\n        const { error } = await backend.from('vocabulary_items')",
-              ),
-              (
-                  "if(supabase) void supabase.auth.getUser().then(({data})=>{if(data.user) return supabase.from('learning_sessions').insert",
-                  "const backend=supabase;if(backend) void backend.auth.getUser().then(({data})=>{if(data.user) return backend.from('learning_sessions').insert",
-              ),
-          ]
-
-          for old, new in replacements:
-              if old in source:
-                  source = source.replace(old, new, 1)
-          path.write_text(source)
-          PY
-
-      - name: Commit source fixes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git reset -- .github/workflows/deploy.yml || true
-          if ! git diff --cached --quiet; then
-            git commit -m "fix: guard optional Supabase client in async handlers"
-            git push origin HEAD:main
-          fi
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22.12.0'
-
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-
       - name: Build application
         run: npm run build
-
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist
-
   deploy:
     environment:
       name: github-pages
