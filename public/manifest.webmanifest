@@ -1,0 +1,15 @@
+{
+  "name": "FALA English — Inglês na prática",
+  "short_name": "FALA",
+  "description": "Seu tutor pessoal de inglês, adaptado aos seus objetivos e interesses.",
+  "start_url": "/FALA/",
+  "scope": "/FALA/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7f8f6",
+  "theme_color": "#183f36",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/FALA/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

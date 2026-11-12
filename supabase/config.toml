@@ -1,0 +1,5 @@
+[functions.tutor]
+verify_jwt = true
+
+[functions.transcribe]
+verify_jwt = true
