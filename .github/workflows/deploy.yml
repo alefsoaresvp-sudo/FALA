@@ -1,4 +1,4 @@
-name: Bootstrap and deploy FALA English
+name: Build and deploy FALA English
 
 on:
   push:
@@ -25,27 +25,53 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore FALA source tree when the transfer bundle is present
+      - name: Remove temporary transfer bundle and apply Supabase type guards
         run: |
-          if compgen -G "bootstrap/fala-source-*.b64" > /dev/null; then
-            mkdir -p /tmp/fala-v2
-            cat bootstrap/fala-source-*.b64 | base64 --decode > /tmp/fala-v2.zip
-            unzip -q /tmp/fala-v2.zip -d /tmp/fala-v2
-            cp -a /tmp/fala-v2/fala-superapp/. .
-            rm -f bootstrap/fala-source-*.b64
-            rmdir bootstrap || true
-          else
-            echo "Source tree already restored; continuing to build."
-          fi
+          rm -f bootstrap/fala-source-*.b64
+          rmdir bootstrap 2>/dev/null || true
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Commit the restored source tree
+          path = Path("src/App.tsx")
+          source = path.read_text()
+
+          replacements = [
+              (
+                  "    if (supabase && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {",
+                  "    const backend = supabase\n    if (backend && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {",
+              ),
+              (
+                  "await supabase.functions.invoke('transcribe', { body: form })",
+                  "await backend.functions.invoke('transcribe', { body: form })",
+              ),
+              (
+                  "const { data: userData } = await supabase.auth.getUser()\n              if (userData.user) await supabase.from('learning_sessions')",
+                  "const { data: userData } = await backend.auth.getUser()\n              if (userData.user) await backend.from('learning_sessions')",
+              ),
+              (
+                  "    if (supabase) void supabase.auth.getUser().then(async ({ data }) => {\n      if (data.user) {\n        const { error } = await supabase.from('vocabulary_items')",
+                  "    const backend = supabase\n    if (backend) void backend.auth.getUser().then(async ({ data }) => {\n      if (data.user) {\n        const { error } = await backend.from('vocabulary_items')",
+              ),
+              (
+                  "if(supabase) void supabase.auth.getUser().then(({data})=>{if(data.user) return supabase.from('learning_sessions').insert",
+                  "const backend=supabase;if(backend) void backend.auth.getUser().then(({data})=>{if(data.user) return backend.from('learning_sessions').insert",
+              ),
+          ]
+
+          for old, new in replacements:
+              if old in source:
+                  source = source.replace(old, new, 1)
+          path.write_text(source)
+          PY
+
+      - name: Commit source fixes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git reset -- .github/workflows/deploy.yml || true
           if ! git diff --cached --quiet; then
-            git commit -m "chore: publish FALA SuperApp source tree"
+            git commit -m "fix: guard optional Supabase client in async handlers"
             git push origin HEAD:main
           fi
 
