@@ -111,3 +111,24 @@ Do not optimize total minutes alone; a long session can be inefficient. Learning
 - ELSA Speak: pronunciation-centric feedback; FALA should provide pronunciation as one component in an integrated path covering speaking, listening, writing and vocabulary.
 
 These are positioning observations from public product information, not a full product teardown or user satisfaction ranking.
+
+
+## FALA 3.0 — desenho pedagógico e produto
+
+### Módulos situacionais
+A aplicação inclui trilhas para viagem/temporada no exterior, restaurantes e delivery, trabalho e carreira, conversas e novas amizades, compras e serviços, e carros/tecnologia. Cada módulo tem quatro microetapas que misturam compreensão, escrita e fala, seguidas de uma avaliação de transferência com cinco questões. A regra de 70% é um critério operacional de conclusão do módulo, não certificação de proficiência.
+
+### Rotina diária
+Três tarefas pequenas (ouvir/falar, resolver uma situação, produzir escrita/conversa) ocupam a meta diária escolhida. A meta é distribuída de acordo com o tempo disponível. A repetição espaçada e a recuperação ativa são estratégias úteis; o conteúdo deve voltar em outros contextos, em vez de apenas repetir o mesmo exercício.
+
+### Music Lab
+O primeiro laboratório usa versos originais curtos que variam por interesse, leitura linha a linha, tradução, vocabulário e completar lacunas. A voz do navegador é síntese de fala, não performance musical. O produto não deve avaliar afinação ou “nota de canto” sem uma tecnologia especificamente validada para isso. Canções comerciais só devem ser incorporadas com direitos/uso autorizado; o MVP usa conteúdo original próprio.
+
+### Escrita por imagem
+O aluno pode fotografar uma página/caderno. A imagem é reduzida no navegador e enviada para a Edge Function autenticada; a Lumi transcreve o texto visível, sinaliza palavras ilegíveis e corrige até três pontos importantes. A foto não é persistida no banco pelo MVP. Fotos desfocadas, mal iluminadas, inclinadas ou com letra muito pequena devem ser tratadas como fonte de incerteza.
+
+### Limites da versão
+- A análise avançada de fonemas e avaliação de canto continuam fora do escopo atual. O reconhecimento/transcrição não mede precisão fonética.
+- O Music Lab atual é prática guiada com texto original e fala sintetizada; ainda não é um player de faixas musicais.
+- Login, sincronização, funções de IA e análise de imagem dependem do projeto Supabase dedicado, variáveis públicas de conexão e secrets configurados no backend.
+- Os módulos e as mini provas são uma primeira biblioteca curada; a etapa seguinte deverá incluir testes adaptativos com justificativas, revisão de erros e repetição espaçada por palavra/estrutura.
