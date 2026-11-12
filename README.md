@@ -11,7 +11,7 @@ O FALA é uma plataforma de inglês orientada por objetivos, interesses e evidê
 - **Atividade adaptativa:** microatividade criada com base nos interesses, objetivo, barreiras e histórico de tentativas.
 - **Sinais de aprendizagem:** observações da IA são registradas como hipóteses com confiança estimada; a Lumi deve confirmá-las com evidências, não tratar um erro isolado como diagnóstico.
 - **Escrita:** revisão contextual, versão mais natural, explicações e tarefa de reescrita.
-- **Fala:** leitura por voz, gravação e transcrição autenticada no backend quando disponível. Transcrição não é avaliação fonética.
+- **Fala:** leitura por voz, gravação e transcrição autenticada no backend quando disponível. Transcrição não é avaliação fonética. Nas etapas de fala das trilhas há opção de digitar quando o microfone não estiver disponível.
 - **Vocabulário e progresso:** palavras, sessões, tentativas, histórico de conversa, indicadores por habilidade e atividade semanal.
 - **Mobile/PWA:** interface responsiva, navegação inferior em telas pequenas e suporte para instalação no celular/offline shell.
 
@@ -95,3 +95,16 @@ Abra o endereço publicado no Chrome/Edge do celular e use **Instalar app** ou *
 - RLS está ligado em todas as tabelas de aprendizagem; as políticas filtram `user_id` pela sessão autenticada.
 - A aplicação não persiste gravações de voz por padrão; envia o blob para transcrição e registra apenas uma transcrição curta nos detalhes da sessão.
 - Observações geradas pela IA são hipóteses para orientar prática, não rótulos permanentes do aluno.
+
+
+## Ativar a versão conectada
+
+1. Crie um projeto Supabase dedicado ao FALA e execute `supabase/schema.sql` nele. O script cria o estado de módulos em `track_progress` com RLS por proprietário.
+2. Implante as Edge Functions `tutor` e `transcribe`, mantendo a verificação de JWT habilitada.
+3. Cadastre `OPENAI_API_KEY` e, opcionalmente, `OPENAI_MODEL` como secrets das Edge Functions. Nunca coloque a chave privada no Vite, no GitHub Pages ou em `VITE_*`.
+4. Cadastre `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` como variáveis do GitHub Actions para o build publicado. Para desenvolvimento local, use `.env.local`.
+5. Em Authentication, configure o endereço do site publicado e os redirects permitidos.
+
+A análise de foto exige autenticação válida, Edge Function implantada e suporte a entrada de imagem do modelo configurado. O navegador comprime a imagem, envia-a diretamente para a Edge Function e não salva o arquivo enviado. A qualidade da transcrição depende de foco, iluminação, rotação e tamanho da letra.
+
+O progresso local funciona sem login no próprio navegador. Para sincronizar entre dispositivos, é necessário concluir a integração do Supabase e aplicar o esquema desta versão.
