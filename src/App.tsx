@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, AudioLines, Award, BookOpen, Bookmark, BriefcaseBusiness,
-  Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, CircleHelp,
+  Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, CircleHelp,
   Clock3, Flame, Headphones, Home, Languages, Lightbulb,
   LockKeyhole, Map, MessageCircle, Mic, MicOff, Moon, Music2, PlayCircle, Plus,
   RotateCcw, Send, Settings2, ShoppingBag, Sparkles, Sun, Target, Trophy, Utensils,
@@ -947,6 +947,8 @@ function App() {
   const recommendedTrack = learningTracks.find(item => item.goals.includes(profile?.goal ?? 'conversation')) ?? learningTracks[0]
   const musicSet = useMemo(() => profile ? readMusicSet(profile) : null, [profile])
   const dailyCompleteCount = dailyChecks.filter(Boolean).length
+  const dailyStepMinutes = [Math.max(1,Math.round(profile.minutes*.25)),Math.max(1,Math.round(profile.minutes*.42)),0]
+  dailyStepMinutes[2] = Math.max(1,profile.minutes-dailyStepMinutes[0]-dailyStepMinutes[1])
 
   const toggleDailyCheck = (index: number) => {
     const updated = [...dailyChecks]
@@ -1033,8 +1035,9 @@ function App() {
     const passed = score >= 70
     updateTrackProgress(activeTrack.id, { ...activeTrackProgress, exam_score: score, exam_passed: passed })
     setTrackFeedback(passed ? 'Módulo concluído. Você atingiu o mínimo de 70% nesta mini prova.' : 'Você ainda não atingiu 70%. Revise as etapas e tente novamente.')
-    if (supabase) void supabase.auth.getUser().then(({ data }) => {
-      if (data.user) return supabase.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 300, score, details: { track_id: activeTrack.id, exam: true } })
+    const backendForExam = supabase
+    if (backendForExam) void backendForExam.auth.getUser().then(({ data }) => {
+      if (data.user) return backendForExam.from('learning_sessions').insert({ user_id: data.user.id, activity_type: 'lesson', duration_seconds: 300, score, details: { track_id: activeTrack.id, exam: true } })
     })
   }
   const analyzeWritingPhoto = async () => {
@@ -1095,7 +1098,7 @@ function App() {
           <section className="panel daily-agenda-panel">
             <div className="panel-heading"><div><span className="eyebrow muted">ROTINA DE HOJE</span><h3>Três passos para usar inglês de verdade</h3></div><span className="panel-badge">{dailyCompleteCount}/3 concluídos</span></div>
             <div className="daily-agenda-progress"><i style={{width:(dailyCompleteCount/3*100)+'%'}}/></div>
-            <div className="daily-agenda-grid">{dailySteps.map((step,index)=>{const Icon=step.icon;return <article className={'daily-agenda-step'+(dailyChecks[index]?' done':'')} key={step.title}><div className="daily-step-top"><span className="daily-step-icon"><Icon size={17}/></span><small>{step.minutes} MIN</small></div><strong>{step.title}</strong><p>{step.detail}</p><div className="daily-step-actions"><button className="text-link" onClick={()=>{if(index===1)openTrack(recommendedTrack.id);setPage(step.page)}}>{index===1?'Abrir trilha':'Começar'} <ArrowRight size={13}/></button><button className="daily-check-button" onClick={()=>toggleDailyCheck(index)}>{dailyChecks[index]?<CheckCircle2 size={16}/>:<Check size={16}/>} {dailyChecks[index]?'Feito':'Marcar feito'}</button></div></article>})}</div>
+            <div className="daily-agenda-grid">{dailySteps.map((step,index)=>{const Icon=step.icon;return <article className={'daily-agenda-step'+(dailyChecks[index]?' done':'')} key={step.title}><div className="daily-step-top"><span className="daily-step-icon"><Icon size={17}/></span><small>{dailyStepMinutes[index]} MIN</small></div><strong>{step.title}</strong><p>{step.detail}</p><div className="daily-step-actions"><button className="text-link" onClick={()=>{if(index===1)openTrack(recommendedTrack.id);setPage(step.page)}}>{index===1?'Abrir trilha':'Começar'} <ArrowRight size={13}/></button><button className="daily-check-button" onClick={()=>toggleDailyCheck(index)}>{dailyChecks[index]?<CheckCircle2 size={16}/>:<Check size={16}/>} {dailyChecks[index]?'Feito':'Marcar feito'}</button></div></article>})}</div>
           </section>
           <section className="panel lumi-plan-card">
             <div className="lumi-card-avatar lumi-mascot" aria-label="Lumi"><span>L</span><i /></div>
