@@ -472,3 +472,23 @@ button{touch-action:manipulation}
 
 .track-audio-preview{display:block;width:100%;height:42px;margin:10px 0;accent-color:var(--green)}
 @media(max-width:850px){.track-audio-preview{margin:8px 0}}
+
+
+/* Authentication wall: no learning area is rendered before a valid session. */
+.auth-gate-shell{min-height:100dvh;display:grid;place-items:center;padding:28px 18px;background:radial-gradient(circle at top right,#e8f2eb 0,transparent 44%),#f6f7f5}
+.auth-gate-card{width:min(440px,100%);padding:34px 32px;border:1px solid var(--line);border-radius:18px;background:var(--paper);box-shadow:0 20px 60px rgba(25,55,37,.09);display:flex;flex-direction:column;gap:14px}
+.auth-gate-brand{font-family:Manrope,sans-serif;font-size:22px;font-weight:800;letter-spacing:-1px;color:var(--green);margin-bottom:6px}
+.auth-gate-card h1{font-family:Manrope,sans-serif;font-size:27px;letter-spacing:-1px;margin:0;color:var(--ink)}
+.auth-gate-card>p{font-size:13px;line-height:1.6;color:var(--muted);margin:0}
+.auth-gate-form{display:grid;gap:13px;margin-top:6px}
+.auth-gate-form label{display:grid;gap:6px;font-size:11px;font-weight:700;color:#5e6b63}
+.auth-gate-form .auth-input{width:100%;height:43px;border:1px solid var(--line);border-radius:9px;padding:0 12px;background:var(--paper);color:var(--ink);outline:none}
+.auth-gate-form .auth-input:focus{border-color:#80a991;box-shadow:0 0 0 3px rgba(58,123,82,.1)}
+.auth-gate-submit{width:100%;height:44px;margin-top:3px}
+.auth-gate-switch{border:0;background:transparent;color:var(--green);font-size:11px;font-weight:700;padding:8px;cursor:pointer}
+.auth-gate-card .auth-message{font-size:11px;line-height:1.5;color:#8b633b;background:#fff7eb;border:1px solid #f2e4ce;border-radius:9px;padding:10px}
+:root[data-theme="dark"] .auth-gate-shell{background:radial-gradient(circle at top right,#263b2c 0,transparent 44%),#111b14}
+:root[data-theme="dark"] .auth-gate-card{background:#17251d;border-color:#2d4433}
+:root[data-theme="dark"] .auth-gate-card h1{color:#ecf4ed}
+:root[data-theme="dark"] .auth-gate-form label{color:#b4c4b8}
+@media(max-width:480px){.auth-gate-card{padding:27px 21px;border-radius:15px}.auth-gate-card h1{font-size:24px}}
