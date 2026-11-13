@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, AudioLines, Award, BookOpen, Bookmark, BriefcaseBusiness,
   Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, CircleHelp,
-  Clock3, Flame, Headphones, Home, Languages, Lightbulb,
-  LockKeyhole, Map, MessageCircle, Mic, MicOff, Moon, Music2, PlayCircle, Plus,
+  Clock3, Flame, Headphones, Home, Languages, Lightbulb, LockKeyhole, Map,
+  MessageCircle, Mic, MicOff, Moon, MoreHorizontal, Music2, PlayCircle, Plus,
   RotateCcw, Send, Settings2, ShoppingBag, Sparkles, Sun, Target, Trophy, Utensils,
   Users, Volume2, WandSparkles, X,
 } from 'lucide-react'
@@ -192,7 +192,7 @@ function readDailyAgenda(): boolean[] {
 const mobileNavItems: { id: Page; label: string; icon: typeof Home }[] = [
   {id:'home',label:'Início',icon:Home},{id:'tracks',label:'Trilhas',icon:Map},
   {id:'speak',label:'Falar',icon:AudioLines},{id:'write',label:'Escrever',icon:Languages},
-  {id:'music',label:'Música',icon:Music2},{id:'vocabulary',label:'Palavras',icon:Bookmark},
+  {id:'music',label:'Música',icon:Music2},
 ]
 const dailySteps = [
   { title:'Ouvir e repetir', detail:'Escute uma frase e pratique o ritmo da fala.', minutes:3, page:'speak' as Page, icon:Headphones },
@@ -424,6 +424,12 @@ function App() {
   const [chatLoading, setChatLoading] = useState(false)
   const [apiNotice, setApiNotice] = useState('')
   const [recording, setRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [recordingNotice, setRecordingNotice] = useState('')
+  const [audioBusy, setAudioBusy] = useState(false)
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
+  const [showMobileMore, setShowMobileMore] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [writingText, setWritingText] = useState('')
   const [writingFeedback, setWritingFeedback] = useState('')
@@ -469,6 +475,7 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const recordingStartedAtRef = useRef<number | null>(null)
 
   const saveProfile = async (userId: string, learner: Profile) => {
     if (!supabase) return
@@ -839,88 +846,242 @@ function App() {
     }
   }
 
-  const startRecording = async () => {
-    setTranscript('')
-    setApiNotice('')
-    const { data: activeSession } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
+  const transcribeAudioBlob = async (blob: Blob) => {
     const backend = supabase
-    if (backend && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        mediaStreamRef.current = stream
-        audioChunksRef.current = []
-        const preferredType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''
-        const recorder = new MediaRecorder(stream, preferredType ? { mimeType: preferredType } : undefined)
-        mediaRecorderRef.current = recorder
-        recorder.ondataavailable = event => { if (event.data.size > 0) audioChunksRef.current.push(event.data) }
-        recorder.onerror = () => {
-          setRecording(false)
-          setApiNotice('Não foi possível gravar o áudio. Confira a permissão do microfone e tente novamente.')
-          stream.getTracks().forEach(track => track.stop())
-        }
-        recorder.onstop = async () => {
-          stream.getTracks().forEach(track => track.stop())
-          mediaStreamRef.current = null
-          const mimeType = recorder.mimeType || 'audio/webm'
-          const blob = new Blob(audioChunksRef.current, { type: mimeType })
-          audioChunksRef.current = []
-          if (!blob.size) { setApiNotice('Não recebemos áudio. Tente gravar novamente.'); return }
-          setApiNotice('Enviando áudio para transcrição segura...')
-          try {
-            const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('wav') ? 'wav' : 'webm'
-            const form = new FormData()
-            form.append('file', new File([blob], `fala-practice.${extension}`, { type: mimeType.split(';')[0] }))
-            const { data, error } = await backend.functions.invoke('transcribe', { body: form })
-            if (error) throw error
-            if (typeof data?.text === 'string' && data.text.trim()) {
-              setTranscript(data.text.trim())
-              setApiNotice('Transcrição concluída. Isso reconhece palavras, mas não mede a pronúncia dos fonemas.')
-              const { data: userData } = await backend.auth.getUser()
-              if (userData.user) await backend.from('learning_sessions').insert({ user_id: userData.user.id, activity_type: 'speaking', duration_seconds: 120, details: { transcript: data.text.trim() } })
-            } else {
-              setApiNotice('Não conseguimos reconhecer palavras nesse áudio. Tente falar um pouco mais perto do microfone.')
-            }
-          } catch (error) {
-            console.error(error)
-            setApiNotice('A transcrição não foi concluída. Verifique o deploy da função transcribe e tente novamente.')
-          }
-        }
-        recorder.start()
-        setRecording(true)
-        return
-      } catch (error) {
-        console.error(error)
-        setApiNotice('Não foi possível acessar o microfone. Confira a permissão do navegador.')
-        return
-      }
-    }
-
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognitionCtor) {
-      setApiNotice('Seu navegador não oferece reconhecimento de voz nesta tela. Use Chrome ou faça login para enviar o áudio ao serviço de transcrição.')
+    if (!backend) {
+      setRecordingNotice('A gravação está salva temporariamente neste aparelho. A transcrição com a Lumi exige a conexão da conta.')
       return
     }
-    const recognition = new SpeechRecognitionCtor()
-    recognition.lang = profile?.accent === 'uk' ? 'en-GB' : 'en-US'
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    recognition.onresult = event => { setTranscript(event.results[0][0].transcript); setRecording(false) }
-    recognition.onerror = () => { setRecording(false); setApiNotice('Não conseguimos acessar o microfone. Confira a permissão do navegador.') }
-    recognition.onend = () => setRecording(false)
-    recognitionRef.current = recognition
-    try { recognition.start(); setRecording(true) } catch { setRecording(false) }
+
+    const { data: sessionData, error: sessionError } = await backend.auth.getSession()
+    if (sessionError || !sessionData.session?.access_token) {
+      setRecordingNotice('Gravação pronta. Entre na sua conta para enviar o áudio à Lumi e receber a transcrição.')
+      setAuthMessage('Entre para transcrever sua gravação com a Lumi.')
+      setShowSettings(true)
+      return
+    }
+
+    if (!blob.size) {
+      setRecordingNotice('O arquivo de áudio está vazio. Grave novamente e fale por pelo menos 2 segundos.')
+      return
+    }
+    if (blob.size > 10 * 1024 * 1024) {
+      setRecordingNotice('O áudio ficou muito grande. Grave um trecho mais curto, de até 45 segundos.')
+      return
+    }
+
+    setAudioBusy(true)
+    setRecordingNotice('Enviando sua gravação para a Lumi...')
+    try {
+      const rawType = (blob.type || 'audio/webm').split(';')[0].toLowerCase()
+      const normalizedType = rawType === 'audio/x-m4a' || rawType === 'audio/m4a'
+        ? 'audio/mp4'
+        : rawType === 'audio/x-wav'
+          ? 'audio/wav'
+          : rawType
+      const extension = normalizedType === 'audio/mp4' ? 'm4a'
+        : normalizedType === 'audio/ogg' ? 'ogg'
+          : normalizedType === 'audio/wav' ? 'wav'
+            : normalizedType === 'audio/mpeg' ? 'mp3' : 'webm'
+      const form = new FormData()
+      form.append('file', new File([blob], 'fala-practice.' + extension, { type: normalizedType }))
+      const { data, error } = await backend.functions.invoke('transcribe', { body: form })
+      if (error) {
+        console.error('Transcription function error', error)
+        throw error
+      }
+      const recognizedText = typeof data?.text === 'string' ? data.text.trim() : ''
+      if (!recognizedText) {
+        setRecordingNotice('Não conseguimos identificar palavras. Grave novamente em um local silencioso, aproxime o aparelho e fale um pouco mais devagar.')
+        return
+      }
+      setTranscript(recognizedText)
+      setRecordingNotice('Transcrição concluída. A Lumi reconheceu as palavras; isso não é uma nota de precisão fonética.')
+      const { data: userData } = await backend.auth.getUser()
+      if (userData.user) {
+        const { error: sessionInsertError } = await backend.from('learning_sessions').insert({
+          user_id: userData.user.id,
+          activity_type: 'speaking',
+          duration_seconds: Math.min(45, recordingSeconds || 10),
+          details: { transcript: recognizedText, source: 'media_recorder' },
+        })
+        if (sessionInsertError) console.error('Could not save speaking session', sessionInsertError)
+      }
+    } catch (error) {
+      console.error('Audio transcription failed', error)
+      const message = error instanceof Error ? error.message : ''
+      if (/Failed to fetch|network|fetch/i.test(message)) {
+        setRecordingNotice('Falha de conexão ao enviar o áudio. Confira a internet e tente transcrever novamente.')
+      } else {
+        setRecordingNotice('A gravação está pronta, mas a transcrição falhou. Confira se OPENAI_API_KEY foi cadastrada no Supabase e se a função transcribe está ativa.')
+      }
+    } finally {
+      setAudioBusy(false)
+    }
   }
+
+  const startRecording = async () => {
+    if (recording || audioBusy) return
+    setTranscript('')
+    setRecordingNotice('')
+    setApiNotice('')
+    setRecordingSeconds(0)
+    setRecordedAudioBlob(null)
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl)
+      setAudioPreviewUrl(null)
+    }
+
+    if (!window.isSecureContext) {
+      setRecordingNotice('O microfone exige uma conexão segura (HTTPS). Abra o FALA pelo endereço https://alefsoaresvp-sudo.github.io/FALA/.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordingNotice('Este navegador não liberou acesso ao microfone. Abra o FALA no Chrome ou Safari atualizado, fora de uma janela incorporada.')
+      return
+    }
+
+    try {
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        })
+      } catch (firstError) {
+        const name = firstError instanceof DOMException ? firstError.name : ''
+        if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'NotReadableError') throw firstError
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      }
+      mediaStreamRef.current = stream
+      audioChunksRef.current = []
+
+      const Recorder = window.MediaRecorder
+      if (typeof Recorder === 'undefined') {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognitionCtor) {
+          setRecordingNotice('Seu navegador não oferece gravação de áudio. Atualize o Chrome/Safari ou tente outro navegador.')
+          return
+        }
+        const recognition = new SpeechRecognitionCtor()
+        recognition.lang = profile?.accent === 'uk' ? 'en-GB' : 'en-US'
+        recognition.interimResults = true
+        recognition.maxAlternatives = 1
+        recognition.onresult = event => {
+          const result = event.results[event.results.length - 1]
+          if (result?.[0]?.transcript) setTranscript(result[0].transcript)
+        }
+        recognition.onerror = event => {
+          setRecording(false)
+          setRecordingNotice(event.error === 'not-allowed'
+            ? 'Permissão do microfone negada. Libere o microfone nas configurações do navegador e tente novamente.'
+            : 'O reconhecimento do navegador falhou. Atualize o navegador ou tente gravar em outro dispositivo.')
+        }
+        recognition.onend = () => {
+          setRecording(false)
+          recordingStartedAtRef.current = null
+        }
+        recognitionRef.current = recognition
+        recognition.start()
+        recordingStartedAtRef.current = Date.now()
+        setRecording(true)
+        setRecordingNotice('Fale agora. O reconhecimento acontece no navegador.')
+        return
+      }
+
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/mp4',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ]
+      const mimeType = supportedTypes.find(type => {
+        try { return Recorder.isTypeSupported(type) } catch { return false }
+      })
+      const recorderOptions: MediaRecorderOptions = { audioBitsPerSecond: 64000 }
+      if (mimeType) recorderOptions.mimeType = mimeType
+      const recorder = new Recorder(stream, recorderOptions)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data)
+      }
+      recorder.onerror = event => {
+        console.error('MediaRecorder error', event)
+        setRecording(false)
+        recordingStartedAtRef.current = null
+        setRecordingNotice('O aparelho interrompeu a gravação. Feche outros aplicativos que usam o microfone e tente novamente.')
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        const chunks = audioChunksRef.current.splice(0)
+        const actualType = recorder.mimeType || chunks.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(chunks, { type: actualType })
+        setRecording(false)
+        recordingStartedAtRef.current = null
+        setRecordedAudioBlob(blob)
+
+        if (blob.size < 1000) {
+          setRecordingNotice('A gravação ficou muito curta ou vazia. Segure para falar por pelo menos 2 segundos e tente novamente.')
+          return
+        }
+        const previewUrl = URL.createObjectURL(blob)
+        setAudioPreviewUrl(previous => {
+          if (previous) URL.revokeObjectURL(previous)
+          return previewUrl
+        })
+
+        const backend = supabase
+        const { data: sessionData } = backend ? await backend.auth.getSession() : { data: { session: null } }
+        if (backend && sessionData.session?.access_token) {
+          await transcribeAudioBlob(blob)
+        } else {
+          setRecordingNotice('Gravação salva temporariamente neste aparelho. Você pode ouvi-la abaixo. Entre na conta para pedir à Lumi que transcreva.')
+        }
+      }
+
+      recorder.start(1000)
+      recordingStartedAtRef.current = Date.now()
+      setRecording(true)
+      setRecordingNotice('Gravando. Fale naturalmente, sem aproximar demais o microfone.')
+    } catch (error) {
+      console.error('Microphone capture failed', error)
+      const name = error instanceof DOMException ? error.name : ''
+      const message = name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'Permissão do microfone bloqueada. Toque no cadeado ao lado do endereço do site, permita o microfone e recarregue a página.'
+        : name === 'NotFoundError'
+          ? 'Não encontramos um microfone neste aparelho.'
+          : name === 'NotReadableError'
+            ? 'O microfone está ocupado por outro aplicativo. Feche chamadas/gravadores e tente novamente.'
+            : name === 'OverconstrainedError'
+              ? 'O navegador não conseguiu configurar o microfone. Tente novamente com as configurações padrão do aparelho.'
+              : 'Não foi possível iniciar o microfone. Verifique as permissões do navegador e tente novamente.'
+      setRecordingNotice(message)
+      setRecording(false)
+      recordingStartedAtRef.current = null
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+    }
+  }
+
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop()
-      setRecording(false)
+      setRecordingNotice('Finalizando o áudio...')
       return
     }
-    recognitionRef.current?.stop()
-    setRecording(false)
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setRecording(false)
+    }
   }
+
   const saveWord = (word: string) => {
     setWords(current => current.includes(word) ? current : [...current, word])
     const backend = supabase
