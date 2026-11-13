@@ -570,6 +570,17 @@ function App() {
 
   const hydrateAccount = async (userId: string) => {
     if (!supabase) return
+    setAccountReady(false)
+    setProfile(null)
+    setTrackProgress({})
+    setWords([])
+    setChat(initialMessages)
+    setLearnerInsights([])
+    setRecentMistakes([])
+    setLearningPlan(null)
+    setPlanSummary('')
+    setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
+    localStorage.removeItem(trackProgressKey)
     try {
       const { data: row, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle()
       if (error) throw error
@@ -757,6 +768,13 @@ function App() {
         setAccountReady(false)
         setProfile(null)
         setTrackProgress({})
+        setWords([])
+        setChat(initialMessages)
+        setLearnerInsights([])
+        setRecentMistakes([])
+        setLearningPlan(null)
+        setPlanSummary('')
+        setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
         localStorage.removeItem(profileKey)
         localStorage.removeItem(trackProgressKey)
         localStorage.removeItem(dailyAgendaKey)
