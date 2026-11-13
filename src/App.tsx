@@ -414,7 +414,7 @@ function Onboarding({ onComplete }: { onComplete: (profile: Profile) => void }) 
 }
 
 function App() {
-  const [profile, setProfile] = useState<Profile | null>(() => readProfile())
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [page, setPage] = useState<Page>('home')
   const [lessonDone, setLessonDone] = useState(false)
   const [quizAnswer, setQuizAnswer] = useState<string | null>(null)
@@ -439,6 +439,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [authMessage, setAuthMessage] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const [dailyActivity, setDailyActivity] = useState<PersonalizedActivity | null>(null)
   const [activityBusy, setActivityBusy] = useState(false)
   const [openAnswer, setOpenAnswer] = useState('')
@@ -598,8 +599,8 @@ function App() {
         setProfile(restored)
         void generateActivity(restored)
       } else {
-        const local = profile ?? readProfile()
-        if (local) { await saveProfile(userId, local); void generateActivity(local) }
+        setProfile(null)
+        localStorage.removeItem(profileKey)
       }
       const { data: vocabulary } = await supabase.from('vocabulary_items').select('term').eq('user_id', userId).order('created_at', { ascending: false }).limit(100)
       if (vocabulary?.length) setWords(vocabulary.map(item => item.term))
@@ -645,15 +646,12 @@ function App() {
       const { data: messages } = await supabase.from('chat_messages').select('role,content,metadata').eq('user_id', userId).order('created_at', { ascending: true }).limit(30)
       if (messages?.length) setChat(messages.map(item => ({ role: item.role as 'user' | 'assistant', text: item.content, note: item.metadata?.correction })))
       const { data: savedTracks, error: tracksError } = await supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', userId)
-      if (!tracksError && savedTracks?.length) {
-        const restoredTracks: Record<string, TrackProgress> = { ...trackProgress }
-        for (const row of savedTracks) restoredTracks[row.track_id] = { completed_lessons: row.completed_lessons ?? [], exam_score: row.exam_score ?? null, exam_passed: !!row.exam_passed }
+      if (!tracksError) {
+        const restoredTracks: Record<string, TrackProgress> = {}
+        for (const row of savedTracks ?? []) restoredTracks[row.track_id] = { completed_lessons: row.completed_lessons ?? [], exam_score: row.exam_score ?? null, exam_passed: !!row.exam_passed }
         setTrackProgress(restoredTracks)
-        localStorage.setItem(trackProgressKey, JSON.stringify(restoredTracks))
-      } else if (!tracksError) {
-        for (const [trackId, progress] of Object.entries(trackProgress)) {
-          await supabase.from('track_progress').upsert({ user_id: userId, track_id: trackId, ...progress, updated_at: new Date().toISOString() }, { onConflict: 'user_id,track_id' })
-        }
+        if (Object.keys(restoredTracks).length) localStorage.setItem(trackProgressKey, JSON.stringify(restoredTracks))
+        else localStorage.removeItem(trackProgressKey)
       }
       setAccountReady(true)
     } catch (error) {
@@ -666,6 +664,12 @@ function App() {
     if (!authEmail.trim() || authPassword.length < 8) { setAuthMessage('Informe um e-mail e uma senha com pelo menos 8 caracteres.'); return }
     setAuthBusy(true); setAuthMessage('')
     try {
+      if (mode === 'signup') {
+        setProfile(null)
+        setTrackProgress({})
+        localStorage.removeItem(profileKey)
+        localStorage.removeItem(trackProgressKey)
+      }
       const result = mode === 'signup'
         ? await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword })
         : await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword })
@@ -684,7 +688,14 @@ function App() {
   const handleSignOut = async () => {
     if (!supabase) return
     const { error } = await supabase.auth.signOut()
-    setAuthMessage(error ? error.message : 'Você saiu da conta. O modo demonstração continua disponível.')
+    setUserEmail(null)
+    setProfile(null)
+    setAccountReady(false)
+    setTrackProgress({})
+    localStorage.removeItem(profileKey)
+    localStorage.removeItem(trackProgressKey)
+    localStorage.removeItem(dailyAgendaKey)
+    setAuthMessage(error ? error.message : 'Você saiu da conta. O acesso à plataforma foi bloqueado.')
   }
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat])
   useEffect(() => {
@@ -744,8 +755,17 @@ function App() {
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user.email ?? null)
-      if (session?.user.id) void hydrateAccount(session.user.id)
-      else setAccountReady(false)
+      if (session?.user.id) {
+        setAccountReady(false)
+        void hydrateAccount(session.user.id)
+      } else {
+        setAccountReady(false)
+        setProfile(null)
+        setTrackProgress({})
+        localStorage.removeItem(profileKey)
+        localStorage.removeItem(trackProgressKey)
+        localStorage.removeItem(dailyAgendaKey)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -1280,6 +1300,9 @@ function App() {
     } finally { setPhotoBusy(false) }
   }
 
+  if (!supabase) return <main className="auth-gate-shell"><section className="auth-gate-card"><strong className="auth-gate-brand">FALA ENGLISH</strong><h1>Login indisponível</h1><p>A autenticação não está configurada. O conteúdo permanece bloqueado até a conexão segura ser restabelecida.</p></section></main>
+  if (!userEmail) return <main className="auth-gate-shell"><section className="auth-gate-card"><strong className="auth-gate-brand">FALA ENGLISH</strong><span className="eyebrow muted">ACESSO RESTRITO</span><h1>{authMode === 'signin' ? 'Entre na sua conta' : 'Crie sua conta'}</h1><p>Para acessar as aulas, a Lumi, os laboratórios e seu progresso, primeiro faça cadastro ou login.</p><form className="auth-gate-form" onSubmit={event => { event.preventDefault(); void handleAuth(authMode) }}><label>E-mail<input className="auth-input" type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} required autoComplete="email" placeholder="voce@email.com"/></label><label>Senha<input className="auth-input" type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} required minLength={8} autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'} placeholder="Mínimo de 8 caracteres"/></label><button className="primary-button auth-gate-submit" type="submit" disabled={authBusy}>{authBusy ? 'Aguarde...' : authMode === 'signin' ? 'Entrar' : 'Criar conta'}</button></form>{authMessage && <p className="auth-message">{authMessage}</p>}<button className="auth-gate-switch" type="button" onClick={() => { setAuthMode(authMode === 'signin' ? 'signup' : 'signin'); setAuthMessage('') }}>{authMode === 'signin' ? 'Não tem conta? Criar cadastro' : 'Já tem conta? Entrar'}</button></section></main>
+  if (!accountReady) return <main className="auth-gate-shell"><section className="auth-gate-card"><strong className="auth-gate-brand">FALA ENGLISH</strong><h1>Verificando seu acesso</h1><p>Validando sua conta e carregando seus dados...</p></section></main>
   if (!profile) return <Onboarding onComplete={completeOnboarding} />
 
   return <div className="app-shell">
@@ -1357,7 +1380,7 @@ function App() {
 
         {page === 'speak' && <>
           <div className="page-intro"><span className="eyebrow muted">FALAR · SPEAKING LAB</span><h1>Solte a voz. <em>Sem medo de errar.</em></h1><p>Treine uma frase e depois converse sobre um assunto real.</p></div>
-          <div className="speak-grid"><section className="panel pronunciation-panel"><div className="panel-heading"><div><span className="eyebrow muted">TREINO DE FALA</span><h3>Repita em voz alta</h3></div><span className="level-pill">{profile.accent === 'us' ? 'Inglês americano' : 'Inglês britânico'}</span></div><div className="speak-prompt"><span className="prompt-label">DIGA ESTA FRASE</span><h2>I'd like to improve my English.</h2><p>Eu gostaria de melhorar meu inglês.</p><button className="listen-button" onClick={() => speakText("I'd like to improve my English.", profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button></div><div className="recorder-console"><button className={`record-button ${recording ? 'recording' : ''}`} onClick={recording ? stopRecording : () => { void startRecording() }} disabled={audioBusy}>{recording ? <MicOff size={23}/> : <Mic size={23}/>}<span>{recording ? 'Parar gravação' : audioBusy ? 'Processando áudio...' : 'Toque para gravar'}</span></button>{recording&&<div className="recording-live"><span className="recording-pulse"/><strong>{String(Math.floor(recordingSeconds/60)).padStart(2,'0')}:{String(recordingSeconds%60).padStart(2,'0')}</strong><small>Limite de 45 segundos</small></div>}</div><p className="record-hint">{recording ? 'Gravando com o microfone do aparelho. Fale a frase completa.' : 'A gravação funciona sem login neste aparelho. Para receber a transcrição da Lumi, entre na sua conta.'}</p>{recordingNotice&&<div className={`audio-status ${audioBusy?'busy':''}`}>{audioBusy&&<span className="recording-pulse"/>}{recordingNotice}</div>}{audioPreviewUrl&&<div className="audio-preview-card"><div><strong>Sua gravação</strong><small>{recordedAudioBlob ? (recordedAudioBlob.size/1024).toFixed(0)+' KB · disponível neste aparelho' : 'Áudio local'}</small></div><audio controls preload="metadata" src={audioPreviewUrl}>Seu navegador não consegue reproduzir este áudio.</audio><div className="audio-preview-actions"><button className="secondary-button" onClick={()=>{setTranscript('');setRecordingNotice('');void startRecording()}} disabled={audioBusy}><RotateCcw size={14}/> Gravar novamente</button>{!transcript&&<button className="primary-button" onClick={()=>recordedAudioBlob&&void transcribeAudioBlob(recordedAudioBlob)} disabled={audioBusy||!recordedAudioBlob}>{audioBusy?'Transcrevendo...':'Transcrever com a Lumi'} <WandSparkles size={14}/></button>}</div></div>}{transcript && <div className="transcript-result"><span className="eyebrow muted">O QUE FOI RECONHECIDO</span><p>“{transcript}”</p><div className="soft-note"><Lightbulb size={15}/> A transcrição reconhece palavras; ela não mede precisão fonética nem substitui uma avaliação de pronúncia.</div></div>}</section><section className="panel conversation-panel"><div className="panel-heading"><div><span className="eyebrow muted">CONVERSA GUIADA</span><h3>Converse com a Lumi</h3></div><span className="online-status"><i/> EM PRÁTICA</span></div><div className="chat-topic"><span className="topic-avatar lumi-face">L</span><div><strong>Lumi · sua parceira de inglês</strong><small>Tema adaptado aos seus interesses</small></div><button className="icon-button" onClick={() => setChat([{ role: 'assistant', text: `Vamos recomeçar, ${firstName}. Escolha um tema que você gosta e vamos conversar em inglês: ${profile.customInterest || profile.interests.join(', ') || 'seu dia a dia'}.` }])} aria-label="Reiniciar conversa"><RotateCcw size={16}/></button></div><div className="chat-messages">{chat.map((item,index)=><div className={`chat-message ${item.role}`} key={index}><div className="message-avatar">{item.role === 'assistant' ? 'L' : firstName.slice(0,1).toUpperCase()}</div><div><p>{item.text}</p>{item.note && <small>{item.note}</small>}</div></div>)}{chatLoading && <div className="chat-message assistant"><div className="message-avatar">L</div><div className="typing-indicator"><i/><i/><i/></div></div>}<div ref={chatEndRef}/></div><form className="chat-compose" onSubmit={e => {e.preventDefault(); void sendMessage()}}><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Responda em inglês ou peça ajuda em português..."/><button type="submit" disabled={!chatInput.trim() || chatLoading}><Send size={17}/></button></form>{apiNotice && <p className="api-notice">{apiNotice}</p>}<div className="chat-footnote"><Sparkles size={13}/> Erros fazem parte do aprendizado. Tente responder em inglês.</div></section></div>
+          <div className="speak-grid"><section className="panel pronunciation-panel"><div className="panel-heading"><div><span className="eyebrow muted">TREINO DE FALA</span><h3>Repita em voz alta</h3></div><span className="level-pill">{profile.accent === 'us' ? 'Inglês americano' : 'Inglês britânico'}</span></div><div className="speak-prompt"><span className="prompt-label">DIGA ESTA FRASE</span><h2>I'd like to improve my English.</h2><p>Eu gostaria de melhorar meu inglês.</p><button className="listen-button" onClick={() => speakText("I'd like to improve my English.", profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button></div><div className="recorder-console"><button className={`record-button ${recording ? 'recording' : ''}`} onClick={recording ? stopRecording : () => { void startRecording() }} disabled={audioBusy}>{recording ? <MicOff size={23}/> : <Mic size={23}/>}<span>{recording ? 'Parar gravação' : audioBusy ? 'Processando áudio...' : 'Toque para gravar'}</span></button>{recording&&<div className="recording-live"><span className="recording-pulse"/><strong>{String(Math.floor(recordingSeconds/60)).padStart(2,'0')}:{String(recordingSeconds%60).padStart(2,'0')}</strong><small>Limite de 45 segundos</small></div>}</div><p className="record-hint">{recording ? 'Gravando com o microfone do aparelho. Fale a frase completa.' : 'A gravação e a transcrição pela Lumi ficam disponíveis após entrar na sua conta.'}</p>{recordingNotice&&<div className={`audio-status ${audioBusy?'busy':''}`}>{audioBusy&&<span className="recording-pulse"/>}{recordingNotice}</div>}{audioPreviewUrl&&<div className="audio-preview-card"><div><strong>Sua gravação</strong><small>{recordedAudioBlob ? (recordedAudioBlob.size/1024).toFixed(0)+' KB · disponível neste aparelho' : 'Áudio local'}</small></div><audio controls preload="metadata" src={audioPreviewUrl}>Seu navegador não consegue reproduzir este áudio.</audio><div className="audio-preview-actions"><button className="secondary-button" onClick={()=>{setTranscript('');setRecordingNotice('');void startRecording()}} disabled={audioBusy}><RotateCcw size={14}/> Gravar novamente</button>{!transcript&&<button className="primary-button" onClick={()=>recordedAudioBlob&&void transcribeAudioBlob(recordedAudioBlob)} disabled={audioBusy||!recordedAudioBlob}>{audioBusy?'Transcrevendo...':'Transcrever com a Lumi'} <WandSparkles size={14}/></button>}</div></div>}{transcript && <div className="transcript-result"><span className="eyebrow muted">O QUE FOI RECONHECIDO</span><p>“{transcript}”</p><div className="soft-note"><Lightbulb size={15}/> A transcrição reconhece palavras; ela não mede precisão fonética nem substitui uma avaliação de pronúncia.</div></div>}</section><section className="panel conversation-panel"><div className="panel-heading"><div><span className="eyebrow muted">CONVERSA GUIADA</span><h3>Converse com a Lumi</h3></div><span className="online-status"><i/> EM PRÁTICA</span></div><div className="chat-topic"><span className="topic-avatar lumi-face">L</span><div><strong>Lumi · sua parceira de inglês</strong><small>Tema adaptado aos seus interesses</small></div><button className="icon-button" onClick={() => setChat([{ role: 'assistant', text: `Vamos recomeçar, ${firstName}. Escolha um tema que você gosta e vamos conversar em inglês: ${profile.customInterest || profile.interests.join(', ') || 'seu dia a dia'}.` }])} aria-label="Reiniciar conversa"><RotateCcw size={16}/></button></div><div className="chat-messages">{chat.map((item,index)=><div className={`chat-message ${item.role}`} key={index}><div className="message-avatar">{item.role === 'assistant' ? 'L' : firstName.slice(0,1).toUpperCase()}</div><div><p>{item.text}</p>{item.note && <small>{item.note}</small>}</div></div>)}{chatLoading && <div className="chat-message assistant"><div className="message-avatar">L</div><div className="typing-indicator"><i/><i/><i/></div></div>}<div ref={chatEndRef}/></div><form className="chat-compose" onSubmit={e => {e.preventDefault(); void sendMessage()}}><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Responda em inglês ou peça ajuda em português..."/><button type="submit" disabled={!chatInput.trim() || chatLoading}><Send size={17}/></button></form>{apiNotice && <p className="api-notice">{apiNotice}</p>}<div className="chat-footnote"><Sparkles size={13}/> Erros fazem parte do aprendizado. Tente responder em inglês.</div></section></div>
         </>}
 
         {page === 'music' && musicSet && <>
