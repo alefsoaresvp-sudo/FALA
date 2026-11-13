@@ -192,7 +192,6 @@ function readDailyAgenda(): boolean[] {
 const mobileNavItems: { id: Page; label: string; icon: typeof Home }[] = [
   {id:'home',label:'Início',icon:Home},{id:'tracks',label:'Trilhas',icon:Map},
   {id:'speak',label:'Falar',icon:AudioLines},{id:'write',label:'Escrever',icon:Languages},
-  {id:'music',label:'Música',icon:Music2},
 ]
 const dailySteps = [
   { title:'Ouvir e repetir', detail:'Escute uma frase e pratique o ritmo da fala.', minutes:3, page:'speak' as Page, icon:Headphones },
@@ -695,6 +694,29 @@ function App() {
   useEffect(() => {
     localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: dailyChecks }))
   }, [dailyChecks])
+  useEffect(() => {
+    if (!recording) return
+    const timer = window.setInterval(() => {
+      const startedAt = recordingStartedAtRef.current
+      if (!startedAt) return
+      const seconds = Math.floor((Date.now() - startedAt) / 1000)
+      setRecordingSeconds(seconds)
+      if (seconds >= 45) {
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        else recognitionRef.current?.stop()
+        setRecordingNotice('Limite de 45 segundos atingido. Você pode ouvir o áudio ou gravar novamente.')
+      }
+    }, 300)
+    return () => window.clearInterval(timer)
+  }, [recording])
+  useEffect(() => () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
+  }, [audioPreviewUrl])
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+  }, [])
   useEffect(() => {
     if (!recording) return
     const timer = window.setInterval(() => {
@@ -1366,7 +1388,8 @@ function App() {
       </div>
       <footer className="app-footer"><span>FALA ENGLISH · APRENDER COM INTENÇÃO</span><span>FALA · Lumi adaptive tutor · 0.2</span></footer>
     </main>
-    <nav className="mobile-bottom-nav" aria-label="Navegação principal">{mobileNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}</nav>
+    <nav className="mobile-bottom-nav" aria-label="Navegação principal">{mobileNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}<button className={showMobileMore?'active':''} onClick={()=>setShowMobileMore(true)} aria-label="Mais opções"><MoreHorizontal size={19}/><span>Mais</span></button></nav>
+    {showMobileMore&&<div className="mobile-more-backdrop" onClick={()=>setShowMobileMore(false)}><section className="mobile-more-sheet" onClick={event=>event.stopPropagation()}><div className="mobile-more-heading"><div><span className="eyebrow muted">SEU ESPAÇO</span><h3>Mais ferramentas</h3></div><button className="icon-button" onClick={()=>setShowMobileMore(false)} aria-label="Fechar menu"><X size={18}/></button></div><button onClick={()=>{setPage('music');setShowMobileMore(false)}}><span><Music2 size={19}/></span><div><strong>Music Lab</strong><small>Vocabulário e prática com música</small></div><ChevronRight size={16}/></button><button onClick={()=>{setPage('vocabulary');setShowMobileMore(false)}}><span><Bookmark size={19}/></span><div><strong>Meu vocabulário</strong><small>Palavras que você salvou</small></div><ChevronRight size={16}/></button><button onClick={()=>{setPage('progress');setShowMobileMore(false)}}><span><Award size={19}/></span><div><strong>Meu progresso</strong><small>Histórico e evolução</small></div><ChevronRight size={16}/></button><button onClick={()=>{setShowMobileMore(false);setShowSettings(true)}}><span><Settings2 size={19}/></span><div><strong>Conta e preferências</strong><small>Login, sincronização e tema</small></div><ChevronRight size={16}/></button></section></div>}
     {showSettings && <div className="modal-backdrop" onClick={() => setShowSettings(false)}><section className="settings-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow muted">SEU PERFIL</span><h2>Preferências de estudo</h2></div><button className="icon-button" onClick={() => setShowSettings(false)}><X size={18}/></button></div><div className="settings-profile"><span className="avatar large-avatar">{firstName.slice(0,1).toUpperCase()}</span><div><strong>{profile.name || 'Estudante'}</strong><small>{goalOptions.find(item=>item.id===profile.goal)?.title} · Lumi personalizada</small></div></div><div className="settings-row"><div><strong>Tema do aplicativo</strong><span>Escolha uma aparência para estudar</span></div><button className="theme-switch" onClick={()=>setDarkTheme(value=>!value)}>{darkTheme?<Sun size={16}/>:<Moon size={16}/>} {darkTheme?'Tema claro':'Tema escuro'}</button></div><div className="settings-row"><div><strong>Tempo por dia</strong><span>Sua meta de estudo</span></div><select className="select-input" value={profile.minutes} onChange={e=>{const updated={...profile,minutes:Number(e.target.value)};updateLearnerProfile(updated)}}>{[5,10,15,20,30].map(v=><option key={v} value={v}>{v} minutos</option>)}</select></div><div className="settings-row"><div><strong>Sotaque de referência</strong><span>Modelo de áudio</span></div><div className="segmented"><button className={profile.accent==='us'?'active':''} onClick={()=>{const updated={...profile,accent:'us' as const};updateLearnerProfile(updated)}}>EUA</button><button className={profile.accent==='uk'?'active':''} onClick={()=>{const updated={...profile,accent:'uk' as const};updateLearnerProfile(updated)}}>Reino Unido</button></div></div><div className="account-section"><span className="eyebrow muted">CONTA E SINCRONIZAÇÃO</span>{!supabase ? <p>O login, a sincronização, a análise de fotos e a Lumi com IA exigem um projeto Supabase conectado ao site e as funções de backend implantadas. Em desenvolvimento local, use as variáveis do <code>.env.local</code>.</p> : userEmail ? <><div className="signed-in"><CheckCircle2 size={17}/><span><strong>Conta conectada</strong><small>{userEmail}</small></span></div><button className="secondary-button" onClick={() => void handleSignOut()}>Sair da conta</button></> : <><p>Entre ou crie uma conta para salvar seu perfil e liberar o tutor com IA.</p><input className="auth-input" type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="Seu e-mail"/><input className="auth-input" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder="Senha (mínimo 8 caracteres)"/><div className="auth-actions"><button className="secondary-button" disabled={authBusy} onClick={() => void handleAuth('signin')}>Entrar</button><button className="primary-button" disabled={authBusy} onClick={() => void handleAuth('signup')}>Criar conta</button></div></>}{authMessage && <p className="auth-message">{authMessage}</p>}</div><button className="reset-profile" onClick={resetProfile}>Refazer personalização <ArrowRight size={15}/></button><p className="settings-data-note">Isso reinicia as preferências locais e mantém a conta. O histórico sincronizado não é apagado.</p></section></div>}
   </div>
 }
