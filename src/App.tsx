@@ -88,20 +88,6 @@ const initialMessages: ChatMessage[] = [
   { role: 'assistant', text: 'Oi! Eu sou a Lumi, sua parceira de inglês. Vamos conversar sem pressão. I will help you one step at a time. What do you enjoy doing in your free time?' },
 ]
 
-function readProfile(): Profile | null {
-  try {
-    const raw = localStorage.getItem(profileKey)
-    if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<Profile>
-    return {
-      name: parsed.name ?? '', goal: parsed.goal ?? 'conversation', level: parsed.level ?? 'unsure',
-      focuses: parsed.focuses ?? ['speaking', 'listening'], minutes: parsed.minutes ?? 10,
-      accent: parsed.accent ?? 'us', style: parsed.style ?? 'mixed', interests: parsed.interests ?? [],
-      customInterest: parsed.customInterest ?? '', barriers: parsed.barriers ?? [], scenario: parsed.scenario ?? 'daily',
-      timeHorizon: parsed.timeHorizon ?? 'flexible', feedbackStyle: parsed.feedbackStyle ?? 'balanced',
-    }
-  } catch { return null }
-}
 function speakText(text: string, accent: 'us' | 'uk' = 'us', rate = 0.88) {
   if (!('speechSynthesis' in window)) return
   window.speechSynthesis.cancel()
@@ -499,7 +485,7 @@ function App() {
   }
 
   const syncProfile = async (userId: string) => {
-    const learner = profile ?? readProfile()
+    const learner = profile
     if (!learner) return
     await saveProfile(userId, learner)
   }
@@ -603,16 +589,18 @@ function App() {
         localStorage.removeItem(profileKey)
       }
       const { data: vocabulary } = await supabase.from('vocabulary_items').select('term').eq('user_id', userId).order('created_at', { ascending: false }).limit(100)
-      if (vocabulary?.length) setWords(vocabulary.map(item => item.term))
+      setWords((vocabulary ?? []).map(item => item.term))
       const { data: plan } = await supabase.from('learning_plans').select('plan').eq('user_id', userId).maybeSingle()
       if (plan?.plan?.headline) { setLearningPlan(plan.plan as LearningPlan); setPlanSummary(`${plan.plan.headline} ${plan.plan.today ?? ''}`) }
       else {
+        setLearningPlan(null)
+        setPlanSummary('')
         const localLearner = row ? {
           name: row.display_name ?? '', goal: row.goal ?? 'conversation', level: row.estimated_level ?? 'unsure',
           focuses: row.focus_areas ?? ['speaking', 'listening'], minutes: row.daily_minutes ?? 10, accent: row.accent ?? 'us',
           style: row.learning_style ?? 'mixed', interests: row.interests ?? [], customInterest: row.custom_interest ?? '',
           barriers: row.barriers ?? [], scenario: row.learning_context ?? 'daily', timeHorizon: row.time_horizon ?? 'flexible', feedbackStyle: row.feedback_style ?? 'balanced',
-        } as Profile : profile ?? readProfile()
+        } as Profile : profile
         if (localLearner) await createLearningPlan(localLearner, userId)
       }
       const since = new Date()
@@ -642,9 +630,9 @@ function App() {
         weeklyMinutes,
       })
       const { data: insights } = await supabase.from('learner_insights').select('id,skill,observation,recommendation,confidence,created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(5)
-      if (insights?.length) setLearnerInsights(insights as LearnerInsight[])
+      setLearnerInsights((insights ?? []) as LearnerInsight[])
       const { data: messages } = await supabase.from('chat_messages').select('role,content,metadata').eq('user_id', userId).order('created_at', { ascending: true }).limit(30)
-      if (messages?.length) setChat(messages.map(item => ({ role: item.role as 'user' | 'assistant', text: item.content, note: item.metadata?.correction })))
+      setChat(messages?.length ? messages.map(item => ({ role: item.role as 'user' | 'assistant', text: item.content, note: item.metadata?.correction })) : initialMessages)
       const { data: savedTracks, error: tracksError } = await supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', userId)
       if (!tracksError) {
         const restoredTracks: Record<string, TrackProgress> = {}
@@ -692,6 +680,13 @@ function App() {
     setProfile(null)
     setAccountReady(false)
     setTrackProgress({})
+    setWords([])
+    setChat(initialMessages)
+    setLearnerInsights([])
+    setRecentMistakes([])
+    setLearningPlan(null)
+    setPlanSummary('')
+    setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
     localStorage.removeItem(profileKey)
     localStorage.removeItem(trackProgressKey)
     localStorage.removeItem(dailyAgendaKey)
