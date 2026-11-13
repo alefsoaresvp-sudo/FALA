@@ -712,11 +712,7 @@ function App() {
   useEffect(() => () => {
     if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
   }, [audioPreviewUrl])
-  useEffect(() => () => {
-    recognitionRef.current?.stop()
-    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
-    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
-  }, [])
+
   useEffect(() => {
     if (!recording) return
     const timer = window.setInterval(() => {
@@ -1060,6 +1056,7 @@ function App() {
         setRecordingNotice('O aparelho interrompeu a gravação. Feche outros aplicativos que usam o microfone e tente novamente.')
         stream.getTracks().forEach(track => track.stop())
         mediaStreamRef.current = null
+        mediaRecorderRef.current = null
       }
       recorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop())
