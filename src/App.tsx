@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, AudioLines, Award, BookOpen, Bookmark, BriefcaseBusiness,
   Camera, Car, Check, CheckCheck, CheckCircle2, ChevronRight, ClipboardCheck, CircleHelp,
-  Clock3, Flame, Headphones, Home, Languages, Lightbulb,
-  LockKeyhole, Map, MessageCircle, Mic, MicOff, Moon, Music2, PlayCircle, Plus,
+  Clock3, Flame, Headphones, Home, Languages, Lightbulb, LockKeyhole, Map,
+  MessageCircle, Mic, MicOff, Moon, MoreHorizontal, Music2, PlayCircle, Plus,
   RotateCcw, Send, Settings2, ShoppingBag, Sparkles, Sun, Target, Trophy, Utensils,
   Users, Volume2, WandSparkles, X,
 } from 'lucide-react'
@@ -192,7 +192,6 @@ function readDailyAgenda(): boolean[] {
 const mobileNavItems: { id: Page; label: string; icon: typeof Home }[] = [
   {id:'home',label:'Início',icon:Home},{id:'tracks',label:'Trilhas',icon:Map},
   {id:'speak',label:'Falar',icon:AudioLines},{id:'write',label:'Escrever',icon:Languages},
-  {id:'music',label:'Música',icon:Music2},{id:'vocabulary',label:'Palavras',icon:Bookmark},
 ]
 const dailySteps = [
   { title:'Ouvir e repetir', detail:'Escute uma frase e pratique o ritmo da fala.', minutes:3, page:'speak' as Page, icon:Headphones },
@@ -424,6 +423,12 @@ function App() {
   const [chatLoading, setChatLoading] = useState(false)
   const [apiNotice, setApiNotice] = useState('')
   const [recording, setRecording] = useState(false)
+  const [recordingSeconds, setRecordingSeconds] = useState(0)
+  const [recordingNotice, setRecordingNotice] = useState('')
+  const [audioBusy, setAudioBusy] = useState(false)
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null)
+  const [showMobileMore, setShowMobileMore] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [writingText, setWritingText] = useState('')
   const [writingFeedback, setWritingFeedback] = useState('')
@@ -469,6 +474,7 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const recordingStartedAtRef = useRef<number | null>(null)
 
   const saveProfile = async (userId: string, learner: Profile) => {
     if (!supabase) return
@@ -689,6 +695,48 @@ function App() {
     localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: dailyChecks }))
   }, [dailyChecks])
   useEffect(() => {
+    if (!recording) return
+    const timer = window.setInterval(() => {
+      const startedAt = recordingStartedAtRef.current
+      if (!startedAt) return
+      const seconds = Math.floor((Date.now() - startedAt) / 1000)
+      setRecordingSeconds(seconds)
+      if (seconds >= 45) {
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        else recognitionRef.current?.stop()
+        setRecordingNotice('Limite de 45 segundos atingido. Você pode ouvir o áudio ou gravar novamente.')
+      }
+    }, 300)
+    return () => window.clearInterval(timer)
+  }, [recording])
+  useEffect(() => () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
+  }, [audioPreviewUrl])
+
+  useEffect(() => {
+    if (!recording) return
+    const timer = window.setInterval(() => {
+      const startedAt = recordingStartedAtRef.current
+      if (!startedAt) return
+      const seconds = Math.floor((Date.now() - startedAt) / 1000)
+      setRecordingSeconds(seconds)
+      if (seconds >= 45) {
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        else recognitionRef.current?.stop()
+        setRecordingNotice('Limite de 45 segundos atingido. Você pode ouvir o áudio ou gravar novamente.')
+      }
+    }, 300)
+    return () => window.clearInterval(timer)
+  }, [recording])
+  useEffect(() => () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl)
+  }, [audioPreviewUrl])
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+  }, [])
+  useEffect(() => {
     if (!supabase) return
     void supabase.auth.getSession().then(({ data }) => {
       setUserEmail(data.session?.user.email ?? null)
@@ -839,88 +887,243 @@ function App() {
     }
   }
 
-  const startRecording = async () => {
-    setTranscript('')
-    setApiNotice('')
-    const { data: activeSession } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
+  const transcribeAudioBlob = async (blob: Blob) => {
     const backend = supabase
-    if (backend && activeSession.session?.access_token && navigator.mediaDevices?.getUserMedia && 'MediaRecorder' in window) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        mediaStreamRef.current = stream
-        audioChunksRef.current = []
-        const preferredType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''
-        const recorder = new MediaRecorder(stream, preferredType ? { mimeType: preferredType } : undefined)
-        mediaRecorderRef.current = recorder
-        recorder.ondataavailable = event => { if (event.data.size > 0) audioChunksRef.current.push(event.data) }
-        recorder.onerror = () => {
-          setRecording(false)
-          setApiNotice('Não foi possível gravar o áudio. Confira a permissão do microfone e tente novamente.')
-          stream.getTracks().forEach(track => track.stop())
-        }
-        recorder.onstop = async () => {
-          stream.getTracks().forEach(track => track.stop())
-          mediaStreamRef.current = null
-          const mimeType = recorder.mimeType || 'audio/webm'
-          const blob = new Blob(audioChunksRef.current, { type: mimeType })
-          audioChunksRef.current = []
-          if (!blob.size) { setApiNotice('Não recebemos áudio. Tente gravar novamente.'); return }
-          setApiNotice('Enviando áudio para transcrição segura...')
-          try {
-            const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('wav') ? 'wav' : 'webm'
-            const form = new FormData()
-            form.append('file', new File([blob], `fala-practice.${extension}`, { type: mimeType.split(';')[0] }))
-            const { data, error } = await backend.functions.invoke('transcribe', { body: form })
-            if (error) throw error
-            if (typeof data?.text === 'string' && data.text.trim()) {
-              setTranscript(data.text.trim())
-              setApiNotice('Transcrição concluída. Isso reconhece palavras, mas não mede a pronúncia dos fonemas.')
-              const { data: userData } = await backend.auth.getUser()
-              if (userData.user) await backend.from('learning_sessions').insert({ user_id: userData.user.id, activity_type: 'speaking', duration_seconds: 120, details: { transcript: data.text.trim() } })
-            } else {
-              setApiNotice('Não conseguimos reconhecer palavras nesse áudio. Tente falar um pouco mais perto do microfone.')
-            }
-          } catch (error) {
-            console.error(error)
-            setApiNotice('A transcrição não foi concluída. Verifique o deploy da função transcribe e tente novamente.')
-          }
-        }
-        recorder.start()
-        setRecording(true)
-        return
-      } catch (error) {
-        console.error(error)
-        setApiNotice('Não foi possível acessar o microfone. Confira a permissão do navegador.')
-        return
-      }
-    }
-
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognitionCtor) {
-      setApiNotice('Seu navegador não oferece reconhecimento de voz nesta tela. Use Chrome ou faça login para enviar o áudio ao serviço de transcrição.')
+    if (!backend) {
+      setRecordingNotice('A gravação está salva temporariamente neste aparelho. A transcrição com a Lumi exige a conexão da conta.')
       return
     }
-    const recognition = new SpeechRecognitionCtor()
-    recognition.lang = profile?.accent === 'uk' ? 'en-GB' : 'en-US'
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    recognition.onresult = event => { setTranscript(event.results[0][0].transcript); setRecording(false) }
-    recognition.onerror = () => { setRecording(false); setApiNotice('Não conseguimos acessar o microfone. Confira a permissão do navegador.') }
-    recognition.onend = () => setRecording(false)
-    recognitionRef.current = recognition
-    try { recognition.start(); setRecording(true) } catch { setRecording(false) }
+
+    const { data: sessionData, error: sessionError } = await backend.auth.getSession()
+    if (sessionError || !sessionData.session?.access_token) {
+      setRecordingNotice('Gravação pronta. Entre na sua conta para enviar o áudio à Lumi e receber a transcrição.')
+      setAuthMessage('Entre para transcrever sua gravação com a Lumi.')
+      setShowSettings(true)
+      return
+    }
+
+    if (!blob.size) {
+      setRecordingNotice('O arquivo de áudio está vazio. Grave novamente e fale por pelo menos 2 segundos.')
+      return
+    }
+    if (blob.size > 10 * 1024 * 1024) {
+      setRecordingNotice('O áudio ficou muito grande. Grave um trecho mais curto, de até 45 segundos.')
+      return
+    }
+
+    setAudioBusy(true)
+    setRecordingNotice('Enviando sua gravação para a Lumi...')
+    try {
+      const rawType = (blob.type || 'audio/webm').split(';')[0].toLowerCase()
+      const normalizedType = rawType === 'audio/x-m4a' || rawType === 'audio/m4a'
+        ? 'audio/mp4'
+        : rawType === 'audio/x-wav'
+          ? 'audio/wav'
+          : rawType
+      const extension = normalizedType === 'audio/mp4' ? 'm4a'
+        : normalizedType === 'audio/ogg' ? 'ogg'
+          : normalizedType === 'audio/wav' ? 'wav'
+            : normalizedType === 'audio/mpeg' ? 'mp3' : 'webm'
+      const form = new FormData()
+      form.append('file', new File([blob], 'fala-practice.' + extension, { type: normalizedType }))
+      const { data, error } = await backend.functions.invoke('transcribe', { body: form })
+      if (error) {
+        console.error('Transcription function error', error)
+        throw error
+      }
+      const recognizedText = typeof data?.text === 'string' ? data.text.trim() : ''
+      if (!recognizedText) {
+        setRecordingNotice('Não conseguimos identificar palavras. Grave novamente em um local silencioso, aproxime o aparelho e fale um pouco mais devagar.')
+        return
+      }
+      setTranscript(recognizedText)
+      setRecordingNotice('Transcrição concluída. A Lumi reconheceu as palavras; isso não é uma nota de precisão fonética.')
+      const { data: userData } = await backend.auth.getUser()
+      if (userData.user) {
+        const { error: sessionInsertError } = await backend.from('learning_sessions').insert({
+          user_id: userData.user.id,
+          activity_type: 'speaking',
+          duration_seconds: Math.min(45, recordingSeconds || 10),
+          details: { transcript: recognizedText, source: 'media_recorder' },
+        })
+        if (sessionInsertError) console.error('Could not save speaking session', sessionInsertError)
+      }
+    } catch (error) {
+      console.error('Audio transcription failed', error)
+      const message = error instanceof Error ? error.message : ''
+      if (/Failed to fetch|network|fetch/i.test(message)) {
+        setRecordingNotice('Falha de conexão ao enviar o áudio. Confira a internet e tente transcrever novamente.')
+      } else {
+        setRecordingNotice('A gravação está pronta, mas a transcrição falhou. Confira se OPENAI_API_KEY foi cadastrada no Supabase e se a função transcribe está ativa.')
+      }
+    } finally {
+      setAudioBusy(false)
+    }
   }
+
+  const startRecording = async () => {
+    if (recording || audioBusy) return
+    setTranscript('')
+    setRecordingNotice('')
+    setApiNotice('')
+    setRecordingSeconds(0)
+    setRecordedAudioBlob(null)
+    if (audioPreviewUrl) {
+      URL.revokeObjectURL(audioPreviewUrl)
+      setAudioPreviewUrl(null)
+    }
+
+    if (!window.isSecureContext) {
+      setRecordingNotice('O microfone exige uma conexão segura (HTTPS). Abra o FALA pelo endereço https://alefsoaresvp-sudo.github.io/FALA/.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setRecordingNotice('Este navegador não liberou acesso ao microfone. Abra o FALA no Chrome ou Safari atualizado, fora de uma janela incorporada.')
+      return
+    }
+
+    try {
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        })
+      } catch (firstError) {
+        const name = firstError instanceof DOMException ? firstError.name : ''
+        if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'NotFoundError' || name === 'NotReadableError') throw firstError
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      }
+      mediaStreamRef.current = stream
+      audioChunksRef.current = []
+
+      const Recorder = window.MediaRecorder
+      if (typeof Recorder === 'undefined') {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!SpeechRecognitionCtor) {
+          setRecordingNotice('Seu navegador não oferece gravação de áudio. Atualize o Chrome/Safari ou tente outro navegador.')
+          return
+        }
+        const recognition = new SpeechRecognitionCtor()
+        recognition.lang = profile?.accent === 'uk' ? 'en-GB' : 'en-US'
+        recognition.interimResults = true
+        recognition.maxAlternatives = 1
+        recognition.onresult = event => {
+          const result = event.results[event.results.length - 1]
+          if (result?.[0]?.transcript) setTranscript(result[0].transcript)
+        }
+        recognition.onerror = event => {
+          setRecording(false)
+          setRecordingNotice(event.error === 'not-allowed'
+            ? 'Permissão do microfone negada. Libere o microfone nas configurações do navegador e tente novamente.'
+            : 'O reconhecimento do navegador falhou. Atualize o navegador ou tente gravar em outro dispositivo.')
+        }
+        recognition.onend = () => {
+          setRecording(false)
+          recordingStartedAtRef.current = null
+        }
+        recognitionRef.current = recognition
+        recognition.start()
+        recordingStartedAtRef.current = Date.now()
+        setRecording(true)
+        setRecordingNotice('Fale agora. O reconhecimento acontece no navegador.')
+        return
+      }
+
+      const supportedTypes = [
+        'audio/webm;codecs=opus',
+        'audio/mp4',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+      ]
+      const mimeType = supportedTypes.find(type => {
+        try { return Recorder.isTypeSupported(type) } catch { return false }
+      })
+      const recorderOptions: MediaRecorderOptions = { audioBitsPerSecond: 64000 }
+      if (mimeType) recorderOptions.mimeType = mimeType
+      const recorder = new Recorder(stream, recorderOptions)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = event => {
+        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data)
+      }
+      recorder.onerror = event => {
+        console.error('MediaRecorder error', event)
+        setRecording(false)
+        recordingStartedAtRef.current = null
+        setRecordingNotice('O aparelho interrompeu a gravação. Feche outros aplicativos que usam o microfone e tente novamente.')
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        const chunks = audioChunksRef.current.splice(0)
+        const actualType = recorder.mimeType || chunks.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(chunks, { type: actualType })
+        setRecording(false)
+        recordingStartedAtRef.current = null
+        setRecordedAudioBlob(blob)
+
+        if (blob.size < 1000) {
+          setRecordingNotice('A gravação ficou muito curta ou vazia. Segure para falar por pelo menos 2 segundos e tente novamente.')
+          return
+        }
+        const previewUrl = URL.createObjectURL(blob)
+        setAudioPreviewUrl(previous => {
+          if (previous) URL.revokeObjectURL(previous)
+          return previewUrl
+        })
+
+        const backend = supabase
+        const { data: sessionData } = backend ? await backend.auth.getSession() : { data: { session: null } }
+        if (backend && sessionData.session?.access_token) {
+          await transcribeAudioBlob(blob)
+        } else {
+          setRecordingNotice('Gravação salva temporariamente neste aparelho. Você pode ouvi-la abaixo. Entre na conta para pedir à Lumi que transcreva.')
+        }
+      }
+
+      recorder.start(1000)
+      recordingStartedAtRef.current = Date.now()
+      setRecording(true)
+      setRecordingNotice('Gravando. Fale naturalmente, sem aproximar demais o microfone.')
+    } catch (error) {
+      console.error('Microphone capture failed', error)
+      const name = error instanceof DOMException ? error.name : ''
+      const message = name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'Permissão do microfone bloqueada. Toque no cadeado ao lado do endereço do site, permita o microfone e recarregue a página.'
+        : name === 'NotFoundError'
+          ? 'Não encontramos um microfone neste aparelho.'
+          : name === 'NotReadableError'
+            ? 'O microfone está ocupado por outro aplicativo. Feche chamadas/gravadores e tente novamente.'
+            : name === 'OverconstrainedError'
+              ? 'O navegador não conseguiu configurar o microfone. Tente novamente com as configurações padrão do aparelho.'
+              : 'Não foi possível iniciar o microfone. Verifique as permissões do navegador e tente novamente.'
+      setRecordingNotice(message)
+      setRecording(false)
+      recordingStartedAtRef.current = null
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+    }
+  }
+
   const stopRecording = () => {
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop()
-      setRecording(false)
+      setRecordingNotice('Finalizando o áudio...')
       return
     }
-    recognitionRef.current?.stop()
-    setRecording(false)
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
+      setRecording(false)
+    }
   }
+
   const saveWord = (word: string) => {
     setWords(current => current.includes(word) ? current : [...current, word])
     const backend = supabase
@@ -1137,7 +1340,7 @@ function App() {
                 <div className="field-label">{activeTrackLesson.question}</div>
                 {activeTrackLesson.kind==='choice'?<div className="answer-options">{(activeTrackLesson.options??[]).map((option,index)=><button className={'answer-option'+(trackChoice===index?(index===activeTrackLesson.correct_index?' correct':' incorrect'):'')} key={option} onClick={()=>{setTrackChoice(index);setTrackFeedback(index===activeTrackLesson.correct_index?'Correto. Você escolheu a resposta adequada ao contexto.':'Essa opção não é a melhor para a situação. Tente novamente.')}}><span>{String.fromCharCode(65+index)}</span>{option}{trackChoice===index&&(index===activeTrackLesson.correct_index?<CheckCircle2 size={17}/>:<X size={17}/>)}</button>)}</div>
                 : activeTrackLesson.kind==='write'?<textarea className="track-response-area" value={trackResponse} onChange={e=>{setTrackResponse(e.target.value);setTrackEvaluation(null);setTrackFeedback('')}} rows={4} placeholder={activeTrackLesson.input_hint||'Escreva sua resposta em inglês...'}/>
-                : <div className="track-speaking-card"><p>1. Ouça o exemplo. 2. Repita em voz alta. 3. Grave sua tentativa para comparar o texto reconhecido. Sem microfone, você pode digitar a frase.</p><button className="listen-button" onClick={()=>speakText(activeTrackLesson.target_phrase,profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button><button className={'record-button'+(recording?' recording':'')} onClick={recording?stopRecording:()=>void startRecording()}>{recording?<MicOff size={20}/>:<Mic size={20}/>}<span>{recording?'Parar gravação':'Gravar minha fala'}</span></button>{transcript&&<div className="track-transcript"><small>TRANSCRIÇÃO RECONHECIDA</small><p>{transcript}</p></div>}<textarea className="track-response-area" value={trackResponse} onChange={e=>setTrackResponse(e.target.value)} rows={2} placeholder="Ou digite sua tentativa em inglês..."/><small className="muted">A transcrição compara palavras; não mede afinação nem precisão fonética.</small></div>}
+                : <div className="track-speaking-card"><p>1. Ouça o exemplo. 2. Repita em voz alta. 3. Grave sua tentativa para comparar o texto reconhecido. Sem microfone, você pode digitar a frase.</p><button className="listen-button" onClick={()=>speakText(activeTrackLesson.target_phrase,profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button><button className={'record-button'+(recording?' recording':'')} onClick={recording?stopRecording:()=>void startRecording()}>{recording?<MicOff size={20}/>:<Mic size={20}/>}<span>{recording?'Parar · '+String(Math.floor(recordingSeconds/60)).padStart(2,'0')+':'+String(recordingSeconds%60).padStart(2,'0'):'Gravar minha fala'}</span></button>{recordingNotice&&<div className="audio-status">{recordingNotice}</div>}{audioPreviewUrl&&<audio className="track-audio-preview" controls preload="metadata" src={audioPreviewUrl}>Seu navegador não consegue reproduzir este áudio.</audio>}{transcript&&<div className="track-transcript"><small>TRANSCRIÇÃO RECONHECIDA</small><p>{transcript}</p></div>}<textarea className="track-response-area" value={trackResponse} onChange={e=>setTrackResponse(e.target.value)} rows={2} placeholder="Ou digite sua tentativa em inglês..."/><small className="muted">A transcrição compara palavras; não mede afinação nem precisão fonética.</small></div>}
                 {trackEvaluation&&<div className="answer-feedback success"><strong>Feedback da Lumi · {trackEvaluation.score}/100</strong><p>{trackEvaluation.strengths}</p><p><b>Correção:</b> {trackEvaluation.correction}</p><p><b>Versão mais natural:</b> {trackEvaluation.improved_answer}</p><p><b>Próximo passo:</b> {trackEvaluation.next_step}</p></div>}
                 {trackFeedback&&<div className="answer-feedback">{trackFeedback}</div>}
                 <div className="track-lesson-actions"><span>{activeTrackLesson.kind==='choice'?'Uma resposta correta libera a etapa.':'Faça sua tentativa para liberar a etapa.'}</span><button className="primary-button" onClick={()=>void completeTrackLesson()} disabled={trackBusy||(activeTrackLesson.kind==='choice'?trackChoice===null:activeTrackLesson.kind==='write'?trackResponse.trim().split(/\s+/).filter(Boolean).length<5:!transcript.trim()&&trackResponse.trim().split(/\s+/).filter(Boolean).length<5)}>{trackBusy?'Lumi está avaliando...':'Concluir etapa'} <ArrowRight size={15}/></button></div>
@@ -1154,7 +1357,7 @@ function App() {
 
         {page === 'speak' && <>
           <div className="page-intro"><span className="eyebrow muted">FALAR · SPEAKING LAB</span><h1>Solte a voz. <em>Sem medo de errar.</em></h1><p>Treine uma frase e depois converse sobre um assunto real.</p></div>
-          <div className="speak-grid"><section className="panel pronunciation-panel"><div className="panel-heading"><div><span className="eyebrow muted">TREINO DE FALA</span><h3>Repita em voz alta</h3></div><span className="level-pill">{profile.accent === 'us' ? 'Inglês americano' : 'Inglês britânico'}</span></div><div className="speak-prompt"><span className="prompt-label">DIGA ESTA FRASE</span><h2>I'd like to improve my English.</h2><p>Eu gostaria de melhorar meu inglês.</p><button className="listen-button" onClick={() => speakText("I'd like to improve my English.", profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button></div><button className={`record-button ${recording ? 'recording' : ''}`} onClick={recording ? stopRecording : () => { void startRecording() }}>{recording ? <MicOff size={23}/> : <Mic size={23}/>}<span>{recording ? 'Parar gravação' : 'Toque para falar'}</span></button><p className="record-hint">{recording ? 'Estou ouvindo. Fale a frase com calma.' : 'O reconhecimento depende do navegador. O FALA não salva gravações nesta versão.'}</p>{transcript && <div className="transcript-result"><span className="eyebrow muted">O QUE FOI RECONHECIDO</span><p>“{transcript}”</p><div className="soft-note"><Lightbulb size={15}/> Esta é uma comparação de transcrição, não uma nota fonética. A avaliação detalhada de sons será conectada ao serviço de pronúncia.</div></div>}</section><section className="panel conversation-panel"><div className="panel-heading"><div><span className="eyebrow muted">CONVERSA GUIADA</span><h3>Converse com a Lumi</h3></div><span className="online-status"><i/> EM PRÁTICA</span></div><div className="chat-topic"><span className="topic-avatar lumi-face">L</span><div><strong>Lumi · sua parceira de inglês</strong><small>Tema adaptado aos seus interesses</small></div><button className="icon-button" onClick={() => setChat([{ role: 'assistant', text: `Vamos recomeçar, ${firstName}. Escolha um tema que você gosta e vamos conversar em inglês: ${profile.customInterest || profile.interests.join(', ') || 'seu dia a dia'}.` }])} aria-label="Reiniciar conversa"><RotateCcw size={16}/></button></div><div className="chat-messages">{chat.map((item,index)=><div className={`chat-message ${item.role}`} key={index}><div className="message-avatar">{item.role === 'assistant' ? 'L' : firstName.slice(0,1).toUpperCase()}</div><div><p>{item.text}</p>{item.note && <small>{item.note}</small>}</div></div>)}{chatLoading && <div className="chat-message assistant"><div className="message-avatar">L</div><div className="typing-indicator"><i/><i/><i/></div></div>}<div ref={chatEndRef}/></div><form className="chat-compose" onSubmit={e => {e.preventDefault(); void sendMessage()}}><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Responda em inglês ou peça ajuda em português..."/><button type="submit" disabled={!chatInput.trim() || chatLoading}><Send size={17}/></button></form>{apiNotice && <p className="api-notice">{apiNotice}</p>}<div className="chat-footnote"><Sparkles size={13}/> Erros fazem parte do aprendizado. Tente responder em inglês.</div></section></div>
+          <div className="speak-grid"><section className="panel pronunciation-panel"><div className="panel-heading"><div><span className="eyebrow muted">TREINO DE FALA</span><h3>Repita em voz alta</h3></div><span className="level-pill">{profile.accent === 'us' ? 'Inglês americano' : 'Inglês britânico'}</span></div><div className="speak-prompt"><span className="prompt-label">DIGA ESTA FRASE</span><h2>I'd like to improve my English.</h2><p>Eu gostaria de melhorar meu inglês.</p><button className="listen-button" onClick={() => speakText("I'd like to improve my English.", profile.accent)}><Volume2 size={16}/> Ouvir exemplo</button></div><div className="recorder-console"><button className={`record-button ${recording ? 'recording' : ''}`} onClick={recording ? stopRecording : () => { void startRecording() }} disabled={audioBusy}>{recording ? <MicOff size={23}/> : <Mic size={23}/>}<span>{recording ? 'Parar gravação' : audioBusy ? 'Processando áudio...' : 'Toque para gravar'}</span></button>{recording&&<div className="recording-live"><span className="recording-pulse"/><strong>{String(Math.floor(recordingSeconds/60)).padStart(2,'0')}:{String(recordingSeconds%60).padStart(2,'0')}</strong><small>Limite de 45 segundos</small></div>}</div><p className="record-hint">{recording ? 'Gravando com o microfone do aparelho. Fale a frase completa.' : 'A gravação funciona sem login neste aparelho. Para receber a transcrição da Lumi, entre na sua conta.'}</p>{recordingNotice&&<div className={`audio-status ${audioBusy?'busy':''}`}>{audioBusy&&<span className="recording-pulse"/>}{recordingNotice}</div>}{audioPreviewUrl&&<div className="audio-preview-card"><div><strong>Sua gravação</strong><small>{recordedAudioBlob ? (recordedAudioBlob.size/1024).toFixed(0)+' KB · disponível neste aparelho' : 'Áudio local'}</small></div><audio controls preload="metadata" src={audioPreviewUrl}>Seu navegador não consegue reproduzir este áudio.</audio><div className="audio-preview-actions"><button className="secondary-button" onClick={()=>{setTranscript('');setRecordingNotice('');void startRecording()}} disabled={audioBusy}><RotateCcw size={14}/> Gravar novamente</button>{!transcript&&<button className="primary-button" onClick={()=>recordedAudioBlob&&void transcribeAudioBlob(recordedAudioBlob)} disabled={audioBusy||!recordedAudioBlob}>{audioBusy?'Transcrevendo...':'Transcrever com a Lumi'} <WandSparkles size={14}/></button>}</div></div>}{transcript && <div className="transcript-result"><span className="eyebrow muted">O QUE FOI RECONHECIDO</span><p>“{transcript}”</p><div className="soft-note"><Lightbulb size={15}/> A transcrição reconhece palavras; ela não mede precisão fonética nem substitui uma avaliação de pronúncia.</div></div>}</section><section className="panel conversation-panel"><div className="panel-heading"><div><span className="eyebrow muted">CONVERSA GUIADA</span><h3>Converse com a Lumi</h3></div><span className="online-status"><i/> EM PRÁTICA</span></div><div className="chat-topic"><span className="topic-avatar lumi-face">L</span><div><strong>Lumi · sua parceira de inglês</strong><small>Tema adaptado aos seus interesses</small></div><button className="icon-button" onClick={() => setChat([{ role: 'assistant', text: `Vamos recomeçar, ${firstName}. Escolha um tema que você gosta e vamos conversar em inglês: ${profile.customInterest || profile.interests.join(', ') || 'seu dia a dia'}.` }])} aria-label="Reiniciar conversa"><RotateCcw size={16}/></button></div><div className="chat-messages">{chat.map((item,index)=><div className={`chat-message ${item.role}`} key={index}><div className="message-avatar">{item.role === 'assistant' ? 'L' : firstName.slice(0,1).toUpperCase()}</div><div><p>{item.text}</p>{item.note && <small>{item.note}</small>}</div></div>)}{chatLoading && <div className="chat-message assistant"><div className="message-avatar">L</div><div className="typing-indicator"><i/><i/><i/></div></div>}<div ref={chatEndRef}/></div><form className="chat-compose" onSubmit={e => {e.preventDefault(); void sendMessage()}}><input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Responda em inglês ou peça ajuda em português..."/><button type="submit" disabled={!chatInput.trim() || chatLoading}><Send size={17}/></button></form>{apiNotice && <p className="api-notice">{apiNotice}</p>}<div className="chat-footnote"><Sparkles size={13}/> Erros fazem parte do aprendizado. Tente responder em inglês.</div></section></div>
         </>}
 
         {page === 'music' && musicSet && <>
@@ -1180,9 +1383,10 @@ function App() {
           <div className="page-intro"><span className="eyebrow muted">EVOLUÇÃO · YOUR PROGRESS</span><h1>Pequenos passos. <em>Progresso real.</em></h1><p>Veja o que já está construindo e o que merece atenção na próxima semana.</p></div><div className="progress-metrics"><div className="panel metric-card"><span className="metric-label">TEMPO DE PRÁTICA</span><strong>{learnerStats.totalMinutes} <small>min</small></strong><span className="metric-caption">Últimos 7 dias</span></div><div className="panel metric-card"><span className="metric-label">SEQUÊNCIA ATUAL</span><strong>{learnerStats.activeDays} <small>dias</small></strong><span className="metric-caption">Com atividade nos últimos 7 dias</span></div><div className="panel metric-card"><span className="metric-label">VOCABULÁRIO</span><strong>{words.length} <small>itens</small></strong><span className="metric-caption">No seu caderno</span></div></div><section className="panel progress-breakdown"><div className="panel-heading"><div><span className="eyebrow muted">HABILIDADES</span><h3>Seu mapa de aprendizagem</h3></div><span className="level-pill">Em construção</span></div>{[{n:'Compreensão',k:'listening'},{n:'Vocabulário',k:'vocabulary'},{n:'Conversação',k:'speaking'},{n:'Escrita',k:'writing'}].map(item=>({...item,v:learnerStats.skillScores[item.k] ?? 0})).map(item=><div className="breakdown-row" key={item.n}><span>{item.n}</span><div><i style={{width:`${item.v}%`}}/></div><strong>{item.v}%</strong></div>)}<div className="soft-note"><CircleHelp size={15}/> Os indicadores aparecem conforme você conclui atividades. A média considera apenas tentativas registradas e não substitui uma avaliação formal de proficiência.</div></section>
         </>}
       </div>
-      <footer className="app-footer"><span>FALA ENGLISH · APRENDER COM INTENÇÃO</span><span>FALA · Lumi adaptive tutor · 0.2</span></footer>
+      <footer className="app-footer"><span>FALA ENGLISH · APRENDER COM INTENÇÃO</span><span>FALA · Lumi adaptive tutor · 4.0</span></footer>
     </main>
-    <nav className="mobile-bottom-nav" aria-label="Navegação principal">{mobileNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}</nav>
+    <nav className="mobile-bottom-nav" aria-label="Navegação principal">{mobileNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}<button className={showMobileMore?'active':''} onClick={()=>setShowMobileMore(true)} aria-label="Mais opções"><MoreHorizontal size={19}/><span>Mais</span></button></nav>
+    {showMobileMore&&<div className="mobile-more-backdrop" onClick={()=>setShowMobileMore(false)}><section className="mobile-more-sheet" onClick={event=>event.stopPropagation()}><div className="mobile-more-heading"><div><span className="eyebrow muted">SEU ESPAÇO</span><h3>Mais ferramentas</h3></div><button className="icon-button" onClick={()=>setShowMobileMore(false)} aria-label="Fechar menu"><X size={18}/></button></div><button onClick={()=>{setPage('music');setShowMobileMore(false)}}><span><Music2 size={19}/></span><div><strong>Music Lab</strong><small>Vocabulário e prática com música</small></div><ChevronRight size={16}/></button><button onClick={()=>{setPage('vocabulary');setShowMobileMore(false)}}><span><Bookmark size={19}/></span><div><strong>Meu vocabulário</strong><small>Palavras que você salvou</small></div><ChevronRight size={16}/></button><button onClick={()=>{setPage('progress');setShowMobileMore(false)}}><span><Award size={19}/></span><div><strong>Meu progresso</strong><small>Histórico e evolução</small></div><ChevronRight size={16}/></button><button onClick={()=>{setShowMobileMore(false);setShowSettings(true)}}><span><Settings2 size={19}/></span><div><strong>Conta e preferências</strong><small>Login, sincronização e tema</small></div><ChevronRight size={16}/></button></section></div>}
     {showSettings && <div className="modal-backdrop" onClick={() => setShowSettings(false)}><section className="settings-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow muted">SEU PERFIL</span><h2>Preferências de estudo</h2></div><button className="icon-button" onClick={() => setShowSettings(false)}><X size={18}/></button></div><div className="settings-profile"><span className="avatar large-avatar">{firstName.slice(0,1).toUpperCase()}</span><div><strong>{profile.name || 'Estudante'}</strong><small>{goalOptions.find(item=>item.id===profile.goal)?.title} · Lumi personalizada</small></div></div><div className="settings-row"><div><strong>Tema do aplicativo</strong><span>Escolha uma aparência para estudar</span></div><button className="theme-switch" onClick={()=>setDarkTheme(value=>!value)}>{darkTheme?<Sun size={16}/>:<Moon size={16}/>} {darkTheme?'Tema claro':'Tema escuro'}</button></div><div className="settings-row"><div><strong>Tempo por dia</strong><span>Sua meta de estudo</span></div><select className="select-input" value={profile.minutes} onChange={e=>{const updated={...profile,minutes:Number(e.target.value)};updateLearnerProfile(updated)}}>{[5,10,15,20,30].map(v=><option key={v} value={v}>{v} minutos</option>)}</select></div><div className="settings-row"><div><strong>Sotaque de referência</strong><span>Modelo de áudio</span></div><div className="segmented"><button className={profile.accent==='us'?'active':''} onClick={()=>{const updated={...profile,accent:'us' as const};updateLearnerProfile(updated)}}>EUA</button><button className={profile.accent==='uk'?'active':''} onClick={()=>{const updated={...profile,accent:'uk' as const};updateLearnerProfile(updated)}}>Reino Unido</button></div></div><div className="account-section"><span className="eyebrow muted">CONTA E SINCRONIZAÇÃO</span>{!supabase ? <p>O login, a sincronização, a análise de fotos e a Lumi com IA exigem um projeto Supabase conectado ao site e as funções de backend implantadas. Em desenvolvimento local, use as variáveis do <code>.env.local</code>.</p> : userEmail ? <><div className="signed-in"><CheckCircle2 size={17}/><span><strong>Conta conectada</strong><small>{userEmail}</small></span></div><button className="secondary-button" onClick={() => void handleSignOut()}>Sair da conta</button></> : <><p>Entre ou crie uma conta para salvar seu perfil e liberar o tutor com IA.</p><input className="auth-input" type="email" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} placeholder="Seu e-mail"/><input className="auth-input" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} placeholder="Senha (mínimo 8 caracteres)"/><div className="auth-actions"><button className="secondary-button" disabled={authBusy} onClick={() => void handleAuth('signin')}>Entrar</button><button className="primary-button" disabled={authBusy} onClick={() => void handleAuth('signup')}>Criar conta</button></div></>}{authMessage && <p className="auth-message">{authMessage}</p>}</div><button className="reset-profile" onClick={resetProfile}>Refazer personalização <ArrowRight size={15}/></button><p className="settings-data-note">Isso reinicia as preferências locais e mantém a conta. O histórico sincronizado não é apagado.</p></section></div>}
   </div>
 }
@@ -1206,13 +1410,16 @@ declare global {
     interimResults: boolean
     maxAlternatives: number
     onresult: ((event: SpeechRecognitionEvent) => void) | null
-    onerror: (() => void) | null
+    onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
     onend: (() => void) | null
     start(): void
     stop(): void
   }
   interface SpeechRecognitionEvent extends Event {
     results: SpeechRecognitionResultList
+  }
+  interface SpeechRecognitionErrorEvent extends Event {
+    error: string
   }
 }
 

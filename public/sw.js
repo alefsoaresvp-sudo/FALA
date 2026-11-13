@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fala-shell-v2'
+const CACHE_NAME = 'fala-shell-v4'
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg']
 
 self.addEventListener('install', (event) => {

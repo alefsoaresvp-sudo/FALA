@@ -108,3 +108,24 @@ Abra o endereço publicado no Chrome/Edge do celular e use **Instalar app** ou *
 A análise de foto exige autenticação válida, Edge Function implantada e suporte a entrada de imagem do modelo configurado. O navegador comprime a imagem, envia-a diretamente para a Edge Function e não salva o arquivo enviado. A qualidade da transcrição depende de foco, iluminação, rotação e tamanho da letra.
 
 O progresso local funciona sem login no próprio navegador. Para sincronizar entre dispositivos, é necessário concluir a integração do Supabase e aplicar o esquema desta versão.
+
+
+## FALA 4.0 — áudio mobile e organização
+
+### Gravação no celular
+- A captura usa `getUserMedia` e `MediaRecorder` sempre que o navegador oferece suporte, independentemente do login.
+- A gravação é limitada a 45 segundos e usa cancelamento de eco, redução de ruído e ganho automático quando suportados pelo aparelho.
+- O aluno pode reproduzir o arquivo gravado no próprio dispositivo. A transcrição com a Lumi exige uma sessão Supabase autenticada e a Edge Function `transcribe` ativa.
+- O código tenta WEBM/Opus e MP4, comuns em navegadores móveis. Tipos e extensões são normalizados no backend antes de enviar ao provedor.
+- O arquivo de áudio não é persistido no banco ou em Storage. A sessão registra apenas o texto transcrito e metadados mínimos.
+- O microfone do navegador exige HTTPS e permissão. Abra o endereço do GitHub Pages no Chrome/Safari atualizado, não dentro de um navegador incorporado, e permita o acesso ao microfone nas configurações do site.
+
+### Modelo de dados para reutilização
+O banco do FALA é dividido logicamente em:
+- **Identidade e preferências:** `profiles`.
+- **Planejamento e progresso:** `learning_plans`, `learning_sessions`, `track_progress`.
+- **Avaliação e adaptação:** `activity_attempts`, `learner_insights`.
+- **Conteúdo do aluno:** `vocabulary_items`.
+- **Conversas:** `chat_messages`.
+
+Todas as tabelas expostas em `public` têm RLS e políticas por `auth.uid()`. Consulte `supabase/DATABASE_ARCHITECTURE.md` antes de copiar ou adaptar o modelo para outro produto. Para sistemas independentes, crie outro projeto Supabase e aplique o esquema nele; não misture dados de produtos diferentes no projeto de produção do FALA.

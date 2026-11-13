@@ -256,3 +256,219 @@
   .mobile-bottom-nav button{font-size:8px;gap:3px;padding:5px 1px}
   .mobile-bottom-nav button svg{width:17px;height:17px}
 }
+
+
+/* FALA 4.0 — refined app shell, mobile navigation and accessible audio practice */
+:root{
+  --app-bg:#f4f7f5;
+  --surface-shadow:0 10px 35px rgba(21,55,42,.055);
+  --surface-shadow-hover:0 16px 42px rgba(21,55,42,.095);
+}
+html{scroll-behavior:smooth;scroll-padding-top:86px}
+body{background:var(--app-bg);overflow-x:hidden}
+button,a,input,textarea,select{-webkit-tap-highlight-color:transparent}
+button{touch-action:manipulation}
+.app-shell{background:var(--app-bg)}
+.sidebar{width:238px;padding:25px 15px 17px;box-shadow:4px 0 24px rgba(27,57,43,.025)}
+.sidebar .brand{padding-bottom:38px}
+.nav-item{min-height:46px;border-radius:11px}
+.nav-item.active{box-shadow:inset 3px 0 0 #2d8060}
+.main-area{margin-left:238px;width:calc(100% - 238px)}
+.topbar{height:68px;position:sticky;top:0;z-index:12;backdrop-filter:blur(18px);background:rgba(250,252,250,.91)}
+.content-wrap{width:min(1180px,100%);padding:36px 42px 48px}
+.panel{border-radius:17px;box-shadow:var(--surface-shadow);border-color:#e7eee8;transition:box-shadow .18s,border-color .18s,transform .18s}
+.panel-heading{gap:12px}
+.primary-button,.secondary-button,.listen-button,.record-button{min-height:44px;border-radius:11px}
+.primary-button{box-shadow:0 5px 13px rgba(23,95,74,.12)}
+.primary-button:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(23,95,74,.18)}
+.secondary-button{border-color:#dfe8e1}
+.page-intro{margin-bottom:21px}
+.page-intro h1{font-size:clamp(25px,3vw,34px)}
+.welcome-row h1{font-size:clamp(25px,3vw,34px)}
+.hero-practice{border-radius:20px;box-shadow:0 18px 42px rgba(17,63,47,.12)}
+.daily-agenda-panel,.track-catalog-card,.track-detail-panel,.music-hero,.music-lyrics-panel,.music-vocab-panel,.music-quiz-panel,.pronunciation-panel,.conversation-panel{border-radius:17px}
+.track-catalog-card{box-shadow:var(--surface-shadow)}
+.track-catalog-card:hover{transform:translateY(-3px);box-shadow:var(--surface-shadow-hover)}
+.answer-option,.track-lesson-row,.exam-options button,.music-gap-options button{min-height:46px;border-radius:11px}
+.chat-compose{border-radius:14px}
+.chat-compose input{font-size:14px}
+.mobile-brand{display:none}
+.recorder-console{display:flex;align-items:center;justify-content:center;gap:15px;margin:18px 0 8px}
+.recording-live{display:grid;grid-template-columns:10px auto;align-items:center;gap:4px 8px;padding:9px 12px;background:#fff3f0;border:1px solid #f1d4ca;border-radius:12px;color:#a65d4d}
+.recording-live strong{font-variant-numeric:tabular-nums;font-size:14px;letter-spacing:.5px}
+.recording-live small{grid-column:2;font-size:9px;color:#a77c70}
+.recording-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:#d66b58;box-shadow:0 0 0 4px rgba(214,107,88,.13);animation:fala-pulse 1.1s ease-in-out infinite}
+@keyframes fala-pulse{50%{transform:scale(.78);opacity:.55}}
+.audio-status{display:flex;align-items:center;gap:9px;margin:12px 0;padding:11px 12px;border:1px solid #dfe9e1;border-radius:11px;background:#f5faf6;color:#4f725a;font-size:11px;line-height:1.5}
+.audio-status.busy{background:#f0f6f1}
+.audio-preview-card{display:grid;gap:11px;padding:14px;margin-top:13px;background:#f7faf7;border:1px solid #e1eae2;border-radius:14px}
+.audio-preview-card>div:first-child{display:grid;gap:3px}
+.audio-preview-card>div:first-child strong{font-size:12px;color:var(--ink)}
+.audio-preview-card>div:first-child small{font-size:9px;color:var(--muted)}
+.audio-preview-card audio{display:block;width:100%;height:42px;accent-color:var(--green)}
+.audio-preview-actions{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.audio-preview-actions button{font-size:10px;min-height:38px}
+.recorder-console .record-button{min-width:190px}
+.record-button.recording{background:#a94c43;box-shadow:0 0 0 6px rgba(169,76,67,.12)}
+.record-hint{max-width:460px;margin:8px auto 0;text-align:center;font-size:10px;line-height:1.55;color:var(--muted)}
+.mobile-more-backdrop{display:none}
+
+/* A more deliberate light palette */
+.daily-agenda-step{box-shadow:0 3px 12px rgba(30,60,42,.025)}
+.track-phrase-box{border:1px solid #e1eee3}
+.music-hero{box-shadow:0 14px 34px rgba(14,56,42,.14)}
+.speak-grid{align-items:start}
+.pronunciation-panel,.conversation-panel{min-width:0}
+.transcript-result{border-radius:13px;border:1px solid #e2ebe3;padding:14px;background:#f8fbf8}
+
+/* Refined dark theme */
+:root[data-theme="dark"]{
+  --app-bg:#0d1712;
+  --surface-shadow:0 10px 34px rgba(0,0,0,.18);
+  --surface-shadow-hover:0 16px 42px rgba(0,0,0,.25);
+}
+:root[data-theme="dark"] body,:root[data-theme="dark"] .app-shell,:root[data-theme="dark"] .main-area,:root[data-theme="dark"] .content-wrap{background:#0d1712}
+:root[data-theme="dark"] .sidebar{background:#14221a;border-color:#263a2d}
+:root[data-theme="dark"] .topbar{background:rgba(17,30,22,.9);border-color:#27392d}
+:root[data-theme="dark"] .panel{background:#15231b;border-color:#283b2e}
+:root[data-theme="dark"] .daily-agenda-step,:root[data-theme="dark"] .track-catalog-card,:root[data-theme="dark"] .track-detail-panel,:root[data-theme="dark"] .pronunciation-panel,:root[data-theme="dark"] .conversation-panel{background:#15231b;border-color:#283b2e}
+:root[data-theme="dark"] .audio-status{background:#1b3022;border-color:#33543b;color:#bdd8c4}
+:root[data-theme="dark"] .audio-preview-card,:root[data-theme="dark"] .transcript-result{background:#1a2a20;border-color:#314b39}
+:root[data-theme="dark"] .recording-live{background:#3b2925;border-color:#70423a;color:#f1c4b7}
+:root[data-theme="dark"] .recording-live small{color:#d8ab9e}
+:root[data-theme="dark"] .mobile-more-sheet{background:#17251d;border-color:#2d4133}
+:root[data-theme="dark"] .mobile-more-sheet>button{background:#1b2c22;border-color:#2c4132}
+:root[data-theme="dark"] .mobile-more-sheet>button>span{background:#2c4937;color:#a8d5b5}
+
+/* Phone layout */
+@media(max-width:850px){
+  html,body,#root{min-height:100%;width:100%;overscroll-behavior-x:none}
+  .app-shell{display:block;min-height:100dvh}
+  .sidebar{display:none!important}
+  .main-area{margin:0!important;width:100%!important;min-height:100dvh}
+  .topbar{height:60px;min-height:60px;padding:0 15px;gap:10px;position:sticky;top:0;z-index:16}
+  .mobile-brand{display:flex;font-size:17px;gap:8px}
+  .mobile-brand .brand-mark{width:29px;height:29px;border-radius:10px;font-size:17px}
+  .breadcrumb{display:none}
+  .topbar-right{margin-left:auto;gap:7px}
+  .topbar-right .level-pill{display:none}
+  .topbar-right .icon-button{width:38px;height:38px;border-radius:12px;background:var(--paper)}
+  .content-wrap{width:100%;padding:21px 15px calc(105px + env(safe-area-inset-bottom))!important}
+  .welcome-row{display:flex;flex-direction:column;align-items:stretch;gap:11px;margin-bottom:16px}
+  .welcome-row h1{font-size:26px;letter-spacing:-.9px;margin:6px 0}
+  .welcome-row p{font-size:12px}
+  .daily-target{align-self:flex-start}
+  .hero-practice{min-height:unset;height:auto;padding:22px 19px;flex-direction:column;border-radius:18px}
+  .hero-copy{width:100%;max-width:100%}
+  .hero-copy h2{font-size:25px;line-height:1.16}
+  .hero-copy p{font-size:12px;max-width:300px}
+  .hero-art,.hero-visual{display:none!important}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .panel{padding:16px;border-radius:15px}
+  .panel-heading{align-items:flex-start}
+  .panel-heading h3{font-size:15px}
+  .page-intro{margin-bottom:17px}
+  .page-intro h1{font-size:27px;line-height:1.18;letter-spacing:-1px}
+  .page-intro p{font-size:12px;line-height:1.55}
+  .daily-agenda-panel{padding:15px;margin:14px 0 18px}
+  .daily-agenda-grid{grid-template-columns:1fr;gap:8px}
+  .daily-agenda-step{display:grid;grid-template-columns:35px 1fr;column-gap:10px;row-gap:3px;padding:11px}
+  .daily-step-top{grid-row:1/4;grid-column:1;margin:0;display:flex;align-items:flex-start}
+  .daily-step-top small{display:none}
+  .daily-agenda-step>strong{grid-column:2;font-size:12px}
+  .daily-agenda-step>p{grid-column:2;min-height:unset;font-size:10px}
+  .daily-step-actions{grid-column:2;margin-top:6px;justify-content:flex-start}
+  .daily-check-button{margin-left:auto}
+  .track-catalog-grid{grid-template-columns:1fr}
+  .track-catalog-card{min-height:unset;padding:15px}
+  .track-detail-panel{padding:14px}
+  .track-detail-heading h2{font-size:21px}
+  .track-lesson-actions{align-items:stretch;flex-direction:column}
+  .track-lesson-actions .primary-button{width:100%;justify-content:center}
+  .track-exam-callout{align-items:stretch;flex-direction:column}
+  .track-exam-callout .primary-button{width:100%;justify-content:center}
+  .speak-grid,.music-grid{grid-template-columns:1fr}
+  .pronunciation-panel,.conversation-panel{width:100%;min-width:0}
+  .speak-prompt{padding:15px}
+  .speak-prompt h2{font-size:22px;line-height:1.25}
+  .record-button{width:min(100%,260px);min-height:58px}
+  .recorder-console{flex-direction:column;gap:10px}
+  .recording-live{grid-template-columns:9px auto;min-width:140px}
+  .audio-preview-actions{display:grid;grid-template-columns:1fr}
+  .audio-preview-actions button{justify-content:center}
+  .chat-messages{min-height:220px;max-height:44dvh}
+  .chat-compose{position:sticky;bottom:calc(69px + env(safe-area-inset-bottom));z-index:3;background:var(--paper);padding:8px;border:1px solid var(--line);box-shadow:0 5px 20px rgba(20,50,35,.06)}
+  .chat-compose input{font-size:16px;min-width:0}
+  .chat-compose button{height:40px;width:42px;flex:none}
+  .music-hero{padding:18px;gap:12px}
+  .music-hero h2{font-size:23px}
+  .music-disc{height:80px;width:80px;opacity:.9}
+  .music-lyrics-panel,.music-vocab-panel,.music-quiz-panel{padding:15px}
+  .writing-photo-tool{padding:13px}
+  .writing-photo-preview{align-items:stretch}
+  .writing-photo-preview img{width:100%;max-width:100%;max-height:230px}
+  .writing-photo-preview .primary-button{margin-left:0}
+  .mobile-bottom-nav{
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+    position:fixed;z-index:30;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));
+    justify-content:unset;align-items:stretch;gap:2px;padding:6px 5px;
+    min-height:62px;background:rgba(255,255,255,.94);border:1px solid #e4ebe5;
+    border-radius:18px;box-shadow:0 8px 32px rgba(18,54,37,.16);backdrop-filter:blur(22px);
+  }
+  .mobile-bottom-nav button{flex:unset;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:0;border-radius:12px;background:transparent;color:#829187;padding:5px 1px;font-size:9px;font-weight:700}
+  .mobile-bottom-nav button.active{background:#eaf4ed;color:#286b4f}
+  .mobile-bottom-nav button svg{height:19px;width:19px}
+  .mobile-bottom-nav button span{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .content-wrap{padding-bottom:calc(112px + env(safe-area-inset-bottom))!important}
+  .app-footer{display:none}
+  .settings-modal{width:min(560px,calc(100vw - 22px));max-height:calc(100dvh - 28px);overflow-y:auto;border-radius:19px;padding:17px}
+  .modal-backdrop{padding:12px}
+  .mobile-more-backdrop{display:flex;position:fixed;z-index:35;inset:0;align-items:flex-end;justify-content:center;background:rgba(7,18,12,.42);backdrop-filter:blur(5px);padding:12px 12px calc(86px + env(safe-area-inset-bottom))}
+  .mobile-more-sheet{width:min(520px,100%);padding:17px;background:#fff;border:1px solid #e6ede7;border-radius:20px;box-shadow:0 16px 48px rgba(0,0,0,.18);animation:fala-sheet-in .18s ease-out}
+  @keyframes fala-sheet-in{from{transform:translateY(14px);opacity:.7}to{transform:translateY(0);opacity:1}}
+  .mobile-more-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .mobile-more-heading h3{font-size:17px;margin:4px 0}
+  .mobile-more-sheet>button{width:100%;display:flex;align-items:center;gap:11px;padding:11px;margin:3px 0;border:1px solid #edf1ed;border-radius:12px;background:#fafcf9;text-align:left;color:var(--ink)}
+  .mobile-more-sheet>button>span{display:grid;place-items:center;width:37px;height:37px;flex:none;border-radius:11px;background:#eaf4ed;color:#286b4f}
+  .mobile-more-sheet>button>div{display:grid;gap:3px;flex:1}
+  .mobile-more-sheet>button strong{font-size:12px}
+  .mobile-more-sheet>button small{font-size:10px;color:var(--muted)}
+  .mobile-more-sheet>button>svg{color:#8c9c91}
+}
+@media(max-width:480px){
+  .topbar{padding:0 12px}
+  .content-wrap{padding-left:12px;padding-right:12px}
+  .welcome-row h1{font-size:24px}
+  .page-intro h1{font-size:25px}
+  .hero-copy h2{font-size:23px}
+  .hero-practice{padding:19px 16px}
+  .track-detail-panel{padding:12px}
+  .music-hero{padding:15px}
+  .music-hero h2{font-size:21px}
+  .music-controls{display:grid;grid-template-columns:1fr 1fr}
+  .music-controls button{width:100%;justify-content:center}
+  .music-disc{width:65px;height:65px}
+  .music-disc svg{width:23px}
+  .music-disc span{font-size:5px}
+  .track-phrase-box h2{font-size:17px}
+  .onboarding-shell{min-height:100dvh;padding:15px 12px calc(18px + env(safe-area-inset-bottom))}
+  .onboarding-top{gap:8px}
+  .onboarding-card{margin:18px auto 0;padding:21px 16px 18px;border-radius:17px}
+  .onboarding-card h1{font-size:26px}
+  .goal-grid{grid-template-columns:1fr}
+  .focus-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .settings-modal{padding:15px}
+}
+:root[data-theme="dark"] .mobile-bottom-nav{background:rgba(19,33,24,.96);border-color:#2d4433}
+:root[data-theme="dark"] .mobile-bottom-nav button{color:#a9b9ad}
+:root[data-theme="dark"] .mobile-bottom-nav button.active{background:#284634;color:#c0e2c9}
+:root[data-theme="dark"] .mobile-more-sheet{background:#17251d;border-color:#2d4133}
+:root[data-theme="dark"] .mobile-more-sheet>button{background:#1b2c22;border-color:#2c4132}
+:root[data-theme="dark"] .mobile-more-sheet>button>span{background:#2c4937;color:#a8d5b5}
+:root[data-theme="dark"] .mobile-more-sheet>button small{color:#9eafa3}
+:root[data-theme="dark"] .mobile-more-backdrop{background:rgba(0,0,0,.62)}
+:root[data-theme="dark"] .recording-live{background:#3b2925;border-color:#70423a;color:#f1c4b7}
+:root[data-theme="dark"] .recording-live small{color:#d8ab9e}
+
+.track-audio-preview{display:block;width:100%;height:42px;margin:10px 0;accent-color:var(--green)}
+@media(max-width:850px){.track-audio-preview{margin:8px 0}}

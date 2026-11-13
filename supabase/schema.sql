@@ -160,8 +160,32 @@ create policy "Learners can manage their own track progress"
 
 grant select, insert, update, delete on public.track_progress to authenticated;
 
--- Keep AI mode accounting compatible with image-based writing review on existing projects.
-alter table public.ai_usage_events drop constraint if exists ai_usage_events_mode_check;
-alter table public.ai_usage_events
-  add constraint ai_usage_events_mode_check
-  check (mode in ('conversation', 'writing', 'writing_image', 'plan', 'activity', 'evaluate'));
+
+-- Keep modification timestamps consistent across the profile, plan and track state.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = pg_catalog, public
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+revoke all on function public.set_updated_at() from public;
+
+drop trigger if exists profiles_set_updated_at on public.profiles;
+create trigger profiles_set_updated_at
+before update on public.profiles
+for each row execute function public.set_updated_at();
+
+drop trigger if exists learning_plans_set_updated_at on public.learning_plans;
+create trigger learning_plans_set_updated_at
+before update on public.learning_plans
+for each row execute function public.set_updated_at();
+
+drop trigger if exists track_progress_set_updated_at on public.track_progress;
+create trigger track_progress_set_updated_at
+before update on public.track_progress
+for each row execute function public.set_updated_at();
