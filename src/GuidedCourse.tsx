@@ -376,12 +376,9 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     const played = speakEnglish(text, accent)
     setAudioNotice(played ? '' : 'A leitura em voz alta não está disponível neste navegador.')
   }
-  const chooseWord = (word: string, index: number) => {
+  const chooseWord = (word: string) => {
     if (checked !== null) return
     setBuiltWords(current => [...current, word])
-    const remaining = currentExercise?.tokens?.filter((_, tokenIndex) => !builtWords.length || tokenIndex !== -1)
-    void remaining
-    setAudioNotice(String(index))
   }
   const removeBuiltWord = (index: number) => {
     if (checked !== null) return
@@ -443,7 +440,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           </div>}
           {currentExercise.kind === 'build' && <div className="word-builder">
             <div className="word-answer-zone">{builtWords.length ? builtWords.map((word, index) => <button key={index} disabled={checked !== null} onClick={() => removeBuiltWord(index)}>{word}</button>) : <span>Toque nas palavras abaixo para montar a frase.</span>}</div>
-            <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word, index)}>{word}</button>)}</div>
+            <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word)}>{word}</button>)}</div>
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
           {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Escute o modelo, repita duas vezes e depois marque como praticado. A pronúncia não recebe nota automática nesta atividade.</small></div><button disabled={checked !== null} onClick={() => setChecked(true)}>{checked === true ? 'Praticado' : 'Já repeti'}</button></div>}
