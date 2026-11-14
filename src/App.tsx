@@ -196,6 +196,7 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false)
   const [chatNotice, setChatNotice] = useState('')
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [lumiVoiceId, setLumiVoiceId] = useState('MEJe6hPrI48Kt2lFuVe3')
   const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
   const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
@@ -545,6 +546,7 @@ export default function App() {
         conversationToken: data.conversation_token,
         connectionType: 'webrtc',
         userId: user.id,
+        overrides: { tts: { voiceId: lumiVoiceId } },
         onConnect: () => {
           setVoiceStatus('connected')
           setVoiceMessage('Lumi está ouvindo. Fale naturalmente em inglês ou peça uma explicação em português.')
@@ -1349,6 +1351,13 @@ export default function App() {
                 <small className={'voice-state ' + voiceStatus}>{voiceStatus === 'connected' ? 'AO VIVO · MICROFONE ATIVO' : voiceStatus === 'connecting' ? 'CONECTANDO…' : voiceStatus === 'error' ? 'CONEXÃO NÃO INICIADA' : 'PRONTA PARA CONVERSAR'}</small>
               </div>
               <div className="voice-session-actions">
+                <label className="voice-choice">Voz da Lumi
+                  <select value={lumiVoiceId} onChange={event => setLumiVoiceId(event.target.value)} disabled={voiceStatus === 'connected' || voiceStatus === 'connecting'}>
+                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · jovem e expressiva</option>
+                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · brilhante e acolhedora</option>
+                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · natural e descontraída</option>
+                  </select>
+                </label>
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
                   {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
                 </button>
