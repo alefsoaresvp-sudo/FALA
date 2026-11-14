@@ -1058,7 +1058,7 @@ export default function App() {
 
   const analyseMusicExcerpt = async () => {
     const excerpt = musicLyricsDraft.trim()
-    const lines = excerpt.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean)
+    const lines = excerpt.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
     if (!excerpt) return
     if (excerpt.length > 600 || lines.length > 6) {
       setMusicAnalysisNotice('Use até 6 linhas e 600 caracteres por análise. Estude uma parte de cada vez.')
@@ -1521,11 +1521,11 @@ export default function App() {
                 <small className={'voice-state ' + voiceStatus}>{voiceStatus === 'connected' ? 'AO VIVO · MICROFONE ATIVO' : voiceStatus === 'connecting' ? 'CONECTANDO…' : voiceStatus === 'error' ? 'CONEXÃO NÃO INICIADA' : 'PRONTA PARA CONVERSAR'}</small>
               </div>
               <div className="voice-session-actions">
-                <label className="voice-choice">Voz da Lumi
+                <label className="voice-choice">Personagem e voz
                   <select value={lumiVoiceId} onChange={event => setLumiVoiceId(event.target.value)} disabled={voiceStatus === 'connected' || voiceStatus === 'connecting'}>
-                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · jovem e expressiva</option>
-                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · brilhante e acolhedora</option>
-                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · natural e descontraída</option>
+                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · amiga animada</option>
+                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · tutora acolhedora</option>
+                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · personagem curiosa</option>
                     <option value="rLl4PSDTzX3VHL4wjSFI">Jesse · personagem amigável</option>
                     <option value="L6s7ahP9mHOb2S1Qynng">Zane · amigo animado</option>
                   </select>
