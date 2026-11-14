@@ -1704,3 +1704,150 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .review-rating-actions small { font-size:8px; }
   .review-complete > strong { font-size:19px; }
 }
+
+
+/* Launch release — evidence-based progress dashboard */
+.progress-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.progress-insight-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border, #dce7f0);
+  border-radius: 18px;
+  background: var(--surface, #fff);
+}
+.progress-insight-card .section-heading { margin-bottom: 14px; }
+.progress-insight-card .section-heading h2 { margin: 4px 0 0; font-size: 18px; }
+.insight-total {
+  color: var(--muted, #72869a);
+  font-size: 11px;
+  font-weight: 800;
+}
+.weekly-activity-chart {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  height: 132px;
+  align-items: end;
+  padding-top: 8px;
+}
+.weekly-activity-day {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: end;
+  gap: 7px;
+}
+.weekly-activity-day strong { color: var(--text, #20384e); font-size: 9px; }
+.weekly-activity-day small { color: var(--muted, #72869a); font-size: 9px; text-transform: capitalize; }
+.weekly-activity-track {
+  display: flex;
+  width: min(22px, 100%);
+  height: 82px;
+  align-items: end;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-soft, #edf3f8);
+}
+.weekly-activity-track i {
+  display: block;
+  width: 100%;
+  min-height: 3px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #80b8e5, #477fae);
+}
+.insight-footnote {
+  margin: 12px 0 0;
+  color: var(--muted, #72869a);
+  font-size: 10px;
+  line-height: 1.55;
+}
+.skill-score-list { display: grid; gap: 12px; }
+.skill-score-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 5px;
+  color: var(--text, #20384e);
+  font-size: 11px;
+}
+.skill-score-row strong { font-variant-numeric: tabular-nums; }
+.skill-score-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--surface-soft, #edf3f8);
+}
+.skill-score-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #9ac7e9, #477fae);
+}
+.insight-empty {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  padding: 12px 0;
+  color: var(--muted, #72869a);
+}
+.insight-empty strong { color: var(--text, #20384e); font-size: 12px; }
+.insight-empty p { margin: 0; font-size: 11px; line-height: 1.5; }
+.progress-achievements-card { margin-bottom: 16px; }
+.achievement-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.achievement-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border, #dce7f0);
+  border-radius: 12px;
+  opacity: .68;
+}
+.achievement-item.unlocked { opacity: 1; background: var(--surface-soft, #f5f9fc); }
+.achievement-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: #477fae;
+  background: #e9f3fb;
+}
+.achievement-item > div { display: grid; min-width: 0; gap: 3px; }
+.achievement-item strong { color: var(--text, #20384e); font-size: 11px; }
+.achievement-item small { color: var(--muted, #72869a); font-size: 9px; line-height: 1.4; }
+.achievement-status { margin-left: auto; color: var(--muted, #72869a); font-size: 8px; white-space: nowrap; }
+.progress-mistakes-card { margin-bottom: 18px; }
+.mistake-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0,1fr);
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--border, #dce7f0);
+}
+.mistake-row > span { color: #477fae; font-size: 10px; font-weight: 800; }
+.mistake-row > div { display: grid; gap: 5px; }
+.mistake-row strong { color: var(--text, #20384e); font-size: 11px; line-height: 1.4; }
+.mistake-row small { color: var(--muted, #72869a); font-size: 9px; line-height: 1.45; }
+:root[data-theme="dark"] .progress-insight-card { background: var(--surface, #172b3d); }
+:root[data-theme="dark"] .achievement-item.unlocked { background: var(--surface-soft, #20394f); }
+:root[data-theme="dark"] .achievement-mark { color: #c1def8; background: #294b68; }
+:root[data-theme="dark"] .weekly-activity-day strong,
+:root[data-theme="dark"] .skill-score-row > div:first-child,
+:root[data-theme="dark"] .insight-empty strong,
+:root[data-theme="dark"] .achievement-item strong,
+:root[data-theme="dark"] .mistake-row strong { color: var(--text, #e4eef7); }
+@media (max-width: 760px) {
+  .progress-insights-grid { grid-template-columns: 1fr; }
+  .achievement-grid { grid-template-columns: 1fr; }
+  .achievement-status { font-size: 8px; }
+}
