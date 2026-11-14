@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight, BookOpen, Check, CheckCircle2, CircleHelp, Headphones,
   LockKeyhole, MessageCircle, Mic, Play, RotateCcw, Sparkles, Star, Volume2,
@@ -7,6 +7,22 @@ import {
 import './GuidedCourse.css'
 
 type ExerciseKind = 'choice' | 'build' | 'type' | 'listen' | 'repeat'
+type CourseSpeechResult = { 0?: { transcript: string } }
+type CourseSpeechEvent = { results: ArrayLike<CourseSpeechResult> }
+type CourseSpeechInstance = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: CourseSpeechEvent) => void) | null
+  onerror: ((event: { error?: string }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type BrowserSpeechWindow = Window & {
+  SpeechRecognition?: new () => CourseSpeechInstance
+  webkitSpeechRecognition?: new () => CourseSpeechInstance
+}
 type Exercise = {
   kind: ExerciseKind
   prompt: string
@@ -57,7 +73,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Como se diz “Olá” em inglês?', options: ['Goodbye', 'Hello', 'Please'], answer: 'Hello', explanation: 'Hello significa “olá”. Hi também significa “oi” e é mais informal.' },
-          { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['My', 'name', 'is', 'Ana.'], answer: 'My name is Ana.', explanation: 'A ordem é My + name + is + nome. Em inglês, não dizemos “My is name”.' },
+          { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'is', 'My', 'name'], answer: 'My name is Ana.', explanation: 'A ordem é My + name + is + nome. Em inglês, não dizemos “My is name”.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu sou Pedro.”', answer: 'I am Pedro.', explanation: 'I significa “eu” e am é a forma do verbo be usada com I.' },
           { kind: 'listen', prompt: 'Ouça e escreva exatamente o que escutar.', answer: 'Good morning.', explanation: 'Good morning significa “bom dia”. Ouça o som das duas palavras juntas.' },
           { kind: 'repeat', prompt: 'Ouça e repita em voz alta: “Nice to meet you.”', answer: 'Nice to meet you.', explanation: 'A expressão significa “prazer em conhecer você”. Repita em voz alta; este exercício não mede fonética automaticamente.' },
@@ -78,7 +94,7 @@ const units: Unit[] = [
         exercises: [
           { kind: 'choice', prompt: 'Qual palavra significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
           { kind: 'choice', prompt: 'O que significa “blue”?', options: ['Azul', 'Verde', 'Vermelho'], answer: 'Azul', explanation: 'Blue = azul. Green = verde e red = vermelho.' },
-          { kind: 'build', prompt: 'Monte: “Um livro azul.”', tokens: ['A', 'blue', 'book.'], answer: 'A blue book.', explanation: 'Em inglês, a cor vem antes do objeto: blue book.' },
+          { kind: 'build', prompt: 'Monte: “Um livro azul.”', tokens: ['book.', 'A', 'blue'], answer: 'A blue book.', explanation: 'Em inglês, a cor vem antes do objeto: blue book.' },
           { kind: 'type', prompt: 'Escreva em inglês: “dois telefones”.', answer: 'Two phones.', explanation: 'Two significa dois. Para a maioria dos substantivos contáveis, acrescentamos -s no plural: phone → phones.' },
           { kind: 'listen', prompt: 'Ouça e escreva o número que escutar por extenso.', answer: 'Eight.', explanation: 'Eight significa oito. Não confunda eight /eɪt/ com ate /eɪt/, que é uma palavra diferente pelo contexto.' },
         ],
@@ -98,7 +114,7 @@ const units: Unit[] = [
         exercises: [
           { kind: 'choice', prompt: 'Complete: “I ___ Brazilian.”', options: ['is', 'are', 'am'], answer: 'am', explanation: 'Com I, usamos am: I am Brazilian.' },
           { kind: 'choice', prompt: 'Qual pronome significa “ela”?', options: ['He', 'She', 'You'], answer: 'She', explanation: 'She = ela. He = ele. You = você ou vocês.' },
-          { kind: 'build', prompt: 'Monte: “Ele está feliz.”', tokens: ['He', 'is', 'happy.'], answer: 'He is happy.', explanation: 'He pede is. A estrutura básica é pessoa + be + característica.' },
+          { kind: 'build', prompt: 'Monte: “Ele está feliz.”', tokens: ['happy.', 'He', 'is'], answer: 'He is happy.', explanation: 'He pede is. A estrutura básica é pessoa + be + característica.' },
           { kind: 'type', prompt: 'Escreva: “Você é estudante.”', answer: 'You are a student.', explanation: 'You are = você é. Usamos a antes de student, porque é um substantivo contável no singular.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “She is my friend.”', answer: 'She is my friend.', explanation: 'She is = ela é/está. My friend = minha amiga ou meu amigo.' },
         ],
@@ -124,7 +140,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'O que significa “I want”?', options: ['Eu tenho', 'Eu quero', 'Eu gosto'], answer: 'Eu quero', explanation: 'I = eu; want = quero. Juntas: I want = eu quero.' },
-          { kind: 'build', prompt: 'Monte: “Eu quero suco.”', tokens: ['I', 'want', 'juice.'], answer: 'I want juice.', explanation: 'A estrutura é I + want + o que você quer. Troque juice por water, coffee ou food.' },
+          { kind: 'build', prompt: 'Monte: “Eu quero suco.”', tokens: ['juice.', 'want', 'I'], answer: 'I want juice.', explanation: 'A estrutura é I + want + o que você quer. Troque juice por water, coffee ou food.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu quero água.”', answer: 'I want water.', explanation: 'I want water = Eu quero água. Water normalmente não recebe plural quando falamos da bebida.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I want coffee.', explanation: 'I want coffee = Eu quero café. Perceba que want vem antes da coisa desejada.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I want the juice, please.”', answer: 'I want the juice, please.', explanation: 'The especifica um suco conhecido: “o suco”. Please deixa o pedido mais educado.' },
@@ -144,7 +160,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Como dizer “Eu tenho um carro”?', options: ['I am a car.', 'I have a car.', 'I like a car.'], answer: 'I have a car.', explanation: 'Have significa ter. I have a car = Eu tenho um carro.' },
-          { kind: 'build', prompt: 'Monte: “Eu gosto de música.”', tokens: ['I', 'like', 'music.'], answer: 'I like music.', explanation: 'Depois de I like, colocamos aquilo de que gostamos.' },
+          { kind: 'build', prompt: 'Monte: “Eu gosto de música.”', tokens: ['music.', 'I', 'like'], answer: 'I like music.', explanation: 'Depois de I like, colocamos aquilo de que gostamos.' },
           { kind: 'type', prompt: 'Escreva: “Eu tenho uma maçã.”', answer: 'I have an apple.', explanation: 'Usamos an antes de apple porque começa com som de vogal.' },
           { kind: 'choice', prompt: 'Complete: “I ___ coffee.” (Eu gosto de café.)', options: ['like', 'am', 'are'], answer: 'like', explanation: 'I like coffee = Eu gosto de café. Não usamos am antes do verbo like.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a phone and I like music.”', answer: 'I have a phone and I like music.', explanation: 'A frase combina duas ideias com and = e.' },
@@ -164,7 +180,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Qual pergunta significa “Você gosta de café?”', options: ['You like coffee?', 'Do you like coffee?', 'Are you like coffee?'], answer: 'Do you like coffee?', explanation: 'No presente simples, usamos Do + you + verbo na pergunta.' },
-          { kind: 'build', prompt: 'Monte a pergunta: “Você trabalha?”', tokens: ['Do', 'you', 'work?'], answer: 'Do you work?', explanation: 'Do inicia a pergunta; you é o sujeito; work é o verbo na forma base.' },
+          { kind: 'build', prompt: 'Monte a pergunta: “Você trabalha?”', tokens: ['work?', 'Do', 'you'], answer: 'Do you work?', explanation: 'Do inicia a pergunta; you é o sujeito; work é o verbo na forma base.' },
           { kind: 'choice', prompt: 'Qual resposta curta é correta para “Yes”?', options: ['Yes, I do.', 'Yes, I am.', 'Yes, I have.'], answer: 'Yes, I do.', explanation: 'A pergunta começou com Do, então a resposta curta usa do.' },
           { kind: 'type', prompt: 'Escreva: “Você gosta de música?”', answer: 'Do you like music?', explanation: 'Do you like + assunto? é uma estrutura muito útil para iniciar conversas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Do you speak English?”', answer: 'Do you speak English?', explanation: 'A frase significa “Você fala inglês?”. Speak = falar.' },
@@ -191,7 +207,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'O que significa “I study English”?', options: ['Eu ensino inglês.', 'Eu estudo inglês.', 'Eu trabalho em inglês.'], answer: 'Eu estudo inglês.', explanation: 'Study significa estudar. I study English = Eu estudo inglês.' },
-          { kind: 'build', prompt: 'Monte: “Eu moro no Brasil.”', tokens: ['I', 'live', 'in', 'Brazil.'], answer: 'I live in Brazil.', explanation: 'Live in + lugar significa morar em determinado lugar.' },
+          { kind: 'build', prompt: 'Monte: “Eu moro no Brasil.”', tokens: ['Brazil.', 'in', 'I', 'live'], answer: 'I live in Brazil.', explanation: 'Live in + lugar significa morar em determinado lugar.' },
           { kind: 'type', prompt: 'Escreva: “Eu trabalho todos os dias.”', answer: 'I work every day.', explanation: 'Every day são duas palavras e significa “todos os dias”.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I study at night.', explanation: 'At night = à noite. I study at night = Eu estudo à noite.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I work and study English.”', answer: 'I work and study English.', explanation: 'And conecta duas ações: trabalho e estudo inglês.' },
@@ -211,7 +227,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Qual frase é mais educada para pedir um café?', options: ['Coffee now!', 'I would like a coffee, please.', 'Give coffee.'], answer: 'I would like a coffee, please.', explanation: 'I would like... é uma forma educada de pedir algo.' },
-          { kind: 'build', prompt: 'Monte: “Eu gostaria de água, por favor.”', tokens: ['I', 'would', 'like', 'water,', 'please.'], answer: 'I would like water, please.', explanation: 'I would like + item + please. A vírgula é apenas pontuação; a ordem das palavras importa.' },
+          { kind: 'build', prompt: 'Monte: “Eu gostaria de água, por favor.”', tokens: ['please.', 'water,', 'I', 'would', 'like'], answer: 'I would like water, please.', explanation: 'I would like + item + please. A vírgula é apenas pontuação; a ordem das palavras importa.' },
           { kind: 'type', prompt: 'Escreva: “Poderia me trazer o cardápio?”', answer: 'Could I have the menu?', explanation: 'Could I have...? é um pedido educado. The menu = o cardápio.' },
           { kind: 'listen', prompt: 'Ouça e escreva o pedido.', answer: 'Could I have the bill, please?', explanation: 'Bill é a conta do restaurante. Não confunda com a palavra menu.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I would like a table for two.”', answer: 'I would like a table for two.', explanation: 'A frase significa “Eu gostaria de uma mesa para duas pessoas”.' },
@@ -238,7 +254,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Como perguntar “Onde fica o banheiro?”', options: ['Where is the bathroom?', 'Bathroom where?', 'What bathroom is?'], answer: 'Where is the bathroom?', explanation: 'Use Where is + the + lugar para perguntar onde algo fica.' },
-          { kind: 'build', prompt: 'Monte: “Onde fica a estação?”', tokens: ['Where', 'is', 'the', 'station?'], answer: 'Where is the station?', explanation: 'Where vem primeiro, depois is, the e o nome do lugar.' },
+          { kind: 'build', prompt: 'Monte: “Onde fica a estação?”', tokens: ['station?', 'the', 'Where', 'is'], answer: 'Where is the station?', explanation: 'Where vem primeiro, depois is, the e o nome do lugar.' },
           { kind: 'type', prompt: 'Escreva: “O hotel fica perto.”', answer: 'The hotel is near.', explanation: 'The hotel = o hotel; is near = fica perto.' },
           { kind: 'listen', prompt: 'Ouça e escreva a pergunta.', answer: 'Where is the airport?', explanation: 'Airport = aeroporto. A pergunta pode ser reutilizada trocando apenas o lugar.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Could you show me on the map?”', answer: 'Could you show me on the map?', explanation: 'A frase significa “Você poderia me mostrar no mapa?”.' },
@@ -258,7 +274,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Como informar que você tem uma reserva?', options: ['I am a reservation.', 'I have a reservation.', 'I has reservation.'], answer: 'I have a reservation.', explanation: 'Have significa ter. Com I, usamos have, não has.' },
-          { kind: 'build', prompt: 'Monte: “Aqui está meu passaporte.”', tokens: ['Here', 'is', 'my', 'passport.'], answer: 'Here is my passport.', explanation: 'Here is... significa “aqui está...”.' },
+          { kind: 'build', prompt: 'Monte: “Aqui está meu passaporte.”', tokens: ['passport.', 'my', 'Here', 'is'], answer: 'Here is my passport.', explanation: 'Here is... significa “aqui está...”.' },
           { kind: 'type', prompt: 'Escreva: “A que horas é o café da manhã?”', answer: 'What time is breakfast?', explanation: 'What time pergunta horário. Breakfast significa café da manhã.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'Where is the check-in desk?', explanation: 'Check-in desk é o balcão de check-in do aeroporto.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a reservation under the name Silva.”', answer: 'I have a reservation under the name Silva.', explanation: 'Under the name significa “em nome de”. Troque Silva pelo seu sobrenome ao usar a frase.' },
@@ -303,6 +319,9 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [checked, setChecked] = useState<boolean | null>(null)
   const [mistakes, setMistakes] = useState(0)
   const [audioNotice, setAudioNotice] = useState('')
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [voiceListening, setVoiceListening] = useState(false)
+  const recognitionRef = useRef<CourseSpeechInstance | null>(null)
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
 
   const allLessons = useMemo(() => units.flatMap(unit => unit.lessons), [])
@@ -320,6 +339,10 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   }, [progress, activeLessonId])
 
   const resetExercise = () => {
+    recognitionRef.current?.stop()
+    recognitionRef.current = null
+    setVoiceListening(false)
+    setVoiceTranscript('')
     setSelectedChoice('')
     setBuiltWords([])
     setTypedAnswer('')
@@ -371,6 +394,44 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     }))
     setActiveLessonId(null)
     onLessonComplete(score)
+  }
+  const startSpeechCapture = () => {
+    if (!currentExercise || currentExercise.kind !== 'repeat' || checked !== null) return
+    const browserWindow = window as BrowserSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setAudioNotice('Este navegador não oferece reconhecimento de fala nesta tela. Use “Marcar como praticado” depois de repetir.')
+      return
+    }
+    try {
+      setVoiceTranscript('')
+      setAudioNotice('')
+      const recognition = new Recognition()
+      recognition.lang = accent === 'uk' ? 'en-GB' : 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+      recognition.onresult = event => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+        setVoiceTranscript(transcript)
+        const matched = normalize(transcript) === normalize(currentExercise.answer)
+        setChecked(matched)
+        if (!matched) setMistakes(value => value + 1)
+        setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
+      }
+      recognition.onerror = event => {
+        setAudioNotice('Não foi possível acessar o microfone (' + (event.error || 'erro') + '). Verifique a permissão e tente novamente.')
+      }
+      recognition.onend = () => {
+        setVoiceListening(false)
+        recognitionRef.current = null
+      }
+      recognitionRef.current = recognition
+      setVoiceListening(true)
+      recognition.start()
+    } catch {
+      setVoiceListening(false)
+      setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
+    }
   }
   const playModel = (text: string) => {
     const played = speakEnglish(text, accent)
@@ -443,7 +504,9 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word)}>{word}</button>)}</div>
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
-          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Escute o modelo, repita duas vezes e depois marque como praticado. A pronúncia não recebe nota automática nesta atividade.</small></div><button disabled={checked !== null} onClick={() => setChecked(true)}>{checked === true ? 'Praticado' : 'Já repeti'}</button></div>}
+          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null || voiceListening} onClick={startSpeechCapture}>{voiceListening ? 'Ouvindo...' : 'Gravar voz'}</button></div>}
+          {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
+          {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
           {checked !== null && <div className={checked ? 'course-feedback correct' : 'course-feedback incorrect'}>
             <strong>{checked ? 'Muito bem. Resposta correta.' : 'Ainda não. Vamos corrigir.'}</strong>
