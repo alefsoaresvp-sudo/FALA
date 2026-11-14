@@ -252,6 +252,7 @@ export default function App() {
   const [recording, setRecording] = useState(false)
   const [recordingNotice, setRecordingNotice] = useState('')
   const [transcript, setTranscript] = useState('')
+  const [speechFeedback, setSpeechFeedback] = useState<TrackEvaluation | null>(null)
   const [audioUrl, setAudioUrl] = useState('')
   const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
   const [cloudLoading, setCloudLoading] = useState(false)
@@ -1221,8 +1222,36 @@ export default function App() {
             return
           }
           setTranscript(text)
-          setRecordingNotice('Transcrição concluída. Ela identifica palavras, mas não mede pronúncia fonética.')
-          await recordSession('speaking', 30, null, { transcript: text, source: 'media_recorder' })
+          setSpeechFeedback(null)
+          setRecordingNotice('Transcrição concluída. A análise a seguir avalia o texto reconhecido, não os sons da sua voz.')
+          let textScore: number | null = null
+          try {
+            const { data: evaluationData, error: evaluationError } = await supabase.functions.invoke('tutor', {
+              body: {
+                mode: 'evaluate',
+                message: text,
+                profile,
+                activity: {
+                  activity_type: 'speaking',
+                  title: 'Speaking Lab · resposta livre',
+                  question: 'Tell me about something you enjoy. Explain why you enjoy it and give one specific detail.',
+                  expected_answer: 'A natural 2–4 sentence response that expresses an interest and gives a reason or example.',
+                  target_phrase: 'I really enjoy…',
+                  context: 'Short spontaneous spoken English answer.',
+                },
+              },
+            })
+            if (evaluationError) throw evaluationError
+            const evaluation = evaluationData?.structured as TrackEvaluation | undefined
+            if (evaluation && typeof evaluation.score === 'number') {
+              setSpeechFeedback(evaluation)
+              textScore = evaluation.score
+              setRecordingNotice('Transcrição concluída e resposta avaliada. A nota se refere ao texto reconhecido, não à pronúncia fonética.')
+            }
+          } catch (evaluationError) {
+            setRecordingNotice('Transcrição concluída. A avaliação textual da Lumi não ficou disponível: ' + friendlyError(evaluationError))
+          }
+          await recordSession('speaking', 30, textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
         } catch (error) {
           setRecordingNotice('A transcrição falhou: ' + friendlyError(error))
         }
@@ -1527,7 +1556,7 @@ export default function App() {
               <article className="practice-card mic-card"><span className="eyebrow">DESAFIO DE HOJE</span><h2>Tell me about something you enjoy.</h2><p>Conte em inglês sobre um interesse seu. Tente falar por 10 a 20 segundos.</p><div className="prompt-translation">Conte sobre algo de que você gosta. Por que isso interessa a você?</div><button className={recording ? 'record-button recording' : 'record-button'} onClick={() => recording ? stopRecording() : void startRecording()}>{recording ? <span className="stop-square"/> : <Mic size={25}/>}<strong>{recording ? 'Parar gravação' : 'Começar gravação'}</strong></button><small className="record-hint">{recording ? 'Gravando agora. Fale naturalmente.' : 'O áudio fica no aparelho até você sair desta tela.'}</small>{recordingNotice && <p className="inline-notice">{recordingNotice}</p>}{audioUrl && <div className="audio-preview"><span><Play size={15}/> Sua gravação</span><audio controls src={audioUrl}/></div>}</article>
               <article className="practice-card phrase-card"><span className="eyebrow">ESTRUTURAS PARA COMEÇAR</span><h3>Você pode usar:</h3>{['I really enjoy…','I have been interested in…','One thing I like about it is…'].map(phrase => <div className="starter-phrase" key={phrase}><span>{phrase}</span><button className="round-action" onClick={() => speak(phrase)} aria-label={'Ouvir ' + phrase}><Volume2 size={17}/></button></div>)}<div className="aside-tip compact"><Headphones size={17}/><p>Ouvir a própria gravação ajuda a perceber pausas e clareza. A transcrição não é uma nota de pronúncia.</p></div></article>
             </div>
-            {transcript && <article className="transcript-card"><span className="eyebrow">TRANSCRIÇÃO RECONHECIDA</span><p>{transcript}</p><button className="text-button" onClick={() => setPage('lumi')}>Conversar sobre minha resposta <ArrowRight size={14}/></button></article>}
+            {transcript && <article className="transcript-card"><span className="eyebrow">TRANSCRIÇÃO RECONHECIDA</span><p>{transcript}</p><button className="text-button" onClick={() => setPage('lumi')}>Conversar sobre minha resposta <ArrowRight size={14}/></button>{speechFeedback && <div className="speaking-feedback"><strong>Clareza da resposta · {speechFeedback.score}/100</strong><p>{speechFeedback.strengths}</p><p><b>Correção principal:</b> {speechFeedback.correction}</p><p><b>Versão natural:</b> {speechFeedback.improved_answer}</p><p><b>Próximo treino:</b> {speechFeedback.next_step}</p><small>A avaliação usa a transcrição. Não mede sotaque, entonação ou pronúncia fonética.</small></div>}</article>}
           </section>}
 
           {page === 'write' && <section className="writing-layout">
