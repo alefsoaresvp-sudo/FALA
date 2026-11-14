@@ -602,3 +602,36 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .music-disc { width: 72px; height: 72px; flex-basis: 72px; border-width: 6px; }
   .music-hero h2 { font-size: 19px; }
 }
+
+
+/* Adaptive plan and complete learner profile */
+.learning-plan-card {
+  display: grid; gap: 13px; padding: 18px; margin: 15px 0 22px;
+  border: 1px solid #dfe9e1; border-radius: 16px;
+  background: linear-gradient(115deg, #f1f8f3, #fff 75%); box-shadow: var(--shadow);
+}
+.learning-plan-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.learning-plan-heading > div { display: grid; gap: 5px; }
+.learning-plan-heading h2 { margin: 0; color: var(--ink); font: 760 17px Manrope, sans-serif; letter-spacing: -.45px; }
+.learning-plan-heading p { max-width: 650px; margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+.learning-plan-heading .button { flex: 0 0 auto; }
+.learning-plan-weeks { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 9px; }
+.learning-plan-weeks article { display: grid; align-content: start; gap: 5px; padding: 12px; border: 1px solid #e5ede6; border-radius: 11px; background: rgba(255,255,255,.78); }
+.learning-plan-weeks small { color: #7b9581; font-size: 8px; font-weight: 800; }
+.learning-plan-weeks strong { color: var(--ink); font-size: 10px; }
+.learning-plan-weeks p { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.55; }
+.learning-plan-placeholder { display: flex; flex-wrap: wrap; gap: 8px; }
+.learning-plan-placeholder span { padding: 7px 9px; border-radius: 9px; color: #6c8273; background: #eaf3ed; font-size: 8px; }
+.learning-plan-metric { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--green); font-size: 9px; }
+.profile-settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 11px; margin-top: 14px; }
+.profile-settings-grid label { display: grid; gap: 5px; color: var(--ink); font-size: 10px; font-weight: 650; }
+.profile-settings-grid select { width: 100%; min-width: 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: #fff; font-size: 10px; }
+.profile-focus-block { display: grid; gap: 8px; margin-top: 15px; }
+.profile-focus-block > strong { color: var(--ink); font-size: 10px; }
+.profile-focus-block .interest-pills { margin: 0; }
+@media(max-width:700px) {
+  .learning-plan-heading { align-items: flex-start; flex-direction: column; }
+  .learning-plan-weeks { grid-template-columns: 1fr; }
+  .learning-plan-heading .button { width: 100%; justify-content: center; }
+  .profile-settings-grid { grid-template-columns: 1fr; }
+}
