@@ -1430,3 +1430,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media (prefers-reduced-motion:reduce) {
   .fala-app *, .mobile-dock * { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; }
 }
+
+
+/* Keep every former lilac accent inside the Blue Ice palette */
+.metric-icon.lilac { color:#3f72a5; background:#e6f0fb; }
+:root[data-theme="dark"] .metric-icon.lilac { color:#c2e0ff; background:#203d5f; }
