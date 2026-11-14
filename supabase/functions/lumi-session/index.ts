@@ -93,8 +93,6 @@ Deno.serve(async (request: Request) => {
       }, response.status === 429 ? 429 : 502);
     }
 
-    // The short-lived token is returned to the authenticated browser.
-    // The persistent ElevenLabs API key never leaves this Edge Function.
     return jsonResponse(request, { conversation_token: payload.token });
   } catch (error) {
     const timedOut = error instanceof DOMException && error.name === "AbortError";
