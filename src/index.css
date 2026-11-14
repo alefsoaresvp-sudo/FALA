@@ -499,3 +499,106 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .voice-session-actions { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .voice-session-actions small { text-align: left; max-width: 48%; }
 }
+
+
+/* Restored FALA learning modules */
+.tracks-layout, .music-layout { display: grid; gap: 17px; }
+.track-catalog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.track-card, .track-detail-card, .music-panel, .music-quiz, .writing-photo-card {
+  min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px;
+  background: var(--paper); box-shadow: var(--shadow);
+}
+.track-card { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+.track-card-top { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.track-card-icon { width: 39px; height: 39px; display: grid; place-items: center; border-radius: 12px; color: var(--green); background: var(--mint); }
+.track-card h2, .track-detail-heading h2 { margin: 3px 0 0; color: var(--ink); font: 750 16px Manrope, sans-serif; letter-spacing: -.35px; }
+.track-card > p, .track-detail-heading p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.track-card-meta { width: 100%; display: flex; justify-content: space-between; gap: 8px; color: #829087; font-size: 9px; }
+.track-progress-line { width: 100%; height: 6px; overflow: hidden; border-radius: 20px; background: #edf1ed; }
+.track-progress-line i { display: block; height: 100%; border-radius: inherit; background: var(--green); transition: width .2s ease; }
+.track-card-footer { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 9px; }
+.track-recommended, .track-detail-level { padding: 5px 8px; border-radius: 999px; color: var(--green); background: var(--mint); font-size: 8px; font-weight: 800; }
+.track-card .button { width: 100%; justify-content: center; margin-top: 3px; }
+.track-detail-card { display: grid; gap: 15px; }
+.track-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.track-detail-heading > div { display: grid; gap: 6px; }
+.track-detail-level { flex: 0 0 auto; }
+.back-chevron { transform: rotate(180deg); }
+.track-detail-progress { display: grid; gap: 8px; color: var(--ink); font-size: 10px; }
+.track-lesson-list { display: grid; }
+.track-lesson-row { width: 100%; display: flex; align-items: center; gap: 11px; padding: 13px 2px; border: 0; border-top: 1px solid #edf1ed; color: var(--ink); background: transparent; text-align: left; }
+.track-lesson-row:disabled { opacity: .48; cursor: not-allowed; }
+.track-lesson-number { width: 29px; height: 29px; display: grid; place-items: center; flex: 0 0 29px; border-radius: 10px; color: var(--green); background: var(--mint); font-size: 10px; font-weight: 800; }
+.track-lesson-copy { min-width: 0; display: grid; flex: 1; gap: 3px; }
+.track-lesson-copy strong { font-size: 10px; }
+.track-lesson-copy small { color: var(--muted); font-size: 8px; }
+.track-status { color: var(--green); font-size: 8px; font-weight: 700; }
+.track-status.locked { color: #a3aca6; }
+.track-status.done { color: #367b57; }
+.track-exam-callout { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 14px; border: 1px solid #dce9de; border-radius: 13px; background: #f4faf5; }
+.track-exam-callout > div { display: grid; gap: 4px; }
+.track-exam-callout strong { color: var(--ink); font-size: 12px; }
+.track-exam-callout p, .track-passed-note, .track-failed-note p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.track-passed-note, .track-failed-note { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border-radius: 10px; color: #347450; background: #eef7f0; font-size: 10px; }
+.track-failed-note { display: block; color: #9d5f46; background: #fff5ee; }
+.track-active-lesson, .track-exam-panel { display: grid; gap: 12px; }
+.track-active-lesson h3, .track-exam-panel h3 { margin: 0; color: var(--ink); font: 750 19px Manrope, sans-serif; }
+.track-scenario { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.track-active-lesson h4 { margin: 3px 0 0; color: var(--ink); font-size: 11px; }
+.track-response-area { width: 100%; resize: vertical; padding: 13px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: #fcfdfc; font-size: 12px; line-height: 1.6; }
+.track-speaking-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.track-speaking-tools small { flex: 1 1 100%; color: var(--muted); font-size: 8px; }
+.track-evaluation { padding: 13px; border: 1px solid #dce9de; border-radius: 11px; background: #f5faf6; }
+.track-evaluation strong { color: var(--green); font-size: 10px; }
+.track-evaluation p { margin: 6px 0 0; color: #52675a; font-size: 9px; line-height: 1.55; }
+.track-lesson-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.track-lesson-actions small { color: var(--muted); font-size: 8px; }
+.track-exam-question { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
+.track-exam-question > strong { color: var(--ink); font-size: 10px; }
+.exam-explanation { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+.music-hero { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; border-radius: 17px; background: linear-gradient(115deg, #edf5ef, #fff 74%); border: 1px solid #dfe9e1; }
+.music-hero h2 { margin: 6px 0; color: var(--ink); font: 800 23px Manrope, sans-serif; letter-spacing: -.8px; }
+.music-hero p { max-width: 570px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.music-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.music-disc { width: 96px; height: 96px; display: grid; place-items: center; align-content: center; gap: 4px; flex: 0 0 96px; border: 9px solid #e5eee7; border-radius: 50%; color: #fff; background: linear-gradient(145deg, #2b7d5b, #123e31); box-shadow: 0 10px 24px rgba(22,84,57,.15); }
+.music-disc b { font-size: 7px; line-height: 1.15; letter-spacing: 1px; text-align: center; }
+.music-grid { display: grid; grid-template-columns: 1.25fr .75fr; gap: 13px; }
+.music-panel { display: grid; align-content: start; gap: 9px; }
+.music-panel h3, .music-quiz h3 { margin: 0; color: var(--ink); font: 750 15px Manrope, sans-serif; }
+.music-line { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 0; border: 0; border-top: 1px solid var(--line); color: var(--ink); background: transparent; text-align: left; }
+.music-line span { color: #9ba69f; font-size: 8px; }
+.music-line strong { flex: 1; font-size: 10px; }
+.music-line svg { color: var(--green); }
+.music-panel > p { margin: 4px 0 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.music-word { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line); }
+.music-word > div { display: grid; flex: 1; gap: 3px; }
+.music-word strong { color: var(--ink); font-size: 10px; }
+.music-word small { color: var(--muted); font-size: 8px; }
+.music-quiz { display: grid; gap: 12px; }
+.music-quiz > div:first-child { display: grid; gap: 7px; }
+.music-quiz p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.music-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.music-options button { padding: 8px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: #fff; font-size: 9px; }
+.music-options button.selected { border-color: var(--green); color: var(--green); background: var(--mint); }
+.music-disclaimer, .photo-privacy-note { color: var(--muted); font-size: 8px; line-height: 1.5; }
+.writing-photo-card { display: grid; gap: 11px; }
+.writing-photo-card > div:first-child h2 { margin: 4px 0; color: var(--ink); font: 750 16px Manrope, sans-serif; }
+.writing-photo-card > div:first-child p { max-width: 680px; margin: 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.photo-picker { width: fit-content; position: relative; overflow: hidden; }
+.photo-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.writing-photo-preview { width: min(100%, 450px); max-height: 360px; object-fit: contain; object-position: left center; border: 1px solid var(--line); border-radius: 12px; background: #f8faf8; }
+.writing-photo-feedback { padding: 12px; border-radius: 10px; color: #53675a; background: #f4f8f5; }
+.writing-photo-feedback p { margin: 6px 0 0; white-space: pre-wrap; font-size: 10px; line-height: 1.65; }
+@media (max-width: 980px) {
+  .track-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .track-catalog-grid, .music-grid { grid-template-columns: 1fr; }
+  .track-detail-heading, .track-exam-callout { align-items: flex-start; flex-direction: column; }
+  .track-detail-level { white-space: normal; }
+  .track-lesson-actions { align-items: flex-start; flex-direction: column; }
+  .track-lesson-actions .button { width: 100%; justify-content: center; }
+  .music-hero { align-items: flex-start; padding: 17px; }
+  .music-disc { width: 72px; height: 72px; flex-basis: 72px; border-width: 6px; }
+  .music-hero h2 { font-size: 19px; }
+}
