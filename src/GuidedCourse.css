@@ -259,3 +259,35 @@
 :root[data-theme="dark"] .manual-repeat-button { border-color:#3c5b79; color:#a3bad0; }
 :root[data-theme="dark"] .manual-repeat-button:hover:not(:disabled) { color:#d3e9ff; background:#1f3a55; }
 :root[data-theme="dark"] .course-voice-transcript { border-color:#355473; color:#c4d9ec; background:#1d354f; }
+
+.course-level-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e9f3fc;
+  color: #3c719f;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .04em;
+}
+.checkpoint-retry-notice {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 12px;
+  padding: 13px 15px;
+  border: 1px solid #e7c88b;
+  border-radius: 13px;
+  background: #fff8e9;
+  color: #805a1e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.checkpoint-retry-notice strong { font-size: 13px; }
+:root[data-theme="dark"] .course-level-chip { background: #203b57; color: #b6d6f3; }
+:root[data-theme="dark"] .checkpoint-retry-notice {
+  border-color: #72572d;
+  background: #3b301e;
+  color: #f0d39d;
+}
