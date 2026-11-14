@@ -98,6 +98,15 @@ function friendlyError(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Não foi possível concluir esta ação. Tente novamente.'
 }
+async function functionErrorDetail(error: unknown) {
+  const context = (error as { context?: unknown } | null)?.context
+  if (context instanceof Response) {
+    const body = await context.clone().json().catch(() => null) as { error?: string; provider_message?: string; provider_status?: number } | null
+    if (body?.provider_message) return 'OpenAI HTTP ' + (body.provider_status || 'erro') + ': ' + body.provider_message
+    if (body?.error) return body.error
+  }
+  return friendlyError(error)
+}
 function demoAnswer(message: string, profile: Profile) {
   const text = message.toLowerCase()
   const topic = profile.customInterest || profile.interests[0] || 'your daily life'
@@ -587,8 +596,9 @@ export default function App() {
         setChatNotice('Modo demonstração: respostas de IA personalizadas e histórico entre dispositivos exigem uma conta conectada.')
       }
     } catch (error) {
-      setChat(current => [...current, { role: 'assistant', text: 'I could not connect just now. Please try again in a moment.' }])
-      setChatNotice('Falha ao conectar à Lumi: ' + friendlyError(error))
+      const detail = await functionErrorDetail(error)
+      setChat(current => [...current, { role: 'assistant', text: 'Não consegui responder agora. ' + detail }])
+      setChatNotice('Falha ao conectar à Lumi: ' + detail)
     } finally {
       setChatBusy(false)
     }
