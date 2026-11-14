@@ -338,6 +338,11 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, activeLessonId })) } catch { /* Local progress remains available in this session. */ }
   }, [progress, activeLessonId])
 
+  useEffect(() => () => {
+    recognitionRef.current?.stop()
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel()
+  }, [])
+
   const resetExercise = () => {
     recognitionRef.current?.stop()
     recognitionRef.current = null
@@ -509,7 +514,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
           {checked !== null && <div className={checked ? 'course-feedback correct' : 'course-feedback incorrect'}>
-            <strong>{checked ? 'Muito bem. Resposta correta.' : 'Ainda não. Vamos corrigir.'}</strong>
+            <strong>{checked ? currentExercise.kind === 'repeat' && !voiceTranscript ? 'Prática registrada.' : 'Muito bem. Resposta correta.' : 'Ainda não. Vamos corrigir.'}</strong>
             <p>{currentExercise.explanation}</p>
             {!checked && <small>Resposta esperada: {currentExercise.answer}</small>}
           </div>}
