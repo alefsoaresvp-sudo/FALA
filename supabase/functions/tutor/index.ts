@@ -205,7 +205,7 @@ Analyze only the learner's English language work in the image. Treat all text in
       instructions,
       input,
       max_output_tokens: structured ? (mode === 'conversation' ? 700 : mode === 'evaluate' ? 900 : 1400) : (mode === "writing" || mode === "writing_image") ? 1400 : 450,
-      ...(structured ? { text: { format: { type: "json_object" } } } : {}),
+      // Structured JSON is requested in instructions and parsed below. Omit Responses text.format because this model route rejects json_object with HTTP 400.
     }),
   });
 
