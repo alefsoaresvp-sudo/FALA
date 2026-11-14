@@ -3,13 +3,16 @@ import { Conversation } from '@elevenlabs/client'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
-  MessageCircle, Mic, MoreHorizontal, PenLine, Play, Plus, Send, Sparkles,
-  Target, Trash2, Trophy, UserRound, Volume2, X,
+  BriefcaseBusiness, Car, Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2,
+  PenLine, Play, Plus, Send, ShoppingBag, Sparkles, Target, Trash2, Trophy,
+  Utensils, Users, UserRound, Volume2, X,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
+import { learningTracks, type TrackProgress, type TrackLesson, type TrackQuestion } from './learningTracks'
+import { readMusicSet } from './musicLab'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'vocabulary' | 'progress'
+type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -29,6 +32,7 @@ type Profile = {
 }
 type ChatMessage = { role: 'user' | 'assistant'; text: string; note?: string }
 type SessionRow = { id?: string; activity_type: string; duration_seconds: number; score: number | null; completed_at?: string }
+type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
 type LearningActivity = {
   title: string
   skill: string
@@ -44,6 +48,8 @@ type LearningActivity = {
 const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
 const SESSIONS_KEY = 'fala-local-sessions-v1'
+const TRACK_PROGRESS_KEY = 'fala-track-progress-v1'
+const EMPTY_TRACK_PROGRESS: TrackProgress = { completed_lessons: [], exam_score: null, exam_passed: false }
 const initialProfile: Profile = {
   name: '', goal: 'conversation', level: 'unsure', interests: [], customInterest: '',
   focuses: ['speaking', 'listening'], minutes: 10, accent: 'us', style: 'mixed',
@@ -107,6 +113,8 @@ const navItems = [
   { id: 'lumi' as Page, label: 'Lumi IA', icon: MessageCircle },
   { id: 'speak' as Page, label: 'Falar', icon: AudioLines },
   { id: 'write' as Page, label: 'Escrever', icon: PenLine },
+  { id: 'tracks' as Page, label: 'Trilhas', icon: Map },
+  { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
 ]
@@ -149,6 +157,23 @@ export default function App() {
   const [writingText, setWritingText] = useState('')
   const [writingFeedback, setWritingFeedback] = useState('')
   const [writingBusy, setWritingBusy] = useState(false)
+  const [writingPhoto, setWritingPhoto] = useState<File | null>(null)
+  const [writingPhotoPreview, setWritingPhotoPreview] = useState('')
+  const [writingPhotoFeedback, setWritingPhotoFeedback] = useState('')
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [trackProgress, setTrackProgress] = useState<Record<string, TrackProgress>>(() => readLocal(TRACK_PROGRESS_KEY, {}))
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
+  const [trackMode, setTrackMode] = useState<'overview' | 'lesson' | 'exam'>('overview')
+  const [trackLessonIndex, setTrackLessonIndex] = useState(0)
+  const [trackChoice, setTrackChoice] = useState<number | null>(null)
+  const [trackResponse, setTrackResponse] = useState('')
+  const [trackFeedback, setTrackFeedback] = useState('')
+  const [trackEvaluation, setTrackEvaluation] = useState<TrackEvaluation | null>(null)
+  const [trackBusy, setTrackBusy] = useState(false)
+  const [trackExamAnswers, setTrackExamAnswers] = useState<Record<number, number>>({})
+  const [trackExamScore, setTrackExamScore] = useState<number | null>(null)
+  const [musicAnswer, setMusicAnswer] = useState('')
+  const [musicFeedback, setMusicFeedback] = useState('')
   const [recording, setRecording] = useState(false)
   const [recordingNotice, setRecordingNotice] = useState('')
   const [transcript, setTranscript] = useState('')
@@ -169,13 +194,17 @@ export default function App() {
   const isConnected = !!user
   const totalMinutes = useMemo(() => Math.round(sessions.reduce((sum, item) => sum + (item.duration_seconds || 0), 0) / 60), [sessions])
   const completedSessions = sessions.length
+  const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
+  const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? EMPTY_TRACK_PROGRESS) : EMPTY_TRACK_PROGRESS
+  const activeTrackLesson = activeTrack?.lessons[trackLessonIndex] ?? null
+  const musicSet = useMemo(() => readMusicSet(profile), [profile])
   const averageScore = useMemo(() => {
     const scores = sessions.map(item => item.score).filter((value): value is number => typeof value === 'number')
     return scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : null
   }, [sessions])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Prática guiada', lumi: 'Converse com a Lumi',
-    speak: 'Treino de fala', write: 'Laboratório de escrita', vocabulary: 'Meu vocabulário', progress: 'Meu progresso',
+    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso',
   }
 
   useEffect(() => {
@@ -215,6 +244,7 @@ export default function App() {
           supabase.from('vocabulary_items').select('term').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
+          supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
         ])
         if (!active) return
         if (profileResult.data) {
@@ -248,6 +278,16 @@ export default function App() {
             note: typeof item.metadata?.correction === 'string' ? item.metadata.correction : undefined,
           })))
         }
+        if (trackProgressResult.data?.length) {
+          const restored: Record<string, TrackProgress> = {}
+          for (const row of trackProgressResult.data) restored[row.track_id] = {
+            completed_lessons: Array.isArray(row.completed_lessons) ? row.completed_lessons : [],
+            exam_score: typeof row.exam_score === 'number' ? row.exam_score : null,
+            exam_passed: !!row.exam_passed,
+          }
+          setTrackProgress(restored)
+          try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(restored)) } catch { /* local cache is optional */ }
+        }
       } catch (error) {
         console.error('FALA account sync failed', error)
         setToast('Não foi possível carregar todos os dados sincronizados.')
@@ -257,6 +297,10 @@ export default function App() {
     })()
     return () => { active = false }
   }, [user?.id])
+
+  useEffect(() => {
+    try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(trackProgress)) } catch { /* Local track progress is optional. */ }
+  }, [trackProgress])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -554,6 +598,192 @@ export default function App() {
     setActivityCorrect(null)
   }
 
+  const updateTrackProgress = (trackId: string, next: TrackProgress) => {
+    setTrackProgress(current => ({ ...current, [trackId]: next }))
+    try {
+      const updated = { ...trackProgress, [trackId]: next }
+      window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(updated))
+    } catch { /* Local progress remains in memory if storage is unavailable. */ }
+    if (supabase && user) {
+      void supabase.from('track_progress').upsert({
+        user_id: user.id, track_id: trackId, ...next, updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,track_id' }).then(({ error }) => {
+        if (error) {
+          console.error('Track progress sync failed', error)
+          setToast('Trilha salva neste aparelho, mas não sincronizou com sua conta.')
+        }
+      })
+    }
+  }
+
+  const openTrack = (trackId: string) => {
+    setActiveTrackId(trackId)
+    setTrackMode('overview')
+    setTrackFeedback('')
+    setTrackEvaluation(null)
+    setTrackExamAnswers({})
+    setTrackExamScore(null)
+  }
+
+  const startTrackLesson = (index: number) => {
+    setTrackLessonIndex(index)
+    setTrackMode('lesson')
+    setTrackChoice(null)
+    setTrackResponse('')
+    setTrackFeedback('')
+    setTrackEvaluation(null)
+    setTranscript('')
+  }
+
+  const completeTrackLesson = async () => {
+    if (!activeTrack || !activeTrackLesson || trackBusy) return
+    const lesson = activeTrackLesson
+    let score: number | null = null
+    if (lesson.kind === 'choice') {
+      if (trackChoice === null) {
+        setTrackFeedback('Escolha uma resposta antes de continuar.')
+        return
+      }
+      if (trackChoice !== lesson.correct_index) {
+        setTrackFeedback('Ainda não. Releia a situação e tente outra opção.')
+        return
+      }
+      score = 100
+    } else {
+      const answer = lesson.kind === 'speak' ? (transcript.trim() || trackResponse.trim()) : trackResponse.trim()
+      if (answer.split(/\s+/).filter(Boolean).length < 5) {
+        setTrackFeedback('Escreva ou transcreva pelo menos cinco palavras para concluir esta etapa.')
+        return
+      }
+      if (supabase && user) {
+        setTrackBusy(true)
+        setTrackFeedback('A Lumi está avaliando sua resposta…')
+        try {
+          const { data, error } = await supabase.functions.invoke('tutor', {
+            body: {
+              mode: 'evaluate',
+              message: answer,
+              activity: {
+                activity_type: lesson.kind === 'speak' ? 'roleplay' : 'complete_sentence',
+                title: lesson.title, question: lesson.question,
+                expected_answer: lesson.expected_answer || lesson.target_phrase,
+                target_phrase: lesson.target_phrase, context: lesson.scenario,
+              },
+              profile,
+              learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+            },
+          })
+          if (error) throw error
+          const evaluation = data?.structured as TrackEvaluation | undefined
+          if (!evaluation || typeof evaluation.score !== 'number') throw new Error('A Lumi não retornou uma avaliação válida.')
+          setTrackEvaluation(evaluation)
+          if (evaluation.score < 55) {
+            setTrackFeedback('Revise a correção e tente novamente. A etapa ainda não foi liberada.')
+            return
+          }
+          score = evaluation.score
+          await supabase.from('activity_attempts').insert({
+            user_id: user.id, activity_type: lesson.kind, skill: lesson.kind === 'write' ? 'writing' : 'speaking',
+            interest_context: activeTrack.title, prompt: lesson.question,
+            learner_answer: answer, correction: evaluation, score: evaluation.score,
+          })
+        } catch (error) {
+          setTrackFeedback('A avaliação da Lumi falhou: ' + friendlyError(error))
+          return
+        } finally {
+          setTrackBusy(false)
+        }
+      } else {
+        setTrackFeedback('Prática concluída no modo local. A correção personalizada da Lumi requer uma conta conectada.')
+      }
+    }
+
+    const completed = [...new Set([...activeTrackProgress.completed_lessons, trackLessonIndex])].sort((a, b) => a - b)
+    updateTrackProgress(activeTrack.id, { ...activeTrackProgress, completed_lessons: completed })
+    await recordSession('lesson', 240, score, { track_id: activeTrack.id, lesson: lesson.title })
+    setTrackFeedback('')
+    setTrackMode('overview')
+  }
+
+  const submitTrackExam = () => {
+    if (!activeTrack) return
+    if (Object.keys(trackExamAnswers).length !== activeTrack.exam.length) {
+      setTrackFeedback('Responda todas as questões antes de corrigir a mini prova.')
+      return
+    }
+    const correct = activeTrack.exam.filter((item, index) => trackExamAnswers[index] === item.correct_index).length
+    const score = Math.round(correct / activeTrack.exam.length * 100)
+    const passed = score >= 70
+    setTrackExamScore(score)
+    updateTrackProgress(activeTrack.id, { ...activeTrackProgress, exam_score: score, exam_passed: passed })
+    setTrackFeedback(passed
+      ? 'Módulo concluído. Você atingiu o mínimo de 70%.'
+      : 'Você ainda não atingiu 70%. Revise as etapas e tente novamente.')
+    void recordSession('lesson', 300, score, { track_id: activeTrack.id, exam: true })
+  }
+
+  const selectWritingPhoto = (file: File | null) => {
+    setWritingPhoto(file)
+    setWritingPhotoPreview('')
+    setWritingPhotoFeedback('')
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setWritingPhotoFeedback('Use uma imagem JPG, PNG ou WEBP. Fotos HEIC precisam ser convertidas antes.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setWritingPhotoFeedback('A imagem está acima de 8 MB. Escolha uma foto menor.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') setWritingPhotoPreview(reader.result)
+    }
+    reader.onerror = () => setWritingPhotoFeedback('Não foi possível abrir a imagem neste navegador.')
+    reader.readAsDataURL(file)
+  }
+
+  const analyzeWritingPhoto = async () => {
+    if (!writingPhoto) {
+      setWritingPhotoFeedback('Selecione ou fotografe uma página do exercício primeiro.')
+      return
+    }
+    if (!supabase || !user) {
+      setWritingPhotoFeedback('Entre na sua conta para enviar a foto à Lumi com segurança. A imagem não é enviada no modo demonstração.')
+      setAuthMode('signin')
+      setAuthOpen(true)
+      return
+    }
+    setPhotoBusy(true)
+    setWritingPhotoFeedback('Preparando a foto e enviando para análise…')
+    try {
+      if (!('createImageBitmap' in window)) throw new Error('Este navegador não oferece suporte à preparação de imagem. Use JPG ou PNG menor que 4 MB.')
+      const bitmap = await createImageBitmap(writingPhoto)
+      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Não foi possível preparar a imagem neste navegador.')
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      bitmap.close()
+      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.82)
+      if (imageDataUrl.length > 5_800_000) throw new Error('A foto continua muito grande após a compressão. Tente uma imagem menor.')
+      const { data, error } = await supabase.functions.invoke('tutor', {
+        body: { mode: 'writing_image', imageDataUrl, profile, message: writingText.trim() },
+      })
+      if (error) throw error
+      const reply = typeof data?.reply === 'string' ? data.reply.trim() : ''
+      if (!reply) throw new Error('A Lumi não retornou uma análise.')
+      setWritingPhotoFeedback(reply)
+      await recordSession('writing', 300, null, { source: 'photo' })
+    } catch (error) {
+      setWritingPhotoFeedback('Não foi possível analisar a foto: ' + friendlyError(error))
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   const saveWord = async (event: FormEvent) => {
     event.preventDefault()
     const term = newWord.trim()
@@ -781,6 +1011,8 @@ export default function App() {
 
             <div className="section-heading"><div><span className="eyebrow">SUAS FERRAMENTAS</span><h2>Escolha como praticar</h2></div></div>
             <div className="tool-grid">
+              <button className="tool-card" onClick={() => setPage('tracks')}><span className="tool-icon blue"><Map size={20}/></span><strong>Trilhas práticas</strong><small>Missões em etapas e mini provas com aprovação.</small><ArrowRight size={16}/></button>
+              <button className="tool-card" onClick={() => setPage('music')}><span className="tool-icon peach"><Music2 size={20}/></span><strong>Music Lab</strong><small>Versos originais, vocabulário e repetição guiada.</small><ArrowRight size={16}/></button>
               <button className="tool-card" onClick={() => setPage('lumi')}><span className="tool-icon violet"><MessageCircle size={20}/></span><strong>Conversa com a Lumi</strong><small>Pratique diálogos e receba correções pontuais.</small><ArrowRight size={16}/></button>
               <button className="tool-card" onClick={() => setPage('speak')}><span className="tool-icon mint"><Mic size={20}/></span><strong>Treino de fala</strong><small>Grave uma resposta e veja a transcrição.</small><ArrowRight size={16}/></button>
               <button className="tool-card" onClick={() => setPage('write')}><span className="tool-icon peach"><PenLine size={20}/></span><strong>Laboratório de escrita</strong><small>Construa frases e melhore seus textos.</small><ArrowRight size={16}/></button>
@@ -800,6 +1032,80 @@ export default function App() {
               <div className="exercise-footer">{activityFeedback ? <button className="button primary" onClick={nextActivity}>Próxima atividade <ArrowRight size={16}/></button> : <button className="button primary" onClick={() => void submitActivity()}>Conferir resposta <Check size={16}/></button>}</div>
             </article>
             <aside className="learning-aside"><div className="aside-tip"><Sparkles size={19}/><strong>Aprender para usar</strong><p>Não memorize só a resposta. Leia a expressão em voz alta e imagine uma situação em que ela seria útil.</p></div><div className="aside-card"><span className="eyebrow">SEU PERFIL</span><strong>{profile.goal === 'work' ? 'Inglês para trabalho' : profile.goal === 'travel' ? 'Inglês para viagens' : profile.goal === 'study' ? 'Inglês para estudos' : 'Inglês para o dia a dia'}</strong><p>{profile.level === 'beginner' ? 'Começando do zero' : profile.level === 'basic' ? 'Básico' : profile.level === 'intermediate' ? 'Intermediário' : profile.level === 'advanced' ? 'Avançado' : 'Nível a descobrir'}</p><button className="text-button" onClick={beginProfileEdit}>Editar perfil <ArrowRight size={14}/></button></div></aside>
+          </section>}
+
+          {page === 'tracks' && <section className="tracks-layout">
+            <div className="page-heading"><span className="eyebrow">TRILHAS · SITUAÇÕES DO MUNDO REAL</span><h1>Aprenda para <em>conseguir fazer.</em></h1><p>Seis trilhas com quatro práticas e uma mini prova. A aprovação requer pelo menos 70%.</p></div>
+            {!activeTrack ? <div className="track-catalog-grid">
+              {learningTracks.map(track => {
+                const Icon = track.icon
+                const progress = trackProgress[track.id] ?? EMPTY_TRACK_PROGRESS
+                const completedCount = progress.completed_lessons.length
+                const recommended = track.goals.includes(profile.goal)
+                return <article className="track-card" key={track.id}>
+                  <div className="track-card-top"><span className="track-card-icon"><Icon size={21}/></span><span className="eyebrow">{track.category}</span></div>
+                  <h2>{track.title}</h2><p>{track.description}</p>
+                  <div className="track-card-meta"><span>{track.level}</span><span>{track.minutes} min</span></div>
+                  <div className="track-progress-line"><i style={{ width: ((completedCount + (progress.exam_passed ? 1 : 0)) / (track.lessons.length + 1) * 100) + '%' }}/></div>
+                  <div className="track-card-footer"><small>{completedCount}/{track.lessons.length} etapas {progress.exam_passed ? '· prova aprovada' : ''}</small>{recommended && <span className="track-recommended">Recomendada</span>}</div>
+                  <button className="button primary" onClick={() => openTrack(track.id)}>{progress.exam_passed ? 'Revisar trilha' : completedCount ? 'Continuar trilha' : 'Começar trilha'} <ArrowRight size={15}/></button>
+                </article>
+              })}
+            </div> : <article className="track-detail-card">
+              <button className="text-button" onClick={() => setActiveTrackId(null)}><ChevronRight size={14} className="back-chevron"/> Todas as trilhas</button>
+              <div className="track-detail-heading"><div><span className="eyebrow">{activeTrack.category}</span><h2>{activeTrack.title}</h2><p>{activeTrack.description}</p></div><span className="track-detail-level">{activeTrack.level} · {activeTrack.minutes} min</span></div>
+              {trackMode === 'overview' && <>
+                <div className="track-detail-progress"><strong>{activeTrackProgress.completed_lessons.length}/{activeTrack.lessons.length} etapas concluídas</strong><div className="track-progress-line"><i style={{width:(activeTrackProgress.completed_lessons.length/activeTrack.lessons.length*100)+'%'}}/></div></div>
+                <div className="track-lesson-list">{activeTrack.lessons.map((lesson,index) => {
+                  const done = activeTrackProgress.completed_lessons.includes(index)
+                  const unlocked = index === 0 || activeTrackProgress.completed_lessons.includes(index-1)
+                  return <button className="track-lesson-row" key={lesson.title} disabled={!unlocked} onClick={() => startTrackLesson(index)}>
+                    <span className="track-lesson-number">{done ? <CheckCircle2 size={17}/> : String(index+1).padStart(2,'0')}</span>
+                    <span className="track-lesson-copy"><strong>{lesson.title}</strong><small>{lesson.kind === 'choice' ? 'Compreensão e escolha' : lesson.kind === 'write' ? 'Resposta escrita' : 'Fala e repetição'}</small></span>
+                    <span className={done ? 'track-status done' : unlocked ? 'track-status' : 'track-status locked'}>{done ? 'Concluída' : unlocked ? 'Disponível' : 'Bloqueada'}</span><ChevronRight size={16}/>
+                  </button>
+                })}</div>
+                {activeTrackProgress.completed_lessons.length === activeTrack.lessons.length && <div className="track-exam-callout">
+                  <div><span className="eyebrow">MINI PROVA FINAL</span><strong>Consolide o que praticou</strong><p>Responda às cinco questões. A aprovação exige 70%.</p></div>
+                  <button className="button primary" onClick={() => { setTrackMode('exam'); setTrackExamAnswers({}); setTrackExamScore(null); setTrackFeedback('') }}>Fazer mini prova <Trophy size={15}/></button>
+                </div>}
+                {activeTrackProgress.exam_passed && <p className="track-passed-note"><CheckCircle2 size={18}/> Trilha aprovada · último resultado {activeTrackProgress.exam_score}%</p>}
+              </>}
+              {trackMode === 'lesson' && activeTrackLesson && <div className="track-active-lesson">
+                <button className="text-button" onClick={() => setTrackMode('overview')}><ChevronRight size={14} className="back-chevron"/> Voltar às etapas</button>
+                <span className="eyebrow">ETAPA {trackLessonIndex+1} DE {activeTrack.lessons.length} · {activeTrackLesson.kind.toUpperCase()}</span>
+                <h3>{activeTrackLesson.title}</h3><p className="track-scenario">{activeTrackLesson.scenario}</p>
+                <div className="phrase-box"><div><span>EXPRESSÃO-CHAVE</span><strong>{activeTrackLesson.target_phrase}</strong><small>{activeTrackLesson.translation}</small></div><button className="round-action" onClick={() => speak(activeTrackLesson.target_phrase)} aria-label="Ouvir expressão"><Volume2 size={18}/></button></div>
+                <h4>{activeTrackLesson.question}</h4>
+                {activeTrackLesson.kind === 'choice' ? <div className="answer-options">{(activeTrackLesson.options ?? []).map((option,index) => <button key={option} className={trackChoice === index ? 'answer-option selected' : 'answer-option'} onClick={() => { setTrackChoice(index); setTrackFeedback(index === activeTrackLesson.correct_index ? 'Resposta correta para esta situação.' : 'Essa opção não é a melhor para o contexto. Tente novamente.') }}><span>{String.fromCharCode(65+index)}</span>{option}</button>)}</div> :
+                  <><textarea className="track-response-area" value={trackResponse} onChange={event => { setTrackResponse(event.target.value); setTrackEvaluation(null); setTrackFeedback('') }} rows={4} placeholder={activeTrackLesson.input_hint || (activeTrackLesson.kind === 'speak' ? 'Digite o que você conseguiu dizer…' : 'Escreva sua resposta em inglês…')}/>{activeTrackLesson.kind === 'speak' && <div className="track-speaking-tools"><button className="button ghost" onClick={() => speak(activeTrackLesson.target_phrase)}><Volume2 size={15}/> Ouvir frase</button><button className="button ghost" onClick={() => setPage('speak')}><Mic size={15}/> Abrir treino de fala</button><small>Você também pode gravar na tela “Falar” e retornar para digitar ou colar a transcrição.</small></div>}</>}
+                {trackEvaluation && <div className="track-evaluation"><strong>Feedback da Lumi · {trackEvaluation.score}/100</strong><p>{trackEvaluation.strengths}</p><p><b>Correção:</b> {trackEvaluation.correction}</p><p><b>Versão natural:</b> {trackEvaluation.improved_answer}</p><p><b>Próximo passo:</b> {trackEvaluation.next_step}</p></div>}
+                {trackFeedback && <p className="inline-notice">{trackFeedback}</p>}
+                <div className="track-lesson-actions"><small>{activeTrackLesson.kind === 'choice' ? 'Escolha a opção correta.' : 'Escreva ao menos cinco palavras para concluir.'}</small><button className="button primary" onClick={() => void completeTrackLesson()} disabled={trackBusy || (activeTrackLesson.kind === 'choice' ? trackChoice === null : trackResponse.trim().split(/\s+/).filter(Boolean).length < 5)}>{trackBusy ? 'Avaliando…' : 'Concluir etapa'} <ArrowRight size={15}/></button></div>
+              </div>}
+              {trackMode === 'exam' && <div className="track-exam-panel">
+                <span className="eyebrow">MINI PROVA · {activeTrack.exam.length} QUESTÕES</span><h3>Você precisa acertar pelo menos 70%.</h3>
+                {activeTrack.exam.map((question,index) => <div className="track-exam-question" key={question.question}>
+                  <strong>{index+1}. {question.question}</strong>
+                  <div className="answer-options">{question.options.map((option,optionIndex) => <button key={option} className={trackExamAnswers[index] === optionIndex ? 'answer-option selected' : 'answer-option'} onClick={() => setTrackExamAnswers(current => ({...current,[index]:optionIndex}))}>{String.fromCharCode(65+optionIndex)} · {option}</button>)}</div>
+                  {trackExamScore !== null && <p className="exam-explanation"><b>{trackExamAnswers[index] === question.correct_index ? 'Correto. ' : 'Revisão: '}</b>{question.explanation}</p>}
+                </div>)}
+                {trackExamScore !== null && <div className={trackExamScore >= 70 ? 'track-passed-note' : 'track-failed-note'}><strong>{trackExamScore >= 70 ? 'Aprovado' : 'Ainda não aprovado'} · {trackExamScore}%</strong><p>{trackFeedback}</p></div>}
+                <div className="track-lesson-actions"><small>{Object.keys(trackExamAnswers).length}/{activeTrack.exam.length} respostas marcadas</small><button className="button primary" onClick={submitTrackExam} disabled={Object.keys(trackExamAnswers).length !== activeTrack.exam.length}>Corrigir mini prova <CheckCircle2 size={15}/></button></div>
+                {trackExamScore !== null && trackExamScore < 70 && <button className="button ghost" onClick={() => { setTrackExamAnswers({}); setTrackExamScore(null); setTrackFeedback('') }}>Tentar novamente</button>}
+              </div>}
+            </article>}
+          </section>}
+
+          {page === 'music' && <section className="music-layout">
+            <div className="page-heading"><span className="eyebrow">MUSIC LAB · VERSOS ORIGINAIS</span><h1>Aprenda inglês <em>com música.</em></h1><p>Escute, leia, repita e recupere uma expressão sem olhar. As letras são originais do FALA.</p></div>
+            <article className="music-hero"><div><span className="eyebrow">{musicSet.theme.toUpperCase()}</span><h2>{musicSet.title}</h2><p>Primeiro escute devagar. Depois tente repetir cada linha no seu ritmo.</p><div className="music-controls"><button className="button primary" onClick={() => speak(musicSet.lyrics.join('. '))}><Play size={15}/> Ouvir devagar</button><button className="button ghost" onClick={() => speak(musicSet.lyrics.join('. '))}><Volume2 size={15}/> Ouvir novamente</button></div></div><span className="music-disc"><Music2 size={35}/><b>FALA<br/>MUSIC LAB</b></span></article>
+            <div className="music-grid">
+              <article className="music-panel"><span className="eyebrow">OUVIR · LER · REPETIR</span><h3>Verso em inglês</h3>{musicSet.lyrics.map((line,index) => <button className="music-line" key={line} onClick={() => speak(line)}><span>0{index+1}</span><strong>{line}</strong><Volume2 size={15}/></button>)}<p>{musicSet.translation}</p></article>
+              <article className="music-panel"><span className="eyebrow">VOCABULÁRIO DO VERSO</span><h3>Palavras para guardar</h3>{musicSet.words.map(([word,meaning]) => <div className="music-word" key={word}><div><strong>{word}</strong><small>{meaning}</small></div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setNewWord(word); setToast('Expressão preenchida. Salve-a no seu caderno de vocabulário.') }} aria-label={'Preparar '+word+' para salvar'}><Plus size={16}/></button></div>)}</article>
+            </div>
+            <article className="music-quiz"><div><span className="eyebrow">RECUPERAÇÃO ATIVA</span><h3>Complete o verso sem olhar.</h3><p>“{musicSet.lyrics.find(line => line.toLowerCase().includes(musicSet.gap))?.replace(new RegExp(musicSet.gap,'i'),'_____')}”</p></div><div className="music-options">{musicSet.options.map(option => <button key={option} className={musicAnswer === option ? 'selected' : ''} onClick={() => { setMusicAnswer(option); setMusicFeedback(option === musicSet.gap ? 'Correto. Agora ouça a linha completa e repita sem ler.' : 'Ainda não. Ouça o verso e tente outra vez.') }}>{option}</button>)}</div>{musicFeedback && <p className="inline-notice">{musicFeedback}</p>}<button className="text-button" onClick={() => { setMusicAnswer(''); setMusicFeedback('') }}>Refazer desafio</button></article>
+            <p className="music-disclaimer">Este laboratório usa versos originais do FALA. A voz sintetizada ajuda a praticar ritmo e vocabulário, mas não é canto humano e não mede afinação.</p>
           </section>}
 
           {page === 'lumi' && <section className="lumi-layout">
@@ -848,6 +1154,7 @@ export default function App() {
               <form className="writing-card" onSubmit={analyzeWriting}><div className="writing-prompt"><span className="eyebrow">PROMPT</span><h2>Write about something you want to learn.</h2><p>Escreva de 3 a 5 frases sobre algo que deseja aprender, por que isso interessa a você e como pretende praticar.</p></div><textarea value={writingText} onChange={event => setWritingText(event.target.value)} rows={8} placeholder="I want to learn…"/><div className="writing-actions"><span>{writingText.trim() ? writingText.trim().split(/\s+/).length : 0} palavras</span><button className="button primary" type="submit" disabled={!writingText.trim() || writingBusy}>{writingBusy ? 'Analisando…' : 'Analisar com a Lumi'} <Sparkles size={15}/></button></div>{writingFeedback && <div className="writing-result"><span className="eyebrow">FEEDBACK</span><p>{writingFeedback}</p></div>}</form>
               <aside className="practice-card writing-tips"><span className="eyebrow">CONECTORES ÚTEIS</span><h3>Conecte suas ideias.</h3>{[['because','porque'],['but','mas'],['so','então / por isso'],['also','também']].map(item => <div className="connector-row" key={item[0]}><strong>{item[0]}</strong><span>{item[1]}</span><button className="round-action" onClick={() => speak(item[0])}><Volume2 size={16}/></button></div>)}</aside>
             </div>
+            <article className="writing-photo-card"><div><span className="eyebrow">ESCRITA NO PAPEL</span><h2>Fotografe seu exercício.</h2><p>Envie uma foto legível do caderno ou folha. A Lumi tenta transcrever, corrigir e explicar os pontos importantes. O envio exige conta conectada.</p></div><label className="button ghost photo-picker"><Camera size={16}/> Tirar foto ou escolher arquivo<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => selectWritingPhoto(event.target.files?.[0] ?? null)}/></label>{writingPhotoPreview && <img className="writing-photo-preview" src={writingPhotoPreview} alt="Prévia do exercício fotografado"/>}{writingPhotoFeedback && <div className="writing-photo-feedback"><span className="eyebrow">ANÁLISE DA FOTO</span><p>{writingPhotoFeedback}</p></div>}<button className="button primary" onClick={() => void analyzeWritingPhoto()} disabled={!writingPhoto || photoBusy}>{photoBusy ? 'Analisando foto…' : 'Enviar para a Lumi'} <Sparkles size={15}/></button><small className="photo-privacy-note">A imagem é comprimida no navegador antes do envio e não é salva no armazenamento do FALA. Fotos desfocadas podem reduzir a precisão.</small></article>
           </section>}
 
           {page === 'vocabulary' && <section className="vocabulary-layout">
