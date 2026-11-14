@@ -34,6 +34,9 @@ type LearningPlan = { headline: string; today: string; focus_order: string[]; we
 type SessionRow = { id?: string; activity_type: string; duration_seconds: number; score: number | null; completed_at?: string }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
 type LearningActivity = {
+  activity_type?: 'multiple_choice' | 'complete_sentence' | 'roleplay' | 'translation'
+  expected_answer?: string
+  input_hint?: string
   title: string
   skill: string
   context: string
@@ -169,6 +172,9 @@ export default function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
+  const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
+  const [activityAnswer, setActivityAnswer] = useState('')
+  const [activityBusy, setActivityBusy] = useState(false)
   const [answerIndex, setAnswerIndex] = useState<number | null>(null)
   const [activityFeedback, setActivityFeedback] = useState('')
   const [activityCorrect, setActivityCorrect] = useState<boolean | null>(null)
@@ -210,7 +216,6 @@ export default function App() {
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const voiceConversationRef = useRef<{ endSession: () => Promise<void> } | null>(null)
 
-  const activity = activityBank[activityIndex % activityBank.length]
   const isConnected = !!user
   const totalMinutes = useMemo(() => Math.round(sessions.reduce((sum, item) => sum + (item.duration_seconds || 0), 0) / 60), [sessions])
   const completedSessions = sessions.length
@@ -604,7 +609,115 @@ export default function App() {
     }
   }
 
+  const generateAdaptiveActivity = async () => {
+    if (!supabase || !user) {
+      setToast('Entre na sua conta para gerar uma atividade personalizada com a Lumi.')
+      setAuthMode('signin')
+      setAuthOpen(true)
+      return
+    }
+    setActivityBusy(true)
+    setActivityFeedback('')
+    setActivityCorrect(null)
+    try {
+      const { data, error } = await supabase.functions.invoke('tutor', {
+        body: {
+          mode: 'activity', profile,
+          learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+          activity: { title: activity.title, context: activity.context },
+        },
+      })
+      if (error) throw error
+      const generated = data?.structured
+      const options = Array.isArray(generated?.options) ? generated.options.filter((value: unknown) => typeof value === 'string').slice(0, 3) : []
+      const kind = ['multiple_choice','complete_sentence','roleplay','translation'].includes(generated?.activity_type)
+        ? generated.activity_type as LearningActivity['activity_type']
+        : 'multiple_choice'
+      if (!generated?.title || !generated?.question || !generated?.target_phrase || options.length < 2) {
+        throw new Error('A atividade gerada veio incompleta. Tente novamente.')
+      }
+      setActivity({
+        activity_type: kind,
+        title: String(generated.title),
+        skill: ['speaking','listening','writing','vocabulary'].includes(generated.skill) ? generated.skill : 'speaking',
+        context: String(generated.context || 'Situação prática'),
+        phrase: String(generated.target_phrase),
+        translation: String(generated.translation || ''),
+        prompt: String(generated.question),
+        options,
+        correct: Math.max(0, Math.min(options.length - 1, Number(generated.correct_index) || 0)),
+        explanation: String(generated.explanation || generated.feedback || ''),
+        expected_answer: String(generated.expected_answer || generated.target_phrase),
+        input_hint: String(generated.input_hint || 'Escreva sua resposta em inglês.'),
+      })
+      setActivityIndex(-1)
+      setAnswerIndex(null)
+      setActivityAnswer('')
+      setActivityFeedback('')
+      setActivityCorrect(null)
+      setToast('Nova atividade personalizada criada pela Lumi.')
+    } catch (error) {
+      setToast('Não foi possível gerar a atividade: ' + await functionErrorDetail(error))
+    } finally {
+      setActivityBusy(false)
+    }
+  }
+
   const submitActivity = async () => {
+    if (activity.activity_type && activity.activity_type !== 'multiple_choice') {
+      const answer = activityAnswer.trim()
+      if (!answer) {
+        setActivityFeedback('Escreva sua resposta antes de enviar.')
+        return
+      }
+      if (!supabase || !user) {
+        setActivityFeedback('Esta atividade exige uma conta conectada para receber correção personalizada da Lumi.')
+        return
+      }
+      setActivityBusy(true)
+      try {
+        const { data, error } = await supabase.functions.invoke('tutor', {
+          body: {
+            mode: 'evaluate',
+            message: answer,
+            profile,
+            activity: {
+              activity_type: activity.activity_type,
+              title: activity.title,
+              question: activity.prompt,
+              expected_answer: activity.expected_answer || activity.phrase,
+              target_phrase: activity.phrase,
+              context: activity.context,
+            },
+            learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+          },
+        })
+        if (error) throw error
+        const evaluation = data?.structured
+        if (!evaluation || typeof evaluation.score !== 'number') throw new Error('A Lumi não retornou uma avaliação válida.')
+        const score = Math.max(0, Math.min(100, Math.round(evaluation.score)))
+        setActivityCorrect(score >= 55)
+        setActivityFeedback(
+          score + '/100 · ' + String(evaluation.strengths || '') +
+          '\nCorreção: ' + String(evaluation.correction || '') +
+          '\nVersão sugerida: ' + String(evaluation.improved_answer || '') +
+          '\nPróximo passo: ' + String(evaluation.next_step || '')
+        )
+        await supabase.from('activity_attempts').insert({
+          user_id: user.id, activity_type: activity.activity_type, skill: activity.skill,
+          interest_context: profile.customInterest || profile.interests.join(', '),
+          prompt: activity.prompt, learner_answer: answer, correction: evaluation, score,
+        })
+        await recordSession('lesson', 240, score, { title: activity.title, skill: activity.skill, source: 'adaptive' })
+      } catch (error) {
+        setActivityFeedback('Não foi possível avaliar sua resposta: ' + await functionErrorDetail(error))
+        setActivityCorrect(false)
+      } finally {
+        setActivityBusy(false)
+      }
+      return
+    }
+
     if (answerIndex === null) {
       setActivityFeedback('Selecione uma resposta antes de conferir.')
       return
@@ -626,8 +739,11 @@ export default function App() {
   }
 
   const nextActivity = () => {
-    setActivityIndex(value => (value + 1) % activityBank.length)
+    const next = activityIndex < 0 ? 0 : (activityIndex + 1) % activityBank.length
+    setActivityIndex(next)
+    setActivity(activityBank[next])
     setAnswerIndex(null)
+    setActivityAnswer('')
     setActivityFeedback('')
     setActivityCorrect(null)
   }
