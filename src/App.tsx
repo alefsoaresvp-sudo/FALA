@@ -53,6 +53,18 @@ type ActivityEvaluation = { score: number; is_acceptable: boolean; improved_answ
 type Page = 'home' | 'tracks' | 'learn' | 'speak' | 'write' | 'music' | 'vocabulary' | 'progress'
 type ChatMessage = { role: 'assistant' | 'user'; text: string; note?: string }
 
+// Safari and embedded iOS browsers can deny access to localStorage.
+// Storage failures must never prevent React from mounting the app.
+function safeStorageGet(key: string): string | null {
+  try { return window.localStorage.getItem(key) } catch { return null }
+}
+function safeStorageSet(key: string, value: string): void {
+  try { window.localStorage.setItem(key, value) } catch { /* Continue with in-memory state. */ }
+}
+function safeStorageRemove(key: string): void {
+  try { window.localStorage.removeItem(key) } catch { /* Storage may be unavailable in private contexts. */ }
+}
+
 const profileKey = 'fala-profile-v2'
 const navItems: { id: Page; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Início', icon: Home },
@@ -166,11 +178,11 @@ function todayKey() {
   return [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-')
 }
 function readTrackProgress(): Record<string, TrackProgress> {
-  try { const raw = localStorage.getItem(trackProgressKey); return raw ? JSON.parse(raw) as Record<string, TrackProgress> : {} } catch { return {} }
+  try { const raw = safeStorageGet(trackProgressKey); return raw ? JSON.parse(raw) as Record<string, TrackProgress> : {} } catch { return {} }
 }
 function readDailyAgenda(): boolean[] {
   try {
-    const raw = localStorage.getItem(dailyAgendaKey)
+    const raw = safeStorageGet(dailyAgendaKey)
     const parsed = raw ? JSON.parse(raw) as { date?: string; done?: boolean[] } : null
     return parsed?.date === todayKey() && Array.isArray(parsed.done) ? [!!parsed.done[0],!!parsed.done[1],!!parsed.done[2]] : [false,false,false]
   } catch { return [false,false,false] }
@@ -437,7 +449,7 @@ function App() {
   const [learnerStats, setLearnerStats] = useState<LearnerStats>({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
   const [recentMistakes, setRecentMistakes] = useState<string[]>([])
   const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
-  const [darkTheme, setDarkTheme] = useState(() => localStorage.getItem(themeKey) === 'dark')
+  const [darkTheme, setDarkTheme] = useState(() => safeStorageGet(themeKey) === 'dark')
   const [trackProgress, setTrackProgress] = useState<Record<string, TrackProgress>>(() => readTrackProgress())
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
   const [trackMode, setTrackMode] = useState<'overview' | 'lesson' | 'exam'>('overview')
@@ -547,7 +559,7 @@ function App() {
   }
 
   const completeOnboarding = (nextProfile: Profile) => {
-    localStorage.setItem(profileKey, JSON.stringify(nextProfile))
+    safeStorageSet(profileKey, JSON.stringify(nextProfile))
     setProfile(nextProfile)
     setChat([{ role: 'assistant', text: `Oi, ${greetingName(nextProfile.name)}! Eu sou a Lumi. Vi que você quer desenvolver inglês para ${nextProfile.scenario} e gosta de ${nextProfile.customInterest || nextProfile.interests.join(', ')}. Vamos usar isso a nosso favor. What would you like to be able to do in English first?` }])
     void generateActivity(nextProfile)
@@ -580,7 +592,7 @@ function App() {
     setLearningPlan(null)
     setPlanSummary('')
     setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
-    localStorage.removeItem(trackProgressKey)
+    safeStorageRemove(trackProgressKey)
     try {
       const { data: row, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle()
       if (error) throw error
@@ -592,12 +604,12 @@ function App() {
           customInterest: row.custom_interest ?? '', barriers: row.barriers ?? [], scenario: row.learning_context ?? 'daily',
           timeHorizon: row.time_horizon ?? 'flexible', feedbackStyle: row.feedback_style ?? 'balanced',
         }
-        localStorage.setItem(profileKey, JSON.stringify(restored))
+        safeStorageSet(profileKey, JSON.stringify(restored))
         setProfile(restored)
         void generateActivity(restored)
       } else {
         setProfile(null)
-        localStorage.removeItem(profileKey)
+        safeStorageRemove(profileKey)
       }
       const { data: vocabulary } = await supabase.from('vocabulary_items').select('term').eq('user_id', userId).order('created_at', { ascending: false }).limit(100)
       setWords((vocabulary ?? []).map(item => item.term))
@@ -649,8 +661,8 @@ function App() {
         const restoredTracks: Record<string, TrackProgress> = {}
         for (const row of savedTracks ?? []) restoredTracks[row.track_id] = { completed_lessons: row.completed_lessons ?? [], exam_score: row.exam_score ?? null, exam_passed: !!row.exam_passed }
         setTrackProgress(restoredTracks)
-        if (Object.keys(restoredTracks).length) localStorage.setItem(trackProgressKey, JSON.stringify(restoredTracks))
-        else localStorage.removeItem(trackProgressKey)
+        if (Object.keys(restoredTracks).length) safeStorageSet(trackProgressKey, JSON.stringify(restoredTracks))
+        else safeStorageRemove(trackProgressKey)
       }
       setAccountReady(true)
     } catch (error) {
@@ -666,8 +678,8 @@ function App() {
       if (mode === 'signup') {
         setProfile(null)
         setTrackProgress({})
-        localStorage.removeItem(profileKey)
-        localStorage.removeItem(trackProgressKey)
+        safeStorageRemove(profileKey)
+        safeStorageRemove(trackProgressKey)
       }
       const result = mode === 'signup'
         ? await supabase.auth.signUp({
@@ -705,18 +717,18 @@ function App() {
     setLearningPlan(null)
     setPlanSummary('')
     setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
-    localStorage.removeItem(profileKey)
-    localStorage.removeItem(trackProgressKey)
-    localStorage.removeItem(dailyAgendaKey)
+    safeStorageRemove(profileKey)
+    safeStorageRemove(trackProgressKey)
+    safeStorageRemove(dailyAgendaKey)
     setAuthMessage(error ? error.message : 'Você saiu da conta. O acesso à plataforma foi bloqueado.')
   }
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chat])
   useEffect(() => {
     document.documentElement.dataset.theme = darkTheme ? 'dark' : 'light'
-    localStorage.setItem(themeKey, darkTheme ? 'dark' : 'light')
+    safeStorageSet(themeKey, darkTheme ? 'dark' : 'light')
   }, [darkTheme])
   useEffect(() => {
-    localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: dailyChecks }))
+    safeStorageSet(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: dailyChecks }))
   }, [dailyChecks])
   useEffect(() => {
     if (!recording) return
@@ -782,9 +794,9 @@ function App() {
         setLearningPlan(null)
         setPlanSummary('')
         setLearnerStats({ totalMinutes: 0, totalSessions: 0, activeDays: 0, skillScores: {}, weeklyMinutes: Array(7).fill(0) })
-        localStorage.removeItem(profileKey)
-        localStorage.removeItem(trackProgressKey)
-        localStorage.removeItem(dailyAgendaKey)
+        safeStorageRemove(profileKey)
+        safeStorageRemove(trackProgressKey)
+        safeStorageRemove(dailyAgendaKey)
       }
     })
     return () => subscription.unsubscribe()
@@ -1176,13 +1188,13 @@ function App() {
   }
   const updateLearnerProfile = (updated: Profile) => {
     setProfile(updated)
-    localStorage.setItem(profileKey, JSON.stringify(updated))
+    safeStorageSet(profileKey, JSON.stringify(updated))
     if (supabase) void supabase.auth.getUser().then(async ({ data }) => {
       if (data.user) await saveProfile(data.user.id, updated)
     }).catch(error => console.error('Profile update sync failed', error))
   }
 
-  const resetProfile = () => { localStorage.removeItem(profileKey); setProfile(null); setShowSettings(false) }
+  const resetProfile = () => { safeStorageRemove(profileKey); setProfile(null); setShowSettings(false) }
 
   const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
   const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? { completed_lessons: [], exam_score: null, exam_passed: false }) : { completed_lessons: [], exam_score: null, exam_passed: false }
@@ -1198,12 +1210,12 @@ function App() {
     const updated = [...dailyChecks]
     updated[index] = !updated[index]
     setDailyChecks(updated)
-    localStorage.setItem(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: updated }))
+    safeStorageSet(dailyAgendaKey, JSON.stringify({ date: todayKey(), done: updated }))
   }
   const updateTrackProgress = (trackId: string, nextProgress: TrackProgress) => {
     const updated = { ...trackProgress, [trackId]: nextProgress }
     setTrackProgress(updated)
-    localStorage.setItem(trackProgressKey, JSON.stringify(updated))
+    safeStorageSet(trackProgressKey, JSON.stringify(updated))
     const backend = supabase
     if (backend) void backend.auth.getUser().then(({ data }) => {
       if (data.user) return backend.from('track_progress').upsert({
