@@ -38,21 +38,6 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
-type LearningActivity = {
-  activity_type?: 'multiple_choice' | 'complete_sentence' | 'roleplay' | 'translation'
-  expected_answer?: string
-  input_hint?: string
-  title: string
-  skill: string
-  context: string
-  phrase: string
-  translation: string
-  prompt: string
-  options: string[]
-  correct: number
-  explanation: string
-}
-
 const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
 const SESSIONS_KEY = 'fala-local-sessions-v1'
@@ -70,30 +55,6 @@ const initialChat: ChatMessage[] = [
   { role: 'assistant', text: 'Hi! I am Lumi, your English practice partner. Tell me what you would like to talk about today.' },
 ]
 const interestOptions = ['Tecnologia e IA', 'Carros e automobilismo', 'Games', 'Negócios', 'Música', 'Filmes e séries', 'Viagens', 'Esportes', 'Ciência', 'Programação']
-const activityBank: LearningActivity[] = [
-  {
-    title: 'Uma conversa que continua', skill: 'speaking', context: 'Você conheceu alguém em um evento e quer manter a conversa.',
-    phrase: 'What do you like to do in your free time?', translation: 'O que você gosta de fazer no seu tempo livre?',
-    prompt: 'Qual pergunta soa natural para conhecer melhor alguém?',
-    options: ['What you do free time?', 'What do you like to do in your free time?', 'You like do what?'], correct: 1,
-    explanation: 'Use “What do you like to do...?” para perguntar sobre preferências. A estrutura é natural e reutilizável.',
-  },
-  {
-    title: 'Inglês para o trabalho', skill: 'writing', context: 'Você precisa explicar que está trabalhando em uma tarefa.',
-    phrase: 'I am working on it right now.', translation: 'Estou trabalhando nisso agora.',
-    prompt: 'Qual frase descreve uma atividade acontecendo neste momento?',
-    options: ['I working on it now.', 'I am work it now.', 'I am working on it right now.'], correct: 2,
-    explanation: 'Present continuous usa am/is/are + verbo com -ing. “Right now” reforça que a ação está acontecendo agora.',
-  },
-  {
-    title: 'Pedir ajuda em uma viagem', skill: 'listening', context: 'Você está em uma cidade nova e precisa de orientação.',
-    phrase: 'Could you show me the way to the station?', translation: 'Você poderia me mostrar o caminho até a estação?',
-    prompt: 'Qual é a forma mais educada de pedir orientação?',
-    options: ['Could you show me the way to the station?', 'Show station where.', 'You can tell station?'], correct: 0,
-    explanation: '“Could you...?” é uma forma educada de fazer pedidos. “The way to” significa o caminho para.',
-  },
-]
-
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key)
@@ -209,13 +170,6 @@ export default function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [lumiVoiceId, setLumiVoiceId] = useState(() => readLocal('fala-lumi-voice-v1', 'MEJe6hPrI48Kt2lFuVe3'))
   const [voiceMessage, setVoiceMessage] = useState('')
-  const [activityIndex, setActivityIndex] = useState(0)
-  const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
-  const [activityAnswer, setActivityAnswer] = useState('')
-  const [activityBusy, setActivityBusy] = useState(false)
-  const [answerIndex, setAnswerIndex] = useState<number | null>(null)
-  const [activityFeedback, setActivityFeedback] = useState('')
-  const [activityCorrect, setActivityCorrect] = useState<boolean | null>(null)
   const [words, setWords] = useState<string[]>(() => readLocal(WORDS_KEY, ['actually', 'figure out', 'I am looking forward to']))
   const [vocabSchedule, setVocabSchedule] = useState<Record<string, VocabularySchedule>>(() => readLocal('fala-vocab-schedule-v1', {}))
   const [wordDetails, setWordDetails] = useState<Record<string, { meaning: string; example: string }>>(() => readLocal(VOCAB_DETAILS_KEY, {}))
@@ -316,11 +270,6 @@ export default function App() {
     )
     return { skillScores, recentMistakes, previousInsights }
   }, [recentAttempts, learnerInsights])
-  const recommendedActivity = useMemo(() => {
-    const latestMistake = recentAttempts.find(item => typeof item.score === 'number' && item.score < 70)
-    const preferredSkill = latestMistake?.skill || profile.focuses.find(skill => ['speaking', 'writing', 'listening'].includes(skill)) || 'speaking'
-    return activityBank.find(item => item.skill === preferredSkill) ?? activityBank[0]
-  }, [recentAttempts, profile.focuses])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
@@ -746,154 +695,6 @@ export default function App() {
     } finally {
       setChatBusy(false)
     }
-  }
-
-  const generateAdaptiveActivity = async () => {
-    if (!supabase || !user) {
-      setToast('Entre na sua conta para gerar uma atividade personalizada com a Lumi.')
-      setAuthMode('signin')
-      setAuthOpen(true)
-      return
-    }
-    setActivityBusy(true)
-    setActivityFeedback('')
-    setActivityCorrect(null)
-    try {
-      const { data, error } = await supabase.functions.invoke('tutor', {
-        body: {
-          mode: 'activity', profile,
-          learningEvidence,
-          activity: { title: activity.title, context: activity.context },
-        },
-      })
-      if (error) throw error
-      const generated = data?.structured
-      const options = Array.isArray(generated?.options) ? generated.options.filter((value: unknown) => typeof value === 'string').slice(0, 3) : []
-      const kind = ['multiple_choice','complete_sentence','roleplay','translation'].includes(generated?.activity_type)
-        ? generated.activity_type as LearningActivity['activity_type']
-        : 'multiple_choice'
-      if (!generated?.title || !generated?.question || !generated?.target_phrase || options.length < 2) {
-        throw new Error('A atividade gerada veio incompleta. Tente novamente.')
-      }
-      setActivity({
-        activity_type: kind,
-        title: String(generated.title),
-        skill: ['speaking','listening','writing','vocabulary'].includes(generated.skill) ? generated.skill : 'speaking',
-        context: String(generated.context || 'Situação prática'),
-        phrase: String(generated.target_phrase),
-        translation: String(generated.translation || ''),
-        prompt: String(generated.question),
-        options,
-        correct: Math.max(0, Math.min(options.length - 1, Number(generated.correct_index) || 0)),
-        explanation: String(generated.explanation || generated.feedback || ''),
-        expected_answer: String(generated.expected_answer || generated.target_phrase),
-        input_hint: String(generated.input_hint || 'Escreva sua resposta em inglês.'),
-      })
-      setActivityIndex(-1)
-      setAnswerIndex(null)
-      setActivityAnswer('')
-      setActivityFeedback('')
-      setActivityCorrect(null)
-      setToast('Nova atividade personalizada criada pela Lumi.')
-    } catch (error) {
-      setToast('Não foi possível gerar a atividade: ' + await functionErrorDetail(error))
-    } finally {
-      setActivityBusy(false)
-    }
-  }
-
-  const submitActivity = async () => {
-    if (activity.activity_type && activity.activity_type !== 'multiple_choice') {
-      const answer = activityAnswer.trim()
-      if (!answer) {
-        setActivityFeedback('Escreva sua resposta antes de enviar.')
-        return
-      }
-      if (!supabase || !user) {
-        setActivityFeedback('Esta atividade exige uma conta conectada para receber correção personalizada da Lumi.')
-        return
-      }
-      setActivityBusy(true)
-      try {
-        const { data, error } = await supabase.functions.invoke('tutor', {
-          body: {
-            mode: 'evaluate',
-            message: answer,
-            profile,
-            activity: {
-              activity_type: activity.activity_type,
-              title: activity.title,
-              question: activity.prompt,
-              expected_answer: activity.expected_answer || activity.phrase,
-              target_phrase: activity.phrase,
-              context: activity.context,
-            },
-            learningEvidence,
-          },
-        })
-        if (error) throw error
-        const evaluation = data?.structured
-        if (!evaluation || typeof evaluation.score !== 'number') throw new Error('A Lumi não retornou uma avaliação válida.')
-        const score = Math.max(0, Math.min(100, Math.round(evaluation.score)))
-        setActivityCorrect(score >= 55)
-        setActivityFeedback(
-          score + '/100 · ' + String(evaluation.strengths || '') +
-          '\nCorreção: ' + String(evaluation.correction || '') +
-          '\nVersão sugerida: ' + String(evaluation.improved_answer || '') +
-          '\nPróximo passo: ' + String(evaluation.next_step || '')
-        )
-        await persistActivityAttempt({
-          activity_type: activity.activity_type, skill: activity.skill,
-          interest_context: profile.customInterest || profile.interests.join(', '),
-          prompt: activity.prompt, learner_answer: answer, correction: evaluation, score,
-        })
-        await recordSession('lesson', 240, score, { title: activity.title, skill: activity.skill, source: 'adaptive' })
-      } catch (error) {
-        setActivityFeedback('Não foi possível avaliar sua resposta: ' + await functionErrorDetail(error))
-        setActivityCorrect(false)
-      } finally {
-        setActivityBusy(false)
-      }
-      return
-    }
-
-    if (answerIndex === null) {
-      setActivityFeedback('Selecione uma resposta antes de conferir.')
-      return
-    }
-    const correct = answerIndex === activity.correct
-    setActivityCorrect(correct)
-    setActivityFeedback(correct ? 'Correto. ' + activity.explanation : 'Ainda não. Resposta correta: ' + activity.options[activity.correct] + '. ' + activity.explanation)
-    if (supabase && user) {
-      await persistActivityAttempt({
-        activity_type: 'multiple_choice', skill: activity.skill,
-        interest_context: profile.customInterest || profile.interests.join(', '),
-        prompt: activity.prompt, learner_answer: activity.options[answerIndex],
-        correction: { correct_answer: activity.options[activity.correct], explanation: activity.explanation },
-        score: correct ? 100 : 0,
-      })
-    }
-    await recordSession('lesson', 180, correct ? 100 : 0, { title: activity.title, skill: activity.skill })
-  }
-
-  const nextActivity = () => {
-    const next = activityIndex < 0 ? 0 : (activityIndex + 1) % activityBank.length
-    setActivityIndex(next)
-    setActivity(activityBank[next])
-    setAnswerIndex(null)
-    setActivityAnswer('')
-    setActivityFeedback('')
-    setActivityCorrect(null)
-  }
-
-  const startRecommendedActivity = () => {
-    setActivity(recommendedActivity)
-    setActivityIndex(activityBank.indexOf(recommendedActivity))
-    setAnswerIndex(null)
-    setActivityAnswer('')
-    setActivityFeedback('')
-    setActivityCorrect(null)
-    setPage('learn')
   }
 
   const startVocabularyReview = () => {
@@ -1510,14 +1311,14 @@ export default function App() {
             </div>
 
             <section className="smart-study-card">
-              <div className="smart-study-main"><span className="eyebrow">{dueWords.length ? 'REVISÃO ESPAÇADA' : 'PRÓXIMO PASSO ADAPTATIVO'}</span><h2>{dueWords.length ? `${dueWords.length} expressões para revisar` : 'Continue de onde você parou.'}</h2><p>{dueWords.length ? 'Recupere o significado antes de olhar a resposta. O FALA ajusta o intervalo conforme sua lembrança.' : `A próxima atividade prioriza ${recommendedActivity.skill === 'speaking' ? 'conversação' : recommendedActivity.skill === 'writing' ? 'escrita' : 'compreensão'} e seu objetivo atual.`}</p><button className="button primary" onClick={dueWords.length ? startVocabularyReview : startRecommendedActivity}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button></div>
-              <aside className="smart-study-progress"><span>META DIÁRIA</span><strong>{todayPracticeMinutes} / {profile.minutes} min</strong><div className="smart-study-track"><i style={{ width: dailyGoalProgress + '%' }}/></div><small>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : `Faltam ${Math.max(0, profile.minutes - todayPracticeMinutes)} minutos de prática.`}</small></aside>
+              <div className="smart-study-main"><span className="eyebrow">{dueWords.length ? 'REVISÃO ESPAÇADA' : 'CURSO GUIADO · DO ZERO'}</span><h2>{dueWords.length ? dueWords.length + ' expressões para revisar' : 'Seu próximo passo está organizado.'}</h2><p>{dueWords.length ? 'Recupere o significado antes de olhar a resposta. O FALA ajusta o intervalo conforme sua lembrança.' : 'Aprenda palavras, entenda como as frases são montadas e pratique antes de avançar para situações reais.'}</p><button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar o curso'} <ArrowRight size={16}/></button></div>
+              <aside className="smart-study-progress"><span>META DIÁRIA</span><strong>{todayPracticeMinutes} / {profile.minutes} min</strong><div className="smart-study-track"><i style={{ width: dailyGoalProgress + '%' }}/></div><small>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos de prática.'}</small></aside>
             </section>
 
             <div className="section-heading"><div><span className="eyebrow">PLANO DE HOJE</span><h2>Um passo de cada vez</h2></div><span className="muted-caption">{profile.minutes} minutos sugeridos</span></div>
             <section className="today-card">
-              <div className="today-copy"><span className="today-tag"><Sparkles size={13}/> RECOMENDADO PARA VOCÊ</span><h3>{recommendedActivity.title}</h3><p>{recommendedActivity.context} Pratique uma expressão útil para seu objetivo, com foco nas habilidades que ainda precisam de reforço.</p><div className="today-meta"><span><Clock3 size={14}/> 3–5 minutos</span><span><BookOpen size={14}/> {recommendedActivity.skill === 'speaking' ? 'Conversação' : recommendedActivity.skill === 'writing' ? 'Estrutura de frases' : 'Compreensão'}</span></div><button className="button light-button" onClick={startRecommendedActivity}>Abrir atividade <ArrowRight size={16}/></button></div>
-              <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>LESSON 01</span></div>
+              <div className="today-copy"><span className="today-tag"><BookOpen size={13}/> CURSO PRINCIPAL</span><h3>Comece pela primeira palavra.</h3><p>O curso começa com cumprimentos, números, cores e frases básicas. Cada aula ensina o conteúdo antes de apresentar os exercícios.</p><div className="today-meta"><span><Clock3 size={14}/> Aulas curtas</span><span><Headphones size={14}/> Escuta, fala e escrita</span></div><button className="button light-button" onClick={() => setPage('learn')}>Abrir curso guiado <ArrowRight size={16}/></button></div>
+              <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>DO ZERO AO INGLÊS PRÁTICO</span></div>
             </section>
 
             <section className="learning-plan-card">
