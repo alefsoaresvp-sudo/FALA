@@ -404,7 +404,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round((step / currentLesson.exercises.length) * 100)
+    const progressPercent = Math.round(((step + 1) / currentLesson.exercises.length) * 100)
     const canCheck = currentExercise.kind === 'choice' ? !!selectedChoice
       : currentExercise.kind === 'build' ? builtWords.length > 0
         : currentExercise.kind === 'repeat' ? checked === true
@@ -469,7 +469,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <div>
           <span className="course-eyebrow">SEU CURSO DE INGLÊS · PASSO A PASSO</span>
           <h1>Aprenda inglês <em>desde o começo.</em></h1>
-          <p>Primeiro você entende. Depois pratica. Só então avança para frases e conversas mais completas.</p>
+          <p>Primeiro você entende. Depois pratica. Só então avança para frases e conversas mais completas, sempre conectando exemplos ao seu objetivo: {goalLabel}.</p>
           <div className="course-hero-actions">
             <button className="course-primary-button" onClick={() => nextLesson ? beginLesson(nextLesson.id) : setActiveLessonId(allLessons[allLessons.length - 1].id)}>{allUnitsCompleted ? 'Revisar última aula' : progress.activeLessonId ? 'Continuar estudando' : completedCount ? 'Continuar curso' : 'Começar do zero'} <ArrowRight size={16}/></button>
             <span><Zap size={15}/> {progress.xp} pontos de prática</span>
