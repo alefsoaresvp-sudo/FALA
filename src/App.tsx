@@ -270,6 +270,32 @@ export default function App() {
     )
     return { skillScores, recentMistakes, previousInsights }
   }, [recentAttempts, learnerInsights])
+  const skillLabels: Record<string, string> = {
+    speaking: 'Fala', listening: 'Escuta', writing: 'Escrita', grammar: 'Gramática',
+    vocabulary: 'Vocabulário', reading: 'Leitura', pronunciation: 'Pronúncia',
+  }
+  const weeklyActivity = useMemo(() => Array.from({ length: 7 }, (_, index) => {
+    const date = new Date()
+    date.setHours(0, 0, 0, 0)
+    date.setDate(date.getDate() - (6 - index))
+    const key = date.toDateString()
+    const seconds = sessions.reduce((sum, session) => sum + (
+      session.completed_at && new Date(session.completed_at).toDateString() === key
+        ? (session.duration_seconds || 0) : 0
+    ), 0)
+    return { key, label: date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''), minutes: Math.round(seconds / 60) }
+  }), [sessions])
+  const activeStudyDays = weeklyActivity.filter(day => day.minutes > 0).length
+  const bestSkill = Object.entries(learningEvidence.skillScores).sort((a, b) => b[1] - a[1])[0]
+  const weakestSkill = Object.entries(learningEvidence.skillScores).sort((a, b) => a[1] - b[1])[0]
+  const maxWeeklyMinutes = Math.max(1, ...weeklyActivity.map(day => day.minutes))
+  const launchAchievements = [
+    { title: 'Primeiro passo', description: 'Conclua sua primeira sessão.', unlocked: completedSessions >= 1 },
+    { title: 'Ritmo consistente', description: 'Estude em 3 dias da última semana.', unlocked: activeStudyDays >= 3 },
+    { title: 'Dez sessões', description: 'Complete 10 sessões de aprendizagem.', unlocked: completedSessions >= 10 },
+    { title: 'Repertório', description: 'Salve 10 palavras ou expressões.', unlocked: words.length >= 10 },
+  ]
+
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
@@ -1510,6 +1536,47 @@ export default function App() {
           {page === 'progress' && <section className="progress-layout">
             <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
+            <section className="progress-insights-grid">
+              <article className="progress-insight-card">
+                <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Últimos 7 dias</h2></div><span className="insight-total">{activeStudyDays}/7 dias</span></div>
+                <div className="weekly-activity-chart" role="img" aria-label="Minutos de estudo nos últimos sete dias">
+                  {weeklyActivity.map(day => <div className="weekly-activity-day" key={day.key}>
+                    <strong>{day.minutes ? day.minutes + 'm' : '—'}</strong>
+                    <div className="weekly-activity-track"><i style={{ height: Math.max(day.minutes ? 10 : 3, day.minutes / maxWeeklyMinutes * 100) + '%' }}/></div>
+                    <small>{day.label}</small>
+                  </div>)}
+                </div>
+                <p className="insight-footnote">Tempo registrado por dia. Dias sem sessão aparecem sem atividade.</p>
+              </article>
+              <article className="progress-insight-card">
+                <div className="section-heading"><div><span className="eyebrow">HABILIDADES</span><h2>Onde você está evoluindo</h2></div></div>
+                {Object.keys(learningEvidence.skillScores).length ? <div className="skill-score-list">
+                  {Object.entries(learningEvidence.skillScores).sort((a,b) => b[1] - a[1]).map(([skill,score]) => <div className="skill-score-row" key={skill}>
+                    <div><span>{skillLabels[skill] || skill}</span><strong>{score}%</strong></div>
+                    <div className="skill-score-track"><i style={{ width: Math.max(0,Math.min(100,score)) + '%' }}/></div>
+                  </div>)}
+                </div> : <div className="insight-empty"><Activity size={20}/><strong>Dados por habilidade ainda indisponíveis.</strong><p>Entre na sua conta e faça atividades avaliadas pela Lumi para alimentar este painel.</p></div>}
+                {bestSkill && <p className="insight-footnote">Ponto forte observado: {skillLabels[bestSkill[0]] || bestSkill[0]} ({bestSkill[1]}%).</p>}
+                {weakestSkill && bestSkill?.[0] !== weakestSkill[0] && <p className="insight-footnote">Prioridade de prática: {skillLabels[weakestSkill[0]] || weakestSkill[0]} ({weakestSkill[1]}%).</p>}
+              </article>
+            </section>
+            <article className="progress-insight-card progress-achievements-card">
+              <div className="section-heading"><div><span className="eyebrow">MARCOS DE APRENDIZAGEM</span><h2>Conquistas por consistência</h2></div><span className="insight-total">{launchAchievements.filter(item => item.unlocked).length}/{launchAchievements.length}</span></div>
+              <div className="achievement-grid">
+                {launchAchievements.map(item => <div className={item.unlocked ? 'achievement-item unlocked' : 'achievement-item'} key={item.title}>
+                  <span className="achievement-mark">{item.unlocked ? <Trophy size={17}/> : <Lock size={16}/>}</span>
+                  <div><strong>{item.title}</strong><small>{item.description}</small></div>
+                  <span className="achievement-status">{item.unlocked ? 'Conquistada' : 'Em progresso'}</span>
+                </div>)}
+              </div>
+            </article>
+            {learningEvidence.recentMistakes.length > 0 && <article className="progress-insight-card progress-mistakes-card">
+              <div className="section-heading"><div><span className="eyebrow">REVISÃO DIRECIONADA</span><h2>O que merece atenção</h2></div></div>
+              <p className="insight-footnote">Estas são tentativas recentes abaixo de 70%. Use-as como ponto de partida para revisar, não como diagnóstico definitivo.</p>
+              {recentAttempts.filter(attempt => typeof attempt.score === 'number' && attempt.score < 70).slice(0,4).map((attempt,index) => <div className="mistake-row" key={attempt.id || index}>
+                <span>{skillLabels[attempt.skill] || attempt.skill}</span><div><strong>{attempt.prompt}</strong><small>Resultado: {Math.round(attempt.score ?? 0)}% · {attempt.correction && Object.values(attempt.correction).filter(value => typeof value === 'string').slice(0,1).join(' ')}</small></div>
+              </div>)}
+            </article>}
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
