@@ -233,3 +233,29 @@
   .repeat-practice-box button { width:100%; }
   .course-primary-button { min-height:46px; }
 }
+
+.manual-repeat-button {
+  min-height:34px;
+  justify-self:start;
+  padding:0 10px;
+  border:1px solid #d8e5f0;
+  border-radius:9px;
+  color:#7890a7;
+  background:transparent;
+  font-size:9px;
+  font-weight:750;
+}
+.manual-repeat-button:hover:not(:disabled) { color:#386f9e; background:#f4f9fe; }
+.course-voice-transcript {
+  margin:8px 0 0;
+  padding:10px 12px;
+  border:1px solid #d9e8f5;
+  border-radius:10px;
+  color:#426987;
+  background:#f7fbff;
+  font-size:10px;
+  line-height:1.5;
+}
+:root[data-theme="dark"] .manual-repeat-button { border-color:#3c5b79; color:#a3bad0; }
+:root[data-theme="dark"] .manual-repeat-button:hover:not(:disabled) { color:#d3e9ff; background:#1f3a55; }
+:root[data-theme="dark"] .course-voice-transcript { border-color:#355473; color:#c4d9ec; background:#1d354f; }
