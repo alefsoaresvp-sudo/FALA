@@ -4,7 +4,7 @@ import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
   Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2, PenLine, Play, Plus,
-  Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X, Search, Sun, Moon, CircleUserRound, RotateCcw, Eye,
+  Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X, Search, Sun, Moon, CircleUserRound, RotateCcw, Eye, Lock,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
