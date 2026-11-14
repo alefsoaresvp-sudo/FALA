@@ -291,3 +291,19 @@
   background: #3b301e;
   color: #f0d39d;
 }
+
+.lesson-tip-box {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 13px 14px;
+  border: 1px solid #cfe1f2;
+  border-left: 3px solid #5a9bd0;
+  border-radius: 12px;
+  background: #f3f8fe;
+}
+.lesson-tip-box strong { color: #2e628f; font-size: 11px; font-weight: 850; }
+.lesson-tip-box p { margin: 0; color: #56738e; font-size: 11px; line-height: 1.65; }
+:root[data-theme="dark"] .lesson-tip-box { border-color: #365674; border-left-color: #75afe0; background: #1b354f; }
+:root[data-theme="dark"] .lesson-tip-box strong { color: #c4e2ff; }
+:root[data-theme="dark"] .lesson-tip-box p { color: #b3c9dd; }
