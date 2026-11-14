@@ -4,14 +4,13 @@ import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
   Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2, PenLine, Play, Plus,
-  Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X,
+  Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X, Search, Sun, Moon, CircleUserRound, RotateCcw, Eye,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
-import { readMusicSet } from './musicLab'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress'
+type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'profile'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -30,6 +29,8 @@ type Profile = {
   feedbackStyle: 'gentle' | 'balanced' | 'direct'
 }
 type ChatMessage = { role: 'user' | 'assistant'; text: string; note?: string }
+type MusicTrack = { id: number; title: string; artist: string; album: string; artwork: string; preview: string; url: string; duration: number }
+type MusicAnalysis = { lines: { original: string; translation: string; explanation: string }[]; vocabulary: { term: string; meaning: string; example: string }[]; song_summary: string; cultural_context: string; next_step: string }
 type LearningPlan = { headline: string; today: string; focus_order: string[]; weeks: { period: string; objective: string; practice: string }[]; success_metric: string; adaptation_note: string }
 type SessionRow = { id?: string; activity_type: string; duration_seconds: number; score: number | null; completed_at?: string }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
@@ -52,6 +53,9 @@ const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
 const SESSIONS_KEY = 'fala-local-sessions-v1'
 const TRACK_PROGRESS_KEY = 'fala-track-progress-v1'
+const THEME_KEY = 'fala-theme-v1'
+const PROFILE_PHOTO_KEY = 'fala-profile-photo-v1'
+const VOCAB_DETAILS_KEY = 'fala-vocab-details-v1'
 const EMPTY_TRACK_PROGRESS: TrackProgress = { completed_lessons: [], exam_score: null, exam_passed: false }
 const initialProfile: Profile = {
   name: '', goal: 'conversation', level: 'unsure', interests: [], customInterest: '',
@@ -129,6 +133,7 @@ const navItems = [
   { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
+  { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
 ]
 
 function LumiPortrait() {
@@ -159,6 +164,8 @@ function LumiPortrait() {
 
 export default function App() {
   const [page, setPage] = useState<Page>('home')
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => readLocal(THEME_KEY, 'light'))
+  const [profilePhoto, setProfilePhoto] = useState<string>(() => readLocal(PROFILE_PHOTO_KEY, ''))
   const [user, setUser] = useState<User | null>(null)
   const [authReady, setAuthReady] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
@@ -196,7 +203,7 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false)
   const [chatNotice, setChatNotice] = useState('')
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-  const [lumiVoiceId, setLumiVoiceId] = useState('MEJe6hPrI48Kt2lFuVe3')
+  const [lumiVoiceId, setLumiVoiceId] = useState(() => readLocal('fala-lumi-voice-v1', 'MEJe6hPrI48Kt2lFuVe3'))
   const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
   const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
@@ -206,7 +213,21 @@ export default function App() {
   const [activityFeedback, setActivityFeedback] = useState('')
   const [activityCorrect, setActivityCorrect] = useState<boolean | null>(null)
   const [words, setWords] = useState<string[]>(() => readLocal(WORDS_KEY, ['actually', 'figure out', 'I am looking forward to']))
+  const [wordDetails, setWordDetails] = useState<Record<string, { meaning: string; example: string }>>(() => readLocal(VOCAB_DETAILS_KEY, {}))
   const [newWord, setNewWord] = useState('')
+  const [vocabSearch, setVocabSearch] = useState('')
+  const [vocabMode, setVocabMode] = useState<'library' | 'review'>('library')
+  const [reviewIndex, setReviewIndex] = useState(0)
+  const [showReviewAnswer, setShowReviewAnswer] = useState(false)
+  const [musicQuery, setMusicQuery] = useState('')
+  const [musicResults, setMusicResults] = useState<MusicTrack[]>([])
+  const [musicSearchBusy, setMusicSearchBusy] = useState(false)
+  const [musicSearchError, setMusicSearchError] = useState('')
+  const [selectedMusic, setSelectedMusic] = useState<MusicTrack | null>(null)
+  const [musicLyricsDraft, setMusicLyricsDraft] = useState('')
+  const [musicAnalysis, setMusicAnalysis] = useState<MusicAnalysis | null>(null)
+  const [musicAnalysisBusy, setMusicAnalysisBusy] = useState(false)
+  const [musicAnalysisNotice, setMusicAnalysisNotice] = useState('')
   const [writingText, setWritingText] = useState('')
   const [writingFeedback, setWritingFeedback] = useState('')
   const [writingBusy, setWritingBusy] = useState(false)
@@ -225,11 +246,10 @@ export default function App() {
   const [trackBusy, setTrackBusy] = useState(false)
   const [trackExamAnswers, setTrackExamAnswers] = useState<Record<number, number>>({})
   const [trackExamScore, setTrackExamScore] = useState<number | null>(null)
-  const [musicAnswer, setMusicAnswer] = useState('')
-  const [musicFeedback, setMusicFeedback] = useState('')
   const [recording, setRecording] = useState(false)
   const [recordingNotice, setRecordingNotice] = useState('')
   const [transcript, setTranscript] = useState('')
+  const [speechFeedback, setSpeechFeedback] = useState<TrackEvaluation | null>(null)
   const [audioUrl, setAudioUrl] = useState('')
   const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
   const [cloudLoading, setCloudLoading] = useState(false)
@@ -249,15 +269,23 @@ export default function App() {
   const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
   const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? EMPTY_TRACK_PROGRESS) : EMPTY_TRACK_PROGRESS
   const activeTrackLesson = activeTrack?.lessons[trackLessonIndex] ?? null
-  const musicSet = useMemo(() => readMusicSet(profile), [profile])
   const averageScore = useMemo(() => {
     const scores = sessions.map(item => item.score).filter((value): value is number => typeof value === 'number')
     return scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : null
   }, [sessions])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Prática guiada', lumi: 'Converse com a Lumi',
-    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso',
+    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
   }
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try { window.localStorage.setItem(THEME_KEY, theme) } catch { /* Theme persistence is optional. */ }
+  }, [theme])
+
+  useEffect(() => {
+    try { window.localStorage.setItem('fala-lumi-voice-v1', lumiVoiceId) } catch { /* Voice preference is optional. */ }
+  }, [lumiVoiceId])
 
   useEffect(() => {
     if (!supabase) {
@@ -293,7 +321,7 @@ export default function App() {
       try {
         const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-          supabase.from('vocabulary_items').select('term').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+          supabase.from('vocabulary_items').select('term,meaning').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
@@ -328,8 +356,13 @@ export default function App() {
         }
         if (vocabularyResult.data) {
           const restoredWords = vocabularyResult.data.map(item => item.term)
+          const restoredDetails = Object.fromEntries(vocabularyResult.data.filter(item => item.meaning).map(item => [item.term, { meaning: item.meaning, example: '' }]))
           setWords(restoredWords)
-          try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords)) } catch { /* local cache is optional */ }
+          setWordDetails(current => ({ ...restoredDetails, ...current }))
+          try {
+            window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords))
+            window.localStorage.setItem(VOCAB_DETAILS_KEY, JSON.stringify(restoredDetails))
+          } catch { /* local cache is optional */ }
         }
         if (sessionsResult.data) setSessions(sessionsResult.data as SessionRow[])
         if (messagesResult.data?.length) {
@@ -992,6 +1025,99 @@ export default function App() {
     }
   }
 
+  const searchMusic = async (event: FormEvent) => {
+    event.preventDefault()
+    const query = musicQuery.trim()
+    if (!query || musicSearchBusy) return
+    setMusicSearchBusy(true)
+    setMusicSearchError('')
+    setMusicResults([])
+    try {
+      const response = await fetch('https://itunes.apple.com/search?term=' + encodeURIComponent(query) + '&entity=song&limit=12&country=US')
+      if (!response.ok) throw new Error('O catálogo de música respondeu HTTP ' + response.status + '.')
+      const payload = await response.json() as { results?: Array<Record<string, unknown>> }
+      const tracks = (payload.results ?? []).filter(item => typeof item.trackName === 'string' && typeof item.artistName === 'string').map(item => ({
+        id: Number(item.trackId) || 0, title: String(item.trackName), artist: String(item.artistName),
+        album: String(item.collectionName || 'Single'), artwork: String(item.artworkUrl100 || ''),
+        preview: typeof item.previewUrl === 'string' ? item.previewUrl.replace(/^http:/,'https:') : '',
+        url: String(item.trackViewUrl || item.collectionViewUrl || 'https://music.apple.com/'),
+        duration: Math.round(Number(item.trackTimeMillis || 0) / 1000),
+      })).filter(track => track.id > 0)
+      setMusicResults(tracks)
+      if (!tracks.length) setMusicSearchError('Nenhuma faixa encontrada. Tente pesquisar pelo título ou pelo nome do artista.')
+    } catch (error) {
+      setMusicSearchError('Não foi possível consultar o catálogo agora: ' + friendlyError(error))
+    } finally {
+      setMusicSearchBusy(false)
+    }
+  }
+
+  const analyseMusicExcerpt = async () => {
+    const excerpt = musicLyricsDraft.trim()
+    const lines = excerpt.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+    if (!excerpt) return
+    if (excerpt.length > 600 || lines.length > 6) {
+      setMusicAnalysisNotice('Use até 6 linhas e 600 caracteres por análise. Estude uma parte de cada vez.')
+      return
+    }
+    if (!supabase || !user) {
+      setMusicAnalysisNotice('Entre na sua conta para usar a análise de tradução da Lumi. A busca e a prévia musical continuam disponíveis sem cadastro.')
+      setAuthMode('signin')
+      setAuthOpen(true)
+      return
+    }
+    setMusicAnalysisBusy(true)
+    setMusicAnalysisNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('tutor', {
+        body: { mode: 'music', message: excerpt, profile, track: selectedMusic ? { title: selectedMusic.title, artist: selectedMusic.artist } : null },
+      })
+      if (error) throw error
+      const result = data?.structured as MusicAnalysis | undefined
+      if (!result || !Array.isArray(result.lines) || !Array.isArray(result.vocabulary)) throw new Error('A análise veio incompleta. Tente novamente com um trecho menor.')
+      setMusicAnalysis(result)
+      await recordSession('music', 180, null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
+    } catch (error) {
+      setMusicAnalysisNotice('Não foi possível analisar o trecho: ' + await functionErrorDetail(error))
+    } finally {
+      setMusicAnalysisBusy(false)
+    }
+  }
+
+  const saveWordFromMusic = async (term: string, meaning: string, example: string) => {
+    const updated = [term, ...words.filter(word => word.toLowerCase() !== term.toLowerCase())].slice(0, 100)
+    const details = { ...wordDetails, [term]: { meaning, example } }
+    setWords(updated)
+    setWordDetails(details)
+    try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)); window.localStorage.setItem(VOCAB_DETAILS_KEY, JSON.stringify(details)) } catch { /* Local vocabulary is optional. */ }
+    if (supabase && user) {
+      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning }, { onConflict: 'user_id,term' })
+      if (error) setToast('Expressão salva neste aparelho, mas não sincronizou.')
+      else setToast('Expressão adicionada ao seu vocabulário.')
+    } else setToast('Expressão salva no vocabulário deste aparelho.')
+  }
+
+  const selectProfilePhoto = async (file: File | null) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) { setToast('Escolha um arquivo de imagem.'); return }
+    if (file.size > 12 * 1024 * 1024) { setToast('A imagem precisa ter menos de 12 MB.'); return }
+    try {
+      const bitmap = await createImageBitmap(file)
+      const scale = Math.min(1, 640 / Math.max(bitmap.width, bitmap.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Não foi possível preparar a foto.')
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      bitmap.close()
+      const data = canvas.toDataURL('image/webp', 0.78)
+      setProfilePhoto(data)
+      try { window.localStorage.setItem(PROFILE_PHOTO_KEY, data) } catch { setToast('Foto aplicada nesta tela, mas o navegador não permitiu salvá-la.') }
+      setToast('Foto de perfil salva neste aparelho.')
+    } catch (error) { setToast('Não foi possível usar esta foto: ' + friendlyError(error)) }
+  }
+
   const saveWord = async (event: FormEvent) => {
     event.preventDefault()
     const term = newWord.trim()
@@ -1001,7 +1127,7 @@ export default function App() {
     setNewWord('')
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
     if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: '' }, { onConflict: 'user_id,term' })
+      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '' }, { onConflict: 'user_id,term' })
       if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
     }
   }
@@ -1092,8 +1218,36 @@ export default function App() {
             return
           }
           setTranscript(text)
-          setRecordingNotice('Transcrição concluída. Ela identifica palavras, mas não mede pronúncia fonética.')
-          await recordSession('speaking', 30, null, { transcript: text, source: 'media_recorder' })
+          setSpeechFeedback(null)
+          setRecordingNotice('Transcrição concluída. A análise a seguir avalia o texto reconhecido, não os sons da sua voz.')
+          let textScore: number | null = null
+          try {
+            const { data: evaluationData, error: evaluationError } = await supabase.functions.invoke('tutor', {
+              body: {
+                mode: 'evaluate',
+                message: text,
+                profile,
+                activity: {
+                  activity_type: 'speaking',
+                  title: 'Speaking Lab · resposta livre',
+                  question: 'Tell me about something you enjoy. Explain why you enjoy it and give one specific detail.',
+                  expected_answer: 'A natural 2–4 sentence response that expresses an interest and gives a reason or example.',
+                  target_phrase: 'I really enjoy…',
+                  context: 'Short spontaneous spoken English answer.',
+                },
+              },
+            })
+            if (evaluationError) throw evaluationError
+            const evaluation = evaluationData?.structured as TrackEvaluation | undefined
+            if (evaluation && typeof evaluation.score === 'number') {
+              setSpeechFeedback(evaluation)
+              textScore = evaluation.score
+              setRecordingNotice('Transcrição concluída e resposta avaliada. A nota se refere ao texto reconhecido, não à pronúncia fonética.')
+            }
+          } catch (evaluationError) {
+            setRecordingNotice('Transcrição concluída. A avaliação textual da Lumi não ficou disponível: ' + friendlyError(evaluationError))
+          }
+          await recordSession('speaking', 30, textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
         } catch (error) {
           setRecordingNotice('A transcrição falhou: ' + friendlyError(error))
         }
@@ -1172,8 +1326,8 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <div className="streak-box"><div><Flame size={17}/><strong>Seu ritmo</strong></div><p>Um pouco de inglês todos os dias vale mais que estudar só de vez em quando.</p></div>
-          <button className="profile-mini" onClick={beginProfileEdit}>
-            <span className="profile-avatar">{(profile.name || user?.email || 'F').slice(0,1).toUpperCase()}</span>
+          <button className="profile-mini" onClick={() => setPage('profile')}>
+            <span className="profile-avatar">{profilePhoto ? <img src={profilePhoto} alt=""/> : (profile.name || user?.email || 'F').slice(0,1).toUpperCase()}</span>
             <span><strong>{profile.name || (user ? 'Sua conta' : 'Modo demonstração')}</strong><small>{user ? 'Conta sincronizada' : 'Dados neste aparelho'}</small></span>
             <ChevronRight size={16}/>
           </button>
@@ -1187,6 +1341,8 @@ export default function App() {
             <span>FALA / <strong>{titleByPage[page]}</strong></span>
           </div>
           <div className="topbar-actions">
+            <button className="theme-toggle" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'} title={theme === 'light' ? 'Tema escuro' : 'Tema claro'}>{theme === 'light' ? <Moon size={17}/> : <Sun size={17}/>}</button>
+            <button className="profile-top-button" onClick={() => setPage('profile')} aria-label="Abrir meu perfil">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</button>
             <span className={isConnected ? 'connection-pill connected' : 'connection-pill'}><i/>{isConnected ? 'Conta conectada' : 'Modo gratuito'}</span>
             {user ? <button className="topbar-button" onClick={() => void signOut()}><LogOut size={16}/> Sair</button> : <button className="topbar-button sign-in-button" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage('') }}><LogIn size={16}/> Entrar</button>}
           </div>
@@ -1252,7 +1408,7 @@ export default function App() {
           </>}
 
           {page === 'learn' && <section className="learning-layout">
-            <div className="page-heading"><span className="eyebrow">PRÁTICA GUIADA · ADAPTATIVA</span><h1>Aprenda fazendo.</h1><p>Uma situação, uma estrutura útil e uma tentativa sua. Sem excesso de teoria.</p><button className="button ghost" type="button" onClick={() => void generateAdaptiveActivity()} disabled={activityBusy}>{activityBusy ? 'A Lumi está preparando…' : 'Criar atividade personalizada com a Lumi'} <Sparkles size={15}/></button></div>
+            <div className="learning-studio-heading"><div><span className="eyebrow">MISSÃO DE HOJE · PRÁTICA GUIADA</span><h1>Aprenda fazendo.<br/><em>Use o inglês no mundo real.</em></h1><p>Responda, fale, receba feedback e avance em pequenas etapas.</p></div><div className="learning-day-card"><span>SESSÕES REGISTRADAS</span><strong>{completedSessions}</strong><small>Seu progresso cresce com a prática.</small></div></div><div className="learning-quick-tools"><button onClick={() => void generateAdaptiveActivity()} disabled={activityBusy}><Sparkles size={16}/>{activityBusy ? 'Criando missão…' : 'Nova missão adaptativa'}</button><button onClick={() => setPage('speak')}><Mic size={16}/> Praticar falando</button><button onClick={() => setPage('tracks')}><Map size={16}/> Continuar trilhas</button></div>
             <article className="exercise-card">
               <div className="exercise-top"><span className="exercise-index">{activityIndex < 0 ? 'ATIVIDADE LUMI' : 'ATIVIDADE ' + String(activityIndex + 1).padStart(2,'0')}</span><span className="skill-chip">{activity.skill === 'speaking' ? 'CONVERSAÇÃO' : activity.skill === 'writing' ? 'GRAMÁTICA EM CONTEXTO' : activity.skill === 'vocabulary' ? 'VOCABULÁRIO' : 'COMPREENSÃO'}</span></div>
               <h2>{activity.title}</h2><p className="exercise-context">{activity.context}</p>
@@ -1328,16 +1484,26 @@ export default function App() {
             </article>}
           </section>}
 
-          {page === 'music' && <section className="music-layout">
-            <div className="page-heading"><span className="eyebrow">MUSIC LAB · VERSOS ORIGINAIS</span><h1>Aprenda inglês <em>com música.</em></h1><p>Escute, leia, repita e recupere uma expressão sem olhar. As letras são originais do FALA.</p></div>
-            <article className="music-hero"><div><span className="eyebrow">{musicSet.theme.toUpperCase()}</span><h2>{musicSet.title}</h2><p>Pratique com áudio real, acompanhe a letra original do FALA e use a pronúncia como apoio.</p><div className="music-controls"><a className="button primary" href="https://open.spotify.com/search/english%20songs" target="_blank" rel="noreferrer"><Play size={15}/> Buscar músicas no Spotify</a><button className="button ghost" onClick={() => speak(musicSet.lyrics.join('. '))}><Volume2 size={15}/> Ouvir pronúncia</button></div></div><span className="music-disc"><Music2 size={35}/><b>FALA<br/>MUSIC LAB</b></span></article>
-            <article className="music-player-card"><div className="music-player-heading"><div><span className="eyebrow">PLAYER DE MÚSICA · SPOTIFY</span><h3>Ouça músicas de verdade</h3><p>Use a busca do Spotify para escolher a faixa que quer estudar. A reprodução e eventuais anúncios são controlados pelo Spotify.</p></div><a href="https://open.spotify.com/search/english%20songs" target="_blank" rel="noreferrer">Abrir Spotify <ArrowRight size={14}/></a></div><iframe title="Spotify — músicas em inglês" src="https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M?utm_source=generator&theme=0" width="100%" height="352" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"/></article>
-            <div className="music-grid">
-              <article className="music-panel"><span className="eyebrow">OUVIR · LER · REPETIR</span><h3>Verso em inglês</h3>{musicSet.lyrics.map((line,index) => <button className="music-line" key={line} onClick={() => speak(line)}><span>0{index+1}</span><strong>{line}</strong><Volume2 size={15}/></button>)}<p>{musicSet.translation}</p></article>
-              <article className="music-panel"><span className="eyebrow">VOCABULÁRIO DO VERSO</span><h3>Palavras para guardar</h3>{musicSet.words.map(([word,meaning]) => <div className="music-word" key={word}><div><strong>{word}</strong><small>{meaning}</small></div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setNewWord(word); setToast('Expressão preenchida. Salve-a no seu caderno de vocabulário.') }} aria-label={'Preparar '+word+' para salvar'}><Plus size={16}/></button></div>)}</article>
+          {page === 'music' && <section className="music-layout music-studio">
+            <div className="music-studio-hero">
+              <div><span className="eyebrow">FALA MUSIC STUDIO</span><h1>Escolha a faixa.<br/><em>Aprenda de verdade.</em></h1><p>Pesquise músicas reais, escute uma prévia oficial e estude um trecho por vez com tradução, vocabulário e contexto.</p></div>
+              <div className="music-hero-art"><Headphones size={76}/><span>LISTEN · UNDERSTAND · SING</span></div>
             </div>
-            <article className="music-quiz"><div><span className="eyebrow">RECUPERAÇÃO ATIVA</span><h3>Complete o verso sem olhar.</h3><p>“{musicSet.lyrics.find(line => line.toLowerCase().includes(musicSet.gap))?.replace(new RegExp(musicSet.gap,'i'),'_____')}”</p></div><div className="music-options">{musicSet.options.map(option => <button key={option} className={musicAnswer === option ? 'selected' : ''} onClick={() => { setMusicAnswer(option); setMusicFeedback(option === musicSet.gap ? 'Correto. Agora ouça a linha completa e repita sem ler.' : 'Ainda não. Ouça o verso e tente outra vez.') }}>{option}</button>)}</div>{musicFeedback && <p className="inline-notice">{musicFeedback}</p>}<button className="text-button" onClick={() => { setMusicAnswer(''); setMusicFeedback('') }}>Refazer desafio</button></article>
-            <p className="music-disclaimer">Este laboratório usa versos originais do FALA. O player Spotify funciona de forma independente. O FALA não sincroniza músicas externas com letras; a leitura das frases originais é um exercício separado de pronúncia.</p>
+            <form className="music-search-bar" onSubmit={searchMusic}>
+              <Search size={20}/><input value={musicQuery} onChange={event => setMusicQuery(event.target.value)} placeholder="Buscar música, artista ou álbum… ex.: Empire State of Mind" aria-label="Buscar música ou artista"/>
+              <button className="button primary" type="submit" disabled={musicSearchBusy || !musicQuery.trim()}>{musicSearchBusy ? 'Buscando…' : 'Buscar músicas'}</button>
+            </form>
+            {musicSearchError && <p className="inline-notice">{musicSearchError}</p>}
+            {musicResults.length > 0 && <section className="music-results-section"><div className="section-heading"><div><span className="eyebrow">RESULTADOS DO CATÁLOGO</span><h2>Escolha uma música</h2></div><small>Prévia oficial · Apple Music / iTunes</small></div><div className="music-results-grid">{musicResults.map(track => <button key={track.id} className={selectedMusic?.id === track.id ? 'music-result-card selected' : 'music-result-card'} onClick={() => { setSelectedMusic(track); setMusicAnalysis(null); setMusicAnalysisNotice('') }}><img src={track.artwork} alt=""/><span><strong>{track.title}</strong><small>{track.artist} · {track.album}</small></span><ChevronRight size={17}/></button>)}</div></section>}
+            {selectedMusic && <section className="selected-track-panel">
+              <div className="selected-track-heading"><img src={selectedMusic.artwork} alt="Capa do álbum"/><div><span className="eyebrow">MÚSICA SELECIONADA</span><h2>{selectedMusic.title}</h2><p>{selectedMusic.artist} · {selectedMusic.album}</p><a href={selectedMusic.url} target="_blank" rel="noreferrer">Abrir página oficial da música <ArrowRight size={13}/></a></div></div>
+              <div className="music-audio-box"><div><Headphones size={18}/><span>Prévia de áudio disponibilizada pelo catálogo</span></div>{selectedMusic.preview ? <audio controls preload="none" src={selectedMusic.preview}>Seu navegador não oferece reprodução de áudio.</audio> : <p>Não há prévia disponível para esta faixa. Use a página oficial para ouvir.</p>}</div>
+              <div className="music-platform-links"><a href={'https://open.spotify.com/search/'+encodeURIComponent(selectedMusic.title+' '+selectedMusic.artist)} target="_blank" rel="noreferrer">Encontrar no Spotify <ArrowRight size={13}/></a><a href={'https://music.youtube.com/search?q='+encodeURIComponent(selectedMusic.title+' '+selectedMusic.artist)} target="_blank" rel="noreferrer">Encontrar no YouTube Music <ArrowRight size={13}/></a><a href={selectedMusic.url} target="_blank" rel="noreferrer">Apple Music / iTunes <ArrowRight size={13}/></a></div>
+              <div className="lyrics-study-panel"><div><span className="eyebrow">ESTUDO DA LETRA · POR TRECHOS</span><h3>Traga o trecho que você quer aprender</h3><p>Copie até 6 linhas da letra de uma fonte a que você tenha acesso. O FALA não captura nem republica letras completas de terceiros automaticamente.</p></div><textarea value={musicLyricsDraft} onChange={event => { setMusicLyricsDraft(event.target.value); setMusicAnalysis(null); setMusicAnalysisNotice('') }} rows={5} maxLength={600} placeholder={'Cole até 6 linhas aqui…\n\nI’m on the edge of glory…'} /><div className="lyrics-actions"><small>{musicLyricsDraft.length}/600 caracteres · limite de 6 linhas</small><button className="button primary" onClick={() => void analyseMusicExcerpt()} disabled={musicAnalysisBusy || !musicLyricsDraft.trim()}>{musicAnalysisBusy ? 'Analisando trecho…' : 'Traduzir e estudar trecho'} <Sparkles size={15}/></button></div>{musicAnalysisNotice && <p className="inline-notice">{musicAnalysisNotice}</p>}
+              {musicAnalysis && <div className="music-analysis-result"><div className="section-heading"><div><span className="eyebrow">TRADUÇÃO E EXPLICAÇÃO</span><h3>{selectedMusic.title}</h3></div><button className="text-button" onClick={() => setMusicAnalysis(null)}><RotateCcw size={14}/> Limpar análise</button></div><p className="song-context">{musicAnalysis.song_summary}</p>{musicAnalysis.lines.map((line,index)=><article className="translated-line" key={index}><div className="translated-line-original"><span>{String(index+1).padStart(2,'0')}</span><strong>{line.original}</strong><button className="round-action" onClick={() => speak(line.original)} aria-label="Ouvir linha"><Volume2 size={15}/></button></div><p>{line.translation}</p><small>{line.explanation}</small></article>)}<div className="music-context-note"><strong>Contexto da música</strong><p>{musicAnalysis.cultural_context}</p><strong>Próximo exercício</strong><p>{musicAnalysis.next_step}</p></div><div className="music-vocab-results"><span className="eyebrow">VOCABULÁRIO DO TRECHO</span>{musicAnalysis.vocabulary.map(item=><div className="music-vocab-row" key={item.term}><div><strong>{item.term}</strong><small>{item.meaning} · {item.example}</small></div><button className="button ghost" onClick={() => void saveWordFromMusic(item.term,item.meaning,item.example)}><Plus size={14}/> Salvar</button></div>)}</div></div>}
+              </div>
+            </section>}
+            <section className="music-how-it-works"><div><span>01</span><strong>Encontre</strong><small>Busca por faixa e artista.</small></div><div><span>02</span><strong>Escute</strong><small>Prévia do catálogo ou plataforma oficial.</small></div><div><span>03</span><strong>Estude</strong><small>Trecho curto, tradução e expressões.</small></div><div><span>04</span><strong>Pratique</strong><small>Repita, revise e salve vocabulário.</small></div></section>
           </section>}
 
           {page === 'lumi' && <section className="lumi-layout">
@@ -1351,11 +1517,13 @@ export default function App() {
                 <small className={'voice-state ' + voiceStatus}>{voiceStatus === 'connected' ? 'AO VIVO · MICROFONE ATIVO' : voiceStatus === 'connecting' ? 'CONECTANDO…' : voiceStatus === 'error' ? 'CONEXÃO NÃO INICIADA' : 'PRONTA PARA CONVERSAR'}</small>
               </div>
               <div className="voice-session-actions">
-                <label className="voice-choice">Voz da Lumi
+                <label className="voice-choice">Personagem e voz
                   <select value={lumiVoiceId} onChange={event => setLumiVoiceId(event.target.value)} disabled={voiceStatus === 'connected' || voiceStatus === 'connecting'}>
-                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · jovem e expressiva</option>
-                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · brilhante e acolhedora</option>
-                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · natural e descontraída</option>
+                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · amiga animada</option>
+                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · tutora acolhedora</option>
+                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · personagem curiosa</option>
+                    <option value="rLl4PSDTzX3VHL4wjSFI">Jesse · personagem amigável</option>
+                    <option value="L6s7ahP9mHOb2S1Qynng">Zane · amigo animado</option>
                   </select>
                 </label>
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
@@ -1384,7 +1552,7 @@ export default function App() {
               <article className="practice-card mic-card"><span className="eyebrow">DESAFIO DE HOJE</span><h2>Tell me about something you enjoy.</h2><p>Conte em inglês sobre um interesse seu. Tente falar por 10 a 20 segundos.</p><div className="prompt-translation">Conte sobre algo de que você gosta. Por que isso interessa a você?</div><button className={recording ? 'record-button recording' : 'record-button'} onClick={() => recording ? stopRecording() : void startRecording()}>{recording ? <span className="stop-square"/> : <Mic size={25}/>}<strong>{recording ? 'Parar gravação' : 'Começar gravação'}</strong></button><small className="record-hint">{recording ? 'Gravando agora. Fale naturalmente.' : 'O áudio fica no aparelho até você sair desta tela.'}</small>{recordingNotice && <p className="inline-notice">{recordingNotice}</p>}{audioUrl && <div className="audio-preview"><span><Play size={15}/> Sua gravação</span><audio controls src={audioUrl}/></div>}</article>
               <article className="practice-card phrase-card"><span className="eyebrow">ESTRUTURAS PARA COMEÇAR</span><h3>Você pode usar:</h3>{['I really enjoy…','I have been interested in…','One thing I like about it is…'].map(phrase => <div className="starter-phrase" key={phrase}><span>{phrase}</span><button className="round-action" onClick={() => speak(phrase)} aria-label={'Ouvir ' + phrase}><Volume2 size={17}/></button></div>)}<div className="aside-tip compact"><Headphones size={17}/><p>Ouvir a própria gravação ajuda a perceber pausas e clareza. A transcrição não é uma nota de pronúncia.</p></div></article>
             </div>
-            {transcript && <article className="transcript-card"><span className="eyebrow">TRANSCRIÇÃO RECONHECIDA</span><p>{transcript}</p><button className="text-button" onClick={() => setPage('lumi')}>Conversar sobre minha resposta <ArrowRight size={14}/></button></article>}
+            {transcript && <article className="transcript-card"><span className="eyebrow">TRANSCRIÇÃO RECONHECIDA</span><p>{transcript}</p><button className="text-button" onClick={() => setPage('lumi')}>Conversar sobre minha resposta <ArrowRight size={14}/></button>{speechFeedback && <div className="speaking-feedback"><strong>Clareza da resposta · {speechFeedback.score}/100</strong><p>{speechFeedback.strengths}</p><p><b>Correção principal:</b> {speechFeedback.correction}</p><p><b>Versão natural:</b> {speechFeedback.improved_answer}</p><p><b>Próximo treino:</b> {speechFeedback.next_step}</p><small>A avaliação usa a transcrição. Não mede sotaque, entonação ou pronúncia fonética.</small></div>}</article>}
           </section>}
 
           {page === 'write' && <section className="writing-layout">
@@ -1396,13 +1564,24 @@ export default function App() {
             <article className="writing-photo-card"><div><span className="eyebrow">ESCRITA NO PAPEL</span><h2>Fotografe seu exercício.</h2><p>Envie uma foto legível do caderno ou folha. A Lumi tenta transcrever, corrigir e explicar os pontos importantes. O envio exige conta conectada.</p></div><label className="button ghost photo-picker"><Camera size={16}/> Tirar foto ou escolher arquivo<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={event => selectWritingPhoto(event.target.files?.[0] ?? null)}/></label>{writingPhotoPreview && <img className="writing-photo-preview" src={writingPhotoPreview} alt="Prévia do exercício fotografado"/>}{writingPhotoFeedback && <div className="writing-photo-feedback"><span className="eyebrow">ANÁLISE DA FOTO</span><p>{writingPhotoFeedback}</p></div>}<button className="button primary" onClick={() => void analyzeWritingPhoto()} disabled={!writingPhoto || photoBusy}>{photoBusy ? 'Analisando foto…' : 'Enviar para a Lumi'} <Sparkles size={15}/></button><small className="photo-privacy-note">A imagem é comprimida no navegador antes do envio e não é salva no armazenamento do FALA. Fotos desfocadas podem reduzir a precisão.</small></article>
           </section>}
 
-          {page === 'vocabulary' && <section className="vocabulary-layout">
-            <div className="page-heading"><span className="eyebrow">YOUR WORD BANK · VOCABULÁRIO</span><h1>Palavras que ficam.</h1><p>Guarde expressões úteis para revisar e usar em conversas reais.</p></div>
-            <form className="add-word-form" onSubmit={saveWord}><input value={newWord} onChange={event => setNewWord(event.target.value)} placeholder="Adicionar uma palavra ou expressão…"/><button className="button primary" type="submit" disabled={!newWord.trim()}><Plus size={17}/> Salvar palavra</button></form>
-            <div className="vocab-count"><strong>{words.length}</strong><span>expressões no seu caderno</span></div>
-            <div className="vocab-list">{words.map((word,index) => <article className="vocab-item" key={word}><span className="vocab-number">{String(index+1).padStart(2,'0')}</span><div><strong>{word}</strong><small>{word === 'actually' ? 'na verdade · de fato' : word === 'figure out' ? 'descobrir · entender' : word === 'I am looking forward to' ? 'estou ansioso por' : 'Expressão salva por você'}</small></div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir ' + word}><Volume2 size={17}/></button><button className="remove-word" onClick={() => void deleteWord(word)} aria-label={'Remover ' + word}><Trash2 size={16}/></button></article>)}</div>
+          {page === 'vocabulary' && <section className="vocabulary-layout vocabulary-studio">
+            <div className="page-heading"><span className="eyebrow">YOUR WORD BANK</span><h1>Transforme palavras <em>em repertório.</em></h1><p>Guarde expressões com significado, exemplos e áudio. Depois revise até conseguir lembrar sem olhar.</p></div>
+            <div className="vocab-summary-grid"><article><span>EXPRESSÕES SALVAS</span><strong>{words.length}</strong></article><article><span>REVISÃO DE HOJE</span><strong>{Math.min(words.length,5)}</strong></article><article><span>FORMATO</span><strong>Ativo</strong></article></div>
+            <div className="vocab-toolbar"><div className="vocab-tabs"><button className={vocabMode === 'library' ? 'active' : ''} onClick={() => setVocabMode('library')}>Meu vocabulário</button><button className={vocabMode === 'review' ? 'active' : ''} onClick={() => { setVocabMode('review'); setReviewIndex(0); setShowReviewAnswer(false) }}>Revisar cartões</button></div><form className="add-word-form" onSubmit={saveWord}><input value={newWord} onChange={event => setNewWord(event.target.value)} placeholder="Nova palavra ou expressão…"/><button className="button primary" type="submit" disabled={!newWord.trim()}><Plus size={16}/> Adicionar</button></form></div>
+            {vocabMode === 'library' ? <>
+              <div className="vocab-filter"><Search size={16}/><input value={vocabSearch} onChange={event => setVocabSearch(event.target.value)} placeholder="Filtrar palavras salvas…"/></div>
+              <div className="vocab-list">{words.filter(word => word.toLowerCase().includes(vocabSearch.toLowerCase())).map((word,index)=><article className="vocab-item vocabulary-rich-card" key={word}><span className="vocab-number">{String(index+1).padStart(2,'0')}</span><div><strong>{word}</strong><small>{wordDetails[word]?.meaning || (word === 'actually' ? 'na verdade · de fato' : word === 'figure out' ? 'descobrir · entender' : word === 'I am looking forward to' ? 'estou ansioso por' : 'Adicione significado ao revisar')}</small>{wordDetails[word]?.example && <p>{wordDetails[word].example}</p>}</div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setVocabMode('review'); setReviewIndex(Math.max(0,words.indexOf(word))); setShowReviewAnswer(true) }} aria-label="Revisar esta palavra"><BookOpen size={16}/></button><button className="remove-word" onClick={() => void deleteWord(word)} aria-label={'Remover '+word}><Trash2 size={15}/></button></article>)}</div>
+              {words.length===0 && <div className="empty-state"><Bookmark size={26}/><strong>Seu caderno ainda está vazio.</strong><p>Adicione palavras novas durante conversas, leituras ou músicas.</p></div>}
+            </> : <div className="vocab-review-stage">{words.length ? <><span className="eyebrow">CARTÃO {Math.min(reviewIndex+1,words.length)} DE {words.length}</span><strong className="review-term">{words[reviewIndex % words.length]}</strong>{showReviewAnswer ? <div className="review-answer"><p>{wordDetails[words[reviewIndex % words.length]]?.meaning || 'Tente criar seu próprio significado e um exemplo.'}</p><small>{wordDetails[words[reviewIndex % words.length]]?.example || 'Use a expressão em uma frase sobre sua rotina.'}</small><button className="button primary" onClick={() => { setReviewIndex((reviewIndex+1)%words.length); setShowReviewAnswer(false) }}>Próximo cartão <ArrowRight size={15}/></button></div> : <button className="button primary" onClick={() => setShowReviewAnswer(true)}>Revelar significado <Eye size={15}/></button>}</> : <p>Adicione palavras para começar a revisão.</p>}</div>}
+            <p className="vocab-footer-note">Dica: tente lembrar o significado antes de revelar o cartão. Depois fale uma frase em voz alta usando a expressão.</p>
           </section>}
 
+          {page === 'profile' && <section className="profile-page">
+            <div className="page-heading"><span className="eyebrow">SEU ESPAÇO</span><h1>Seu perfil. <em>Seu plano.</em></h1><p>Personalize como você aprende e acompanhe seu espaço de estudo.</p></div>
+            <article className="profile-hero-card"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Sua foto de perfil"/> : <CircleUserRound size={46}/>}</div><div><span className="eyebrow">PERFIL DO ESTUDANTE</span><h2>{profile.name || 'Estudante FALA'}</h2><p>{profile.goal === 'work' ? 'Trabalho e carreira' : profile.goal === 'travel' ? 'Viagens' : profile.goal === 'study' ? 'Estudos' : 'Conversação e vida diária'} · {profile.level === 'unsure' ? 'Nível a descobrir' : profile.level}</p><div className="profile-page-actions"><label className="button ghost profile-photo-picker">Alterar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label><button className="button primary" onClick={beginProfileEdit}>Editar preferências <ArrowRight size={15}/></button></div></div></article>
+            <div className="profile-preferences-grid"><article><span className="eyebrow">ROTINA</span><strong>{profile.minutes} minutos por dia</strong><small>Objetivo: {profile.timeHorizon === 'flexible' ? 'flexível' : profile.timeHorizon}</small></article><article><span className="eyebrow">PRIORIDADE</span><strong>{profile.focuses.slice(0,2).join(' e ') || 'Conversação'}</strong><small>Contextos adaptados aos seus interesses</small></article><article><span className="eyebrow">CONTA</span><strong>{user ? 'Sincronizada' : 'Modo local'}</strong><small>{user ? user.email : 'Entre para sincronizar em outros dispositivos'}</small></article></div>
+            <article className="profile-settings-card"><div><span className="eyebrow">APARÊNCIA</span><h3>Escolha seu tema</h3><p>O tema fica salvo neste aparelho.</p></div><div className="theme-choice-buttons"><button className={theme==='light'?'active':''} onClick={() => setTheme('light')}><Sun size={17}/> Claro</button><button className={theme==='dark'?'active':''} onClick={() => setTheme('dark')}><Moon size={17}/> Escuro</button></div></article>
+          </section>}
           {page === 'progress' && <section className="progress-layout">
             <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
@@ -1421,7 +1600,7 @@ export default function App() {
 
       {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><div className="brand-mark">f.</div><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
 
-      {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="dialog-card profile-dialog"><button className="dialog-close" onClick={() => setProfileOpen(false)} aria-label="Fechar"><X size={18}/></button><span className="eyebrow">PERSONALIZAÇÃO</span><h2>Seu inglês começa com você.</h2><p>Essas preferências ajudam a escolher contextos e exemplos mais relevantes.</p><form onSubmit={saveProfile}><label>Como podemos chamar você?<input value={nameDraft} onChange={event => setNameDraft(event.target.value)} placeholder="Seu primeiro nome"/></label><label>Objetivo principal<select value={goalDraft} onChange={event => setGoalDraft(event.target.value as Goal)}><option value="conversation">Conversar com confiança</option><option value="work">Trabalho e carreira</option><option value="travel">Viagens</option><option value="study">Estudos</option><option value="life">Um pouco de tudo</option></select></label><label>Nível atual<select value={levelDraft} onChange={event => setLevelDraft(event.target.value as Level)}><option value="unsure">Ainda não sei</option><option value="beginner">Começando do zero</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select></label><div className="form-label">Seus interesses</div><div className="interest-pills">{interestOptions.map(item => <button type="button" key={item} className={interestsDraft.includes(item) ? 'chosen' : ''} onClick={() => setInterestsDraft(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])}>{interestsDraft.includes(item) && <Check size={13}/>} {item}</button>)}</div><label>Outro interesse (opcional)<input value={customInterestDraft} onChange={event => setCustomInterestDraft(event.target.value)} placeholder="Ex.: Fórmula 1, Python, empreendedorismo…"/></label>
+      {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="dialog-card profile-dialog"><button className="dialog-close" onClick={() => setProfileOpen(false)} aria-label="Fechar"><X size={18}/></button><span className="eyebrow">PERSONALIZAÇÃO</span><h2>Seu inglês começa com você.</h2><p>Essas preferências ajudam a escolher contextos e exemplos mais relevantes.</p><div className="profile-photo-editor"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Foto do perfil"/> : <CircleUserRound size={38}/>}</div><label className="button ghost profile-photo-picker">Adicionar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label>{profilePhoto && <button type="button" className="text-button" onClick={() => { setProfilePhoto(''); try { window.localStorage.removeItem(PROFILE_PHOTO_KEY) } catch { /* optional */ } }}>Remover foto</button>}</div><form onSubmit={saveProfile}><label>Como podemos chamar você?<input value={nameDraft} onChange={event => setNameDraft(event.target.value)} placeholder="Seu primeiro nome"/></label><label>Objetivo principal<select value={goalDraft} onChange={event => setGoalDraft(event.target.value as Goal)}><option value="conversation">Conversar com confiança</option><option value="work">Trabalho e carreira</option><option value="travel">Viagens</option><option value="study">Estudos</option><option value="life">Um pouco de tudo</option></select></label><label>Nível atual<select value={levelDraft} onChange={event => setLevelDraft(event.target.value as Level)}><option value="unsure">Ainda não sei</option><option value="beginner">Começando do zero</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select></label><div className="form-label">Seus interesses</div><div className="interest-pills">{interestOptions.map(item => <button type="button" key={item} className={interestsDraft.includes(item) ? 'chosen' : ''} onClick={() => setInterestsDraft(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])}>{interestsDraft.includes(item) && <Check size={13}/>} {item}</button>)}</div><label>Outro interesse (opcional)<input value={customInterestDraft} onChange={event => setCustomInterestDraft(event.target.value)} placeholder="Ex.: Fórmula 1, Python, empreendedorismo…"/></label>
           <div className="profile-settings-grid">
             <label>Tempo diário<select value={minutesDraft} onChange={event => setMinutesDraft(Number(event.target.value))}>{[5,10,15,20,30,45,60].map(value => <option key={value} value={value}>{value} minutos</option>)}</select></label>
             <label>Sotaque de referência<select value={accentDraft} onChange={event => setAccentDraft(event.target.value as 'us'|'uk')}><option value="us">Inglês americano</option><option value="uk">Inglês britânico</option></select></label>
