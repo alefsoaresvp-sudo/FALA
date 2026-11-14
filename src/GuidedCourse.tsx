@@ -37,6 +37,7 @@ type Lesson = {
   title: string
   subtitle: string
   objective: string
+  lessonTip?: string
   pattern: string
   teach: { term: string; meaning: string; example: string }[]
   exercises: Exercise[]
@@ -44,7 +45,7 @@ type Lesson = {
   isCheckpoint?: boolean
 }
 type Unit = { id: string; title: string; subtitle: string; level: string; lessons: Lesson[] }
-type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null }
+type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null }
 type Props = {
   accent?: 'us' | 'uk'
   goalLabel?: string
@@ -53,7 +54,7 @@ type Props = {
 }
 
 const STORAGE_KEY = 'fala-course-progress-v1'
-const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null }
+const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null, streakDays: 0, lastStudyDate: null }
 
 const units: Unit[] = [
   {
@@ -89,10 +90,10 @@ const units: Unit[] = [
         objective: 'Reconhecer números de 1 a 10, cores e objetos comuns.',
         pattern: 'A blue book = Um livro azul  |  I have two pens = Eu tenho duas canetas',
         teach: [
-          { term: 'one, two, three', meaning: 'um, dois, três', example: 'One apple = Uma maçã' },
-          { term: 'four, five, six', meaning: 'quatro, cinco, seis', example: 'Five books = Cinco livros' },
-          { term: 'red, blue, green', meaning: 'vermelho, azul, verde', example: 'A red car = Um carro vermelho' },
-          { term: 'book / phone / water', meaning: 'livro / telefone / água', example: 'My phone = Meu telefone' },
+          { term: 'one to ten', meaning: 'um a dez', example: 'one, two, three, four, five, six, seven, eight, nine, ten' },
+          { term: 'eleven to twenty', meaning: 'onze a vinte', example: 'eleven, twelve, thirteen, fourteen, fifteen, sixteen, seventeen, eighteen, nineteen, twenty' },
+          { term: 'red / blue / green / yellow', meaning: 'vermelho / azul / verde / amarelo', example: 'A yellow bus = Um ônibus amarelo' },
+          { term: 'black / white / orange / pink / purple', meaning: 'preto / branco / laranja / rosa / roxo', example: 'A black phone = Um telefone preto' },
         ],
         exercises: [
           { kind: 'choice', prompt: 'Qual palavra significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
@@ -120,6 +121,89 @@ const units: Unit[] = [
           { kind: 'build', prompt: 'Monte: “Ele está feliz.”', tokens: ['happy.', 'He', 'is'], answer: 'He is happy.', explanation: 'He pede is. A estrutura básica é pessoa + be + característica.' },
           { kind: 'type', prompt: 'Escreva: “Você é estudante.”', answer: 'You are a student.', explanation: 'You are = você é. Usamos a antes de student, porque é um substantivo contável no singular.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “She is my friend.”', answer: 'She is my friend.', explanation: 'She is = ela é/está. My friend = minha amiga ou meu amigo.' },
+        ],
+      },
+      {
+        id: 'alphabet-sounds',
+        title: 'Conheça o alfabeto em inglês',
+        subtitle: 'Letras e soletração',
+        objective: 'Reconhecer as letras em inglês e soletrar seu nome.',
+        lessonTip: 'O alfabeto inglês tem 26 letras. Algumas têm nomes diferentes do português: A se chama “ei”, E se chama “i” e I se chama “ai”. Ao soletrar, diga o nome de cada letra, não o som que ela faz dentro de uma palavra.',
+        pattern: 'How do you spell it? = Como se soletra?  |  A-N-A = “ei – en – ei”',
+        teach: [
+          { term: 'A / E / I', meaning: 'nomes: ei / i / ai', example: 'A is for apple. = A de apple (maçã).' },
+          { term: 'B / C / D', meaning: 'nomes: bi / si / di', example: 'B is for book. = B de book (livro).' },
+          { term: 'J / G', meaning: 'nomes: djei / dji', example: 'J and G têm nomes parecidos, mas sons diferentes nas palavras.' },
+          { term: 'How do you spell...?', meaning: 'Como se soletra...?', example: 'How do you spell Ana? A-N-A.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Como se chama a letra A em inglês?', options: ['Ah', 'Ei', 'Ai'], answer: 'Ei', explanation: 'O nome da letra A em inglês é “ei”, como o som inicial de “ей”.' },
+          { kind: 'choice', prompt: 'Qual letra tem o nome “ai”?', options: ['E', 'I', 'A'], answer: 'I', explanation: 'I se chama “ai”. E se chama “i” e A se chama “ei”.' },
+          { kind: 'build', prompt: 'Monte a pergunta “Como se soletra?”', tokens: ['spell?', 'you', 'do', 'How'], answer: 'How do you spell?', explanation: 'How do you spell...? é a pergunta usada para pedir a soletração.' },
+          { kind: 'type', prompt: 'Complete a soletração do nome Ana: A-N-___', answer: 'A', explanation: 'Ana é soletrado A-N-A. Diga o nome das letras em inglês: ei – en – ei.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “How do you spell your name?”', answer: 'How do you spell your name?', explanation: 'A frase significa “Como você soletra seu nome?”. Ouça, repita e depois tente soletrar seu próprio nome.' },
+        ],
+      },
+      {
+        id: 'articles-plurals',
+        title: 'Use a, an e o plural',
+        subtitle: 'Um, uma e mais de um',
+        objective: 'Dizer o nome de objetos no singular e no plural.',
+        lessonTip: 'Em inglês, a e an significam “um/uma” antes de um substantivo contável no singular. Use a antes de som de consoante (a book) e an antes de som de vogal (an apple). Para falar de mais de um objeto, normalmente acrescentamos -s: book → books.',
+        pattern: 'a + som de consoante  |  an + som de vogal  |  plural: palavra + s',
+        teach: [
+          { term: 'a book', meaning: 'um livro', example: 'I have a book. = Eu tenho um livro.' },
+          { term: 'an apple', meaning: 'uma maçã', example: 'I have an apple. = Eu tenho uma maçã.' },
+          { term: 'one / two', meaning: 'um / dois', example: 'one pen → two pens = uma caneta → duas canetas' },
+          { term: 'this / these', meaning: 'este / estes', example: 'This is a pen. These are pens.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Complete: “___ apple” (uma maçã).', options: ['A', 'An', 'The'], answer: 'An', explanation: 'Apple começa com som de vogal; por isso usamos an: an apple.' },
+          { kind: 'choice', prompt: 'Qual é o plural de “book”?', options: ['bookes', 'books', 'book'], answer: 'books', explanation: 'Na maioria dos substantivos, acrescentamos -s: book → books.' },
+          { kind: 'build', prompt: 'Monte: “Eu tenho um telefone.”', tokens: ['phone.', 'a', 'have', 'I'], answer: 'I have a phone.', explanation: 'I (eu) + have (tenho) + a (um) + phone (telefone).' },
+          { kind: 'type', prompt: 'Escreva “duas maçãs” em inglês.', answer: 'Two apples.', explanation: 'Two = duas. Apple recebe -s no plural: apples.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “I have an apple and two books.”', answer: 'I have an apple and two books.', explanation: 'An apple está no singular; two books está no plural.' },
+        ],
+      },
+      {
+        id: 'a0-review',
+        title: 'Revise sua primeira base',
+        subtitle: 'Alfabeto, números, cores e frases',
+        objective: 'Recuperar os fundamentos antes do teste da unidade.',
+        lessonTip: 'Nesta revisão, tente responder sem olhar as explicações. Se errar, leia o feedback, volte à aula correspondente e tente novamente. Errar durante o treino faz parte do aprendizado.',
+        pattern: 'Palavra → significado → frase curta → uso em contexto',
+        teach: [
+          { term: 'Hello', meaning: 'olá', example: 'Hello, my name is Ana.' },
+          { term: 'blue', meaning: 'azul', example: 'A blue book.' },
+          { term: 'I am', meaning: 'eu sou / estou', example: 'I am a student.' },
+          { term: 'an apple', meaning: 'uma maçã', example: 'I have an apple.' },
+        ],
+        isReview: true,
+        exercises: [
+          { kind: 'choice', prompt: 'Qual frase significa “Eu sou estudante”?', options: ['I student.', 'I am a student.', 'I have student.'], answer: 'I am a student.', explanation: 'I am = eu sou/estou. A frase precisa do artigo a antes de student.' },
+          { kind: 'choice', prompt: 'Qual cor é “green”?', options: ['Verde', 'Vermelho', 'Roxo'], answer: 'Verde', explanation: 'Green = verde; red = vermelho; purple = roxo.' },
+          { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'name', 'is', 'My'], answer: 'My name is Ana.', explanation: 'My name is... é a estrutura para dizer seu nome.' },
+          { kind: 'type', prompt: 'Escreva o número “doze”.', answer: 'Twelve.', explanation: 'Twelve = doze. Eleven = onze e thirteen = treze.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “I have a blue book.”', answer: 'I have a blue book.', explanation: 'I have = eu tenho; a blue book = um livro azul.' },
+        ],
+      },
+      {
+        id: 'a0-checkpoint',
+        title: 'Teste: fundamentos do inglês',
+        subtitle: 'Verifique o que aprendeu',
+        objective: 'Demonstrar domínio dos primeiros fundamentos.',
+        lessonTip: 'Faça o teste sem consultar as respostas. Você precisa acertar pelo menos 70% para liberar a próxima unidade. Se não atingir a nota, poderá tentar novamente depois de revisar.',
+        pattern: 'Meta de aprovação: 70% de acertos',
+        isCheckpoint: true,
+        exercises: [
+          { kind: 'choice', prompt: 'Como se diz “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
+          { kind: 'choice', prompt: 'Qual é a tradução de “five”?', options: ['Quatro', 'Cinco', 'Seis'], answer: 'Cinco', explanation: 'Five = cinco.' },
+          { kind: 'choice', prompt: 'O que significa “purple”?', options: ['Laranja', 'Roxo', 'Preto'], answer: 'Roxo', explanation: 'Purple = roxo.' },
+          { kind: 'choice', prompt: 'Complete: “She ___ happy.”', options: ['am', 'are', 'is'], answer: 'is', explanation: 'Com she (ela), usamos is: She is happy.' },
+          { kind: 'choice', prompt: 'Complete: “___ orange”.', options: ['A', 'An', 'These'], answer: 'An', explanation: 'Orange começa com som de vogal; usamos an.' },
+          { kind: 'build', prompt: 'Monte: “Eu quero água.”', tokens: ['water.', 'I', 'want'], answer: 'I want water.', explanation: 'I = eu; want = quero; water = água.' },
+          { kind: 'type', prompt: 'Escreva “três livros”.', answer: 'Three books.', explanation: 'Three = três; book no plural recebe -s.' },
+          { kind: 'listen', prompt: 'Ouça e escreva: “Hello, my name is Ana.”', answer: 'Hello, my name is Ana.', explanation: 'Hello = olá; my name is = meu nome é.' },
         ],
       },
     ],
@@ -966,6 +1050,17 @@ function loadProgress(): SavedProgress {
     return initialProgress
   }
 }
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+function previousLocalDateKey() {
+  const date = new Date()
+  date.setDate(date.getDate() - 1)
+  return localDateKey(date)
+}
 function normalize(value: string) {
   return value.toLowerCase().trim().replace(/[.!?,]/g, '').replace(/\s+/g, ' ')
 }
@@ -1078,6 +1173,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         ? current.completedLessonIds
         : [...current.completedLessonIds, currentLesson.id],
       xp: current.xp + (current.completedLessonIds.includes(currentLesson.id) ? 0 : currentLesson.isCheckpoint ? 30 : currentLesson.isReview ? 15 : 10),
+      streakDays: current.lastStudyDate === localDateKey() ? (current.streakDays ?? 0) : current.lastStudyDate === previousLocalDateKey() ? (current.streakDays ?? 0) + 1 : 1,
+      lastStudyDate: localDateKey(),
       activeLessonId: null,
     }))
     setActiveLessonId(null)
@@ -1179,6 +1276,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             </div>)}
           </div>
           <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.pattern}</span></div>
+          {currentLesson.lessonTip && <div className="lesson-tip-box"><strong>Entenda a regra</strong><p>{currentLesson.lessonTip}</p></div>}
         </article>
         {checkpointNotice && <div className="checkpoint-retry-notice"><strong>Você ainda não passou no teste.</strong><span>{checkpointNotice}</span></div>}
         <article className="lesson-exercise-card">
@@ -1232,7 +1330,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <div className="course-overview-stats">
         <article><BookOpen size={18}/><strong>{completedCount}/{allLessons.length}</strong><span>aulas concluídas</span></article>
         <article><Star size={18}/><strong>{progress.xp}</strong><span>pontos conquistados</span></article>
-        <article><Headphones size={18}/><strong>5 tipos</strong><span>de prática por aula</span></article>
+        <article><Zap size={18}/><strong>{progress.streakDays ?? 0} dias</strong><span>sequência de estudo</span></article>
       </div>
       <div className="course-path-heading"><div><span className="course-eyebrow">SUA TRILHA</span><h2>Uma etapa de cada vez</h2></div><span className="course-level-label">A0 → C1 · 40 aulas sequenciais</span></div>
       {units.map((unit, unitIndex) => {
