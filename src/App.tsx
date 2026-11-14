@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
+import GuidedCourse from './GuidedCourse'
 import { supabase } from './supabase'
 
 type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'profile'
@@ -321,7 +322,7 @@ export default function App() {
     return activityBank.find(item => item.skill === preferredSkill) ?? activityBank[0]
   }, [recentAttempts, profile.focuses])
   const titleByPage: Record<Page, string> = {
-    home: 'Visão geral', learn: 'Prática guiada', lumi: 'Converse com a Lumi',
+    home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
   }
 
@@ -1481,7 +1482,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">SEU INGLÊS, NO SEU RITMO</span>
                 <h1>{profile.name ? 'Olá, ' + greeting(profile.name) + '.' : 'Inglês que acompanha sua vida.'}<br/><em>Aprenda para usar.</em></h1>
-                <p>Prática objetiva, situações reais e uma rotina adaptada ao que você quer conquistar.</p>
+                <p>Um curso guiado que ensina desde a primeira palavra, explica cada frase e faz você praticar até conseguir usar o inglês.</p>
                 <div className="welcome-actions">
                   <button className="button primary" onClick={() => setPage('learn')}>Começar a estudar <ArrowRight size={16}/></button>
                   <button className="button ghost" onClick={() => setPage('lumi')}><MessageCircle size={16}/> Conversar com a Lumi</button>
@@ -1537,19 +1538,12 @@ export default function App() {
             </div>
           </>}
 
-          {page === 'learn' && <section className="learning-layout">
-            <div className="learning-studio-heading"><div><span className="eyebrow">MISSÃO DE HOJE · PRÁTICA GUIADA</span><h1>Aprenda fazendo.<br/><em>Use o inglês no mundo real.</em></h1><p>Responda, fale, receba feedback e avance em pequenas etapas.</p></div><div className="learning-day-card"><span>SESSÕES REGISTRADAS</span><strong>{completedSessions}</strong><small>Seu progresso cresce com a prática.</small></div></div><div className="learning-quick-tools"><button onClick={() => void generateAdaptiveActivity()} disabled={activityBusy}><Sparkles size={16}/>{activityBusy ? 'Criando missão…' : 'Nova missão adaptativa'}</button><button onClick={() => setPage('speak')}><Mic size={16}/> Praticar falando</button><button onClick={() => setPage('tracks')}><Map size={16}/> Continuar trilhas</button></div>
-            <article className="exercise-card">
-              <div className="exercise-top"><span className="exercise-index">{activityIndex < 0 ? 'ATIVIDADE LUMI' : 'ATIVIDADE ' + String(activityIndex + 1).padStart(2,'0')}</span><span className="skill-chip">{activity.skill === 'speaking' ? 'CONVERSAÇÃO' : activity.skill === 'writing' ? 'GRAMÁTICA EM CONTEXTO' : activity.skill === 'vocabulary' ? 'VOCABULÁRIO' : 'COMPREENSÃO'}</span></div>
-              <h2>{activity.title}</h2><p className="exercise-context">{activity.context}</p>
-              <div className="phrase-box"><div><span>EXPRESSÃO-CHAVE</span><strong>{activity.phrase}</strong><small>{activity.translation}</small></div><button className="round-action" onClick={() => speak(activity.phrase)} aria-label="Ouvir expressão"><Volume2 size={19}/></button></div>
-              <h3>{activity.prompt}</h3>
-              {activity.activity_type && activity.activity_type !== 'multiple_choice' ? <textarea className="track-response-area" rows={5} value={activityAnswer} onChange={event => { setActivityAnswer(event.target.value); setActivityFeedback(''); setActivityCorrect(null) }} placeholder={activity.input_hint || 'Escreva sua resposta em inglês…'} /> : <div className="answer-options">{activity.options.map((option,index) => <button key={option} className={answerIndex === index ? 'answer-option selected' : 'answer-option'} onClick={() => { setAnswerIndex(index); setActivityFeedback(''); setActivityCorrect(null) }}><span>{String.fromCharCode(65+index)}</span>{option}{answerIndex === index && <CheckCircle2 size={18}/>}</button>)}</div>}
-              {activityFeedback && <div className={activityCorrect ? 'feedback-panel good' : 'feedback-panel'}><strong>{activityCorrect === null ? 'Feedback da Lumi' : activityCorrect ? 'Atividade concluída' : 'Vamos ajustar'}</strong><p style={{whiteSpace:'pre-wrap'}}>{activityFeedback}</p></div>}
-              <div className="exercise-footer">{activityFeedback ? <button className="button primary" onClick={nextActivity}>Próxima atividade <ArrowRight size={16}/></button> : <button className="button primary" onClick={() => void submitActivity()} disabled={activityBusy || (activity.activity_type && activity.activity_type !== 'multiple_choice' ? !activityAnswer.trim() : answerIndex === null)}>{activityBusy ? 'Avaliando…' : activity.activity_type && activity.activity_type !== 'multiple_choice' ? 'Enviar resposta' : 'Conferir resposta'} <Check size={16}/></button>}</div>
-            </article>
-            <aside className="learning-aside"><div className="aside-tip"><Sparkles size={19}/><strong>Aprender para usar</strong><p>Não memorize só a resposta. Leia a expressão em voz alta e imagine uma situação em que ela seria útil.</p></div><div className="aside-card"><span className="eyebrow">SEU PERFIL</span><strong>{profile.goal === 'work' ? 'Inglês para trabalho' : profile.goal === 'travel' ? 'Inglês para viagens' : profile.goal === 'study' ? 'Inglês para estudos' : 'Inglês para o dia a dia'}</strong><p>{profile.level === 'beginner' ? 'Começando do zero' : profile.level === 'basic' ? 'Básico' : profile.level === 'intermediate' ? 'Intermediário' : profile.level === 'advanced' ? 'Avançado' : 'Nível a descobrir'}</p><button className="text-button" onClick={beginProfileEdit}>Editar perfil <ArrowRight size={14}/></button></div></aside>
-          </section>}
+          {page === 'learn' && <GuidedCourse
+            accent={profile.accent}
+            goalLabel={profile.goal === 'travel' ? 'viagens' : profile.goal === 'work' ? 'trabalho' : profile.goal === 'study' ? 'estudos' : 'conversação e vida diária'}
+            onAskTutor={question => { setChatInput(question); setPage('lumi') }}
+            onLessonComplete={score => void recordSession('lesson', 300, score, { source: 'guided-course-v6' })}
+          />}
 
           {page === 'tracks' && <section className="tracks-layout">
             <div className="page-heading"><span className="eyebrow">TRILHAS · SITUAÇÕES DO MUNDO REAL</span><h1>Aprenda para <em>conseguir fazer.</em></h1><p>Seis trilhas com quatro práticas e uma mini prova. A aprovação requer pelo menos 70%.</p></div>
