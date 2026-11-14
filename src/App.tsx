@@ -275,6 +275,14 @@ export default function App() {
           setLevelDraft(restored.level)
           setInterestsDraft(restored.interests)
           setCustomInterestDraft(restored.customInterest)
+          setFocusesDraft(restored.focuses)
+          setMinutesDraft(restored.minutes)
+          setAccentDraft(restored.accent)
+          setStyleDraft(restored.style)
+          setBarriersDraft(restored.barriers)
+          setScenarioDraft(restored.scenario)
+          setTimeHorizonDraft(restored.timeHorizon)
+          setFeedbackStyleDraft(restored.feedbackStyle)
           try { window.localStorage.setItem(PROFILE_KEY, JSON.stringify(restored)) } catch { /* local cache is optional */ }
         }
         if (vocabularyResult.data) {
