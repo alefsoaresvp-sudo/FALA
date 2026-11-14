@@ -33,6 +33,9 @@ type MusicTrack = { id: number; title: string; artist: string; album: string; ar
 type MusicAnalysis = { lines: { original: string; translation: string; explanation: string }[]; vocabulary: { term: string; meaning: string; example: string }[]; song_summary: string; cultural_context: string; next_step: string }
 type LearningPlan = { headline: string; today: string; focus_order: string[]; weeks: { period: string; objective: string; practice: string }[]; success_metric: string; adaptation_note: string }
 type SessionRow = { id?: string; activity_type: string; duration_seconds: number; score: number | null; completed_at?: string }
+type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
+type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
+type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
 type LearningActivity = {
   activity_type?: 'multiple_choice' | 'complete_sentence' | 'roleplay' | 'translation'
@@ -213,12 +216,14 @@ export default function App() {
   const [activityFeedback, setActivityFeedback] = useState('')
   const [activityCorrect, setActivityCorrect] = useState<boolean | null>(null)
   const [words, setWords] = useState<string[]>(() => readLocal(WORDS_KEY, ['actually', 'figure out', 'I am looking forward to']))
+  const [vocabSchedule, setVocabSchedule] = useState<Record<string, VocabularySchedule>>(() => readLocal('fala-vocab-schedule-v1', {}))
   const [wordDetails, setWordDetails] = useState<Record<string, { meaning: string; example: string }>>(() => readLocal(VOCAB_DETAILS_KEY, {}))
   const [newWord, setNewWord] = useState('')
   const [vocabSearch, setVocabSearch] = useState('')
   const [vocabMode, setVocabMode] = useState<'library' | 'review'>('library')
   const [reviewIndex, setReviewIndex] = useState(0)
   const [showReviewAnswer, setShowReviewAnswer] = useState(false)
+  const [reviewComplete, setReviewComplete] = useState(false)
   const [musicQuery, setMusicQuery] = useState('')
   const [musicResults, setMusicResults] = useState<MusicTrack[]>([])
   const [musicSearchBusy, setMusicSearchBusy] = useState(false)
@@ -252,6 +257,8 @@ export default function App() {
   const [speechFeedback, setSpeechFeedback] = useState<TrackEvaluation | null>(null)
   const [audioUrl, setAudioUrl] = useState('')
   const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
+  const [recentAttempts, setRecentAttempts] = useState<ActivityAttempt[]>([])
+  const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -273,6 +280,46 @@ export default function App() {
     const scores = sessions.map(item => item.score).filter((value): value is number => typeof value === 'number')
     return scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : null
   }, [sessions])
+  const todayPracticeMinutes = useMemo(() => {
+    const today = new Date().toDateString()
+    const seconds = sessions.reduce((sum, item) => item.completed_at && new Date(item.completed_at).toDateString() === today ? sum + (item.duration_seconds || 0) : sum, 0)
+    return Math.round(seconds / 60)
+  }, [sessions])
+  const dailyGoalProgress = Math.min(100, Math.round(todayPracticeMinutes / Math.max(1, profile.minutes) * 100))
+  const dueWords = useMemo(() => {
+    const now = Date.now()
+    return words.filter(term => {
+      const nextReviewAt = vocabSchedule[term]?.nextReviewAt
+      return !nextReviewAt || new Date(nextReviewAt).getTime() <= now
+    })
+  }, [words, vocabSchedule])
+  const reviewQueue = dueWords.length ? dueWords : words
+  const activeReviewTerm = reviewQueue.length ? reviewQueue[reviewIndex % reviewQueue.length] : ''
+  const learningEvidence = useMemo(() => {
+    const grouped: Record<string, number[]> = {}
+    for (const attempt of recentAttempts) {
+      if (typeof attempt.score === 'number' && attempt.skill) (grouped[attempt.skill] ||= []).push(attempt.score)
+    }
+    const skillScores = Object.fromEntries(Object.entries(grouped).map(([skill, scores]) => [
+      skill, Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+    ]))
+    const recentMistakes = recentAttempts
+      .filter(attempt => typeof attempt.score === 'number' && attempt.score < 70)
+      .slice(0, 5)
+      .map(attempt => {
+        const correction = Object.values(attempt.correction || {}).filter(value => typeof value === 'string').slice(0, 2).join(' ')
+        return `${attempt.skill}: ${attempt.prompt.slice(0, 130)} | resposta: ${(attempt.learner_answer || '').slice(0, 90)} | ${correction}`.slice(0, 340)
+      })
+    const previousInsights = learnerInsights.slice(0, 4).map(item =>
+      `${item.skill}: ${item.observation} Recomendação: ${item.recommendation}`.slice(0, 260)
+    )
+    return { skillScores, recentMistakes, previousInsights }
+  }, [recentAttempts, learnerInsights])
+  const recommendedActivity = useMemo(() => {
+    const latestMistake = recentAttempts.find(item => typeof item.score === 'number' && item.score < 70)
+    const preferredSkill = latestMistake?.skill || profile.focuses.find(skill => ['speaking', 'writing', 'listening'].includes(skill)) || 'speaking'
+    return activityBank.find(item => item.skill === preferredSkill) ?? activityBank[0]
+  }, [recentAttempts, profile.focuses])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Prática guiada', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
@@ -312,6 +359,8 @@ export default function App() {
     if (!supabase || !user) {
       setCloudLoading(false)
       setSessions(readLocal(SESSIONS_KEY, []))
+      setRecentAttempts([])
+      setLearnerInsights([])
       setChat(initialChat)
       return
     }
@@ -319,13 +368,15 @@ export default function App() {
     setCloudLoading(true)
     void (async () => {
       try {
-        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult] = await Promise.all([
+        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult, attemptsResult, insightsResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-          supabase.from('vocabulary_items').select('term,meaning').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+          supabase.from('vocabulary_items').select('term,meaning,example_sentence,next_review_at,review_interval_days,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
           supabase.from('learning_plans').select('plan').eq('user_id', user.id).maybeSingle(),
+          supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(20),
+          supabase.from('learner_insights').select('skill,observation,recommendation,confidence').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
         ])
         if (!active) return
         if (profileResult.data) {
@@ -356,14 +407,22 @@ export default function App() {
         }
         if (vocabularyResult.data) {
           const restoredWords = vocabularyResult.data.map(item => item.term)
-          const restoredDetails = Object.fromEntries(vocabularyResult.data.filter(item => item.meaning).map(item => [item.term, { meaning: item.meaning, example: '' }]))
+          const restoredDetails = Object.fromEntries(vocabularyResult.data.map(item => [item.term, { meaning: item.meaning || '', example: item.example_sentence || '' }]))
+          const restoredSchedule = Object.fromEntries(vocabularyResult.data.map(item => [item.term, {
+            nextReviewAt: item.next_review_at || item.created_at || new Date().toISOString(),
+            intervalDays: Math.max(1, Number(item.review_interval_days) || 1),
+          }])) as Record<string, VocabularySchedule>
           setWords(restoredWords)
           setWordDetails(current => ({ ...restoredDetails, ...current }))
+          setVocabSchedule(restoredSchedule)
           try {
             window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords))
             window.localStorage.setItem(VOCAB_DETAILS_KEY, JSON.stringify(restoredDetails))
+            window.localStorage.setItem('fala-vocab-schedule-v1', JSON.stringify(restoredSchedule))
           } catch { /* local cache is optional */ }
         }
+        setRecentAttempts((attemptsResult.data || []) as ActivityAttempt[])
+        setLearnerInsights((insightsResult.data || []) as LearnerInsight[])
         if (sessionsResult.data) setSessions(sessionsResult.data as SessionRow[])
         if (messagesResult.data?.length) {
           setChat(messagesResult.data.map(item => ({
@@ -397,6 +456,10 @@ export default function App() {
   useEffect(() => {
     try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(trackProgress)) } catch { /* Local track progress is optional. */ }
   }, [trackProgress])
+
+  useEffect(() => {
+    try { window.localStorage.setItem('fala-vocab-schedule-v1', JSON.stringify(vocabSchedule)) } catch { /* Local review schedule is optional. */ }
+  }, [vocabSchedule])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -526,6 +589,17 @@ export default function App() {
     if (data) setSessions(current => [data as SessionRow, ...current])
   }
 
+  const persistActivityAttempt = async (attempt: Omit<ActivityAttempt, 'id' | 'attempted_at'>) => {
+    if (!supabase || !user) return
+    const { data, error } = await supabase.from('activity_attempts').insert({ user_id: user.id, ...attempt })
+      .select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').single()
+    if (error) {
+      console.error('FALA activity attempt sync failed', error)
+      return
+    }
+    if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current].slice(0, 20))
+  }
+
   const appendVoiceLine = (role: 'user' | 'assistant', rawText: string) => {
     const text = rawText.trim()
     if (!text) return
@@ -610,6 +684,7 @@ export default function App() {
           customInterest: profile.customInterest,
           focusAreas: profile.focuses,
           preferredFeedback: profile.feedbackStyle,
+          recentLearningEvidence: learningEvidence,
         })
       )
       setVoiceStatus('connected')
@@ -638,7 +713,7 @@ export default function App() {
         const { data, error } = await supabase.functions.invoke('tutor', {
           body: {
             mode: 'conversation', message, history, profile,
-            learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+            learningEvidence,
           },
         })
         if (error) throw error
@@ -650,12 +725,13 @@ export default function App() {
           { user_id: user.id, role: 'assistant', content: reply, metadata: data?.correction ? { correction: data.correction } : {} },
         ])
         if (data?.learning_insight?.observation && data?.learning_insight?.recommendation) {
-          await supabase.from('learner_insights').insert({
+          const { data: savedInsight, error: insightError } = await supabase.from('learner_insights').insert({
             user_id: user.id, skill: data.learning_insight.skill || 'speaking',
             observation: data.learning_insight.observation, recommendation: data.learning_insight.recommendation,
             confidence: Math.max(0, Math.min(1, Number(data.learning_insight.confidence) || 0)),
             evidence: { source: 'conversation' },
-          })
+          }).select('skill,observation,recommendation,confidence').single()
+          if (!insightError && savedInsight) setLearnerInsights(current => [savedInsight as LearnerInsight, ...current].slice(0, 5))
         }
       } else {
         await new Promise(resolve => window.setTimeout(resolve, 500))
@@ -685,7 +761,7 @@ export default function App() {
       const { data, error } = await supabase.functions.invoke('tutor', {
         body: {
           mode: 'activity', profile,
-          learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+          learningEvidence,
           activity: { title: activity.title, context: activity.context },
         },
       })
@@ -751,7 +827,7 @@ export default function App() {
               target_phrase: activity.phrase,
               context: activity.context,
             },
-            learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+            learningEvidence,
           },
         })
         if (error) throw error
@@ -765,8 +841,8 @@ export default function App() {
           '\nVersão sugerida: ' + String(evaluation.improved_answer || '') +
           '\nPróximo passo: ' + String(evaluation.next_step || '')
         )
-        await supabase.from('activity_attempts').insert({
-          user_id: user.id, activity_type: activity.activity_type, skill: activity.skill,
+        await persistActivityAttempt({
+          activity_type: activity.activity_type, skill: activity.skill,
           interest_context: profile.customInterest || profile.interests.join(', '),
           prompt: activity.prompt, learner_answer: answer, correction: evaluation, score,
         })
@@ -788,14 +864,13 @@ export default function App() {
     setActivityCorrect(correct)
     setActivityFeedback(correct ? 'Correto. ' + activity.explanation : 'Ainda não. Resposta correta: ' + activity.options[activity.correct] + '. ' + activity.explanation)
     if (supabase && user) {
-      const { error } = await supabase.from('activity_attempts').insert({
-        user_id: user.id, activity_type: 'multiple_choice', skill: activity.skill,
+      await persistActivityAttempt({
+        activity_type: 'multiple_choice', skill: activity.skill,
         interest_context: profile.customInterest || profile.interests.join(', '),
         prompt: activity.prompt, learner_answer: activity.options[answerIndex],
         correction: { correct_answer: activity.options[activity.correct], explanation: activity.explanation },
         score: correct ? 100 : 0,
       })
-      if (error) console.error('FALA activity attempt failed', error)
     }
     await recordSession('lesson', 180, correct ? 100 : 0, { title: activity.title, skill: activity.skill })
   }
@@ -808,6 +883,24 @@ export default function App() {
     setActivityAnswer('')
     setActivityFeedback('')
     setActivityCorrect(null)
+  }
+
+  const startRecommendedActivity = () => {
+    setActivity(recommendedActivity)
+    setActivityIndex(activityBank.indexOf(recommendedActivity))
+    setAnswerIndex(null)
+    setActivityAnswer('')
+    setActivityFeedback('')
+    setActivityCorrect(null)
+    setPage('learn')
+  }
+
+  const startVocabularyReview = () => {
+    setVocabMode('review')
+    setReviewIndex(0)
+    setShowReviewAnswer(false)
+    setReviewComplete(false)
+    setPage('vocabulary')
   }
 
   const updateTrackProgress = (trackId: string, next: TrackProgress) => {
@@ -882,7 +975,7 @@ export default function App() {
                 target_phrase: lesson.target_phrase, context: lesson.scenario,
               },
               profile,
-              learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] },
+              learningEvidence,
             },
           })
           if (error) throw error
@@ -894,8 +987,8 @@ export default function App() {
             return
           }
           score = evaluation.score
-          await supabase.from('activity_attempts').insert({
-            user_id: user.id, activity_type: lesson.kind, skill: lesson.kind === 'write' ? 'writing' : 'speaking',
+          await persistActivityAttempt({
+            activity_type: lesson.kind, skill: lesson.kind === 'write' ? 'writing' : 'speaking',
             interest_context: activeTrack.title, prompt: lesson.question,
             learner_answer: answer, correction: evaluation, score: evaluation.score,
           })
@@ -1007,7 +1100,7 @@ export default function App() {
     setPlanNotice('')
     try {
       const { data, error } = await supabase.functions.invoke('tutor', {
-        body: { mode: 'plan', profile, learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] } },
+        body: { mode: 'plan', profile, learningEvidence },
       })
       if (error) throw error
       const plan = data?.structured as LearningPlan | undefined
@@ -1076,7 +1169,7 @@ export default function App() {
       const result = data?.structured as MusicAnalysis | undefined
       if (!result || !Array.isArray(result.lines) || !Array.isArray(result.vocabulary)) throw new Error('A análise veio incompleta. Tente novamente com um trecho menor.')
       setMusicAnalysis(result)
-      await recordSession('music', 180, null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
+      await recordSession('listening', 180, null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
     } catch (error) {
       setMusicAnalysisNotice('Não foi possível analisar o trecho: ' + await functionErrorDetail(error))
     } finally {
@@ -1087,11 +1180,13 @@ export default function App() {
   const saveWordFromMusic = async (term: string, meaning: string, example: string) => {
     const updated = [term, ...words.filter(word => word.toLowerCase() !== term.toLowerCase())].slice(0, 100)
     const details = { ...wordDetails, [term]: { meaning, example } }
+    const nextReviewAt = new Date().toISOString()
     setWords(updated)
     setWordDetails(details)
+    setVocabSchedule(current => ({ ...current, [term]: { nextReviewAt, intervalDays: 1 } }))
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)); window.localStorage.setItem(VOCAB_DETAILS_KEY, JSON.stringify(details)) } catch { /* Local vocabulary is optional. */ }
     if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning }, { onConflict: 'user_id,term' })
+      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning, example_sentence: example, next_review_at: nextReviewAt, review_interval_days: 1 }, { onConflict: 'user_id,term' })
       if (error) setToast('Expressão salva neste aparelho, mas não sincronizou.')
       else setToast('Expressão adicionada ao seu vocabulário.')
     } else setToast('Expressão salva no vocabulário deste aparelho.')
@@ -1123,11 +1218,13 @@ export default function App() {
     const term = newWord.trim()
     if (!term) return
     const updated = [term, ...words.filter(word => word.toLowerCase() !== term.toLowerCase())].slice(0, 100)
+    const nextReviewAt = new Date().toISOString()
     setWords(updated)
+    setVocabSchedule(current => ({ ...current, [term]: { nextReviewAt, intervalDays: 1 } }))
     setNewWord('')
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
     if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '' }, { onConflict: 'user_id,term' })
+      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '', example_sentence: wordDetails[term]?.example || null, next_review_at: nextReviewAt, review_interval_days: 1 }, { onConflict: 'user_id,term' })
       if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
     }
   }
@@ -1135,11 +1232,39 @@ export default function App() {
   const deleteWord = async (term: string) => {
     const updated = words.filter(word => word !== term)
     setWords(updated)
+    setVocabSchedule(current => { const next = { ...current }; delete next[term]; return next })
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
     if (supabase && user) {
       const { error } = await supabase.from('vocabulary_items').delete().eq('user_id', user.id).eq('term', term)
       if (error) setToast('A palavra foi removida localmente, mas não sincronizou.')
     }
+  }
+
+  const gradeVocabularyReview = async (grade: 'again' | 'good' | 'easy') => {
+    const term = activeReviewTerm
+    if (!term) return
+    const currentInterval = Math.max(1, vocabSchedule[term]?.intervalDays || 1)
+    const nextInterval = grade === 'again' ? 1 : grade === 'good'
+      ? Math.min(365, Math.max(2, currentInterval * 2))
+      : Math.min(365, Math.max(4, currentInterval * 3))
+    const nextDate = new Date()
+    nextDate.setDate(nextDate.getDate() + nextInterval)
+    const nextReviewAt = nextDate.toISOString()
+    setVocabSchedule(current => ({ ...current, [term]: { nextReviewAt, intervalDays: nextInterval } }))
+    if (supabase && user) {
+      const { error } = await supabase.from('vocabulary_items').update({
+        next_review_at: nextReviewAt, review_interval_days: nextInterval,
+      }).eq('user_id', user.id).eq('term', term)
+      if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
+    }
+    const score = grade === 'again' ? 0 : grade === 'good' ? 85 : 100
+    await recordSession('vocabulary', 45, score, { term, recall: grade, next_review_days: nextInterval })
+    if (dueWords.length === 1) setReviewComplete(true)
+    else {
+      setReviewIndex(dueWords.length > 0 ? 0 : (reviewIndex + 1) % Math.max(1, words.length))
+      setShowReviewAnswer(false)
+    }
+    setToast(grade === 'again' ? 'Expressão programada para amanhã.' : `Próxima revisão em ${nextInterval} dias.`)
   }
 
   const analyzeWriting = async (event: FormEvent) => {
@@ -1383,9 +1508,14 @@ export default function App() {
               <article className="metric-card"><span className="metric-icon lilac"><Trophy size={18}/></span><div><small>APROVEITAMENTO</small><strong>{averageScore === null ? '—' : averageScore + '%'}</strong><span>{averageScore === null ? 'ainda sem dados suficientes' : 'média das tentativas'}</span></div></article>
             </div>
 
+            <section className="smart-study-card">
+              <div className="smart-study-main"><span className="eyebrow">{dueWords.length ? 'REVISÃO ESPAÇADA' : 'PRÓXIMO PASSO ADAPTATIVO'}</span><h2>{dueWords.length ? `${dueWords.length} expressões para revisar` : 'Continue de onde você parou.'}</h2><p>{dueWords.length ? 'Recupere o significado antes de olhar a resposta. O FALA ajusta o intervalo conforme sua lembrança.' : `A próxima atividade prioriza ${recommendedActivity.skill === 'speaking' ? 'conversação' : recommendedActivity.skill === 'writing' ? 'escrita' : 'compreensão'} e seu objetivo atual.`}</p><button className="button primary" onClick={dueWords.length ? startVocabularyReview : startRecommendedActivity}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button></div>
+              <aside className="smart-study-progress"><span>META DIÁRIA</span><strong>{todayPracticeMinutes} / {profile.minutes} min</strong><div className="smart-study-track"><i style={{ width: dailyGoalProgress + '%' }}/></div><small>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : `Faltam ${Math.max(0, profile.minutes - todayPracticeMinutes)} minutos de prática.`}</small></aside>
+            </section>
+
             <div className="section-heading"><div><span className="eyebrow">PLANO DE HOJE</span><h2>Um passo de cada vez</h2></div><span className="muted-caption">{profile.minutes} minutos sugeridos</span></div>
             <section className="today-card">
-              <div className="today-copy"><span className="today-tag"><Sparkles size={13}/> RECOMENDADO PARA VOCÊ</span><h3>{activity.title}</h3><p>{activity.context} Comece com uma atividade curta e pratique uma expressão que poderá usar fora do aplicativo.</p><div className="today-meta"><span><Clock3 size={14}/> 3 minutos</span><span><BookOpen size={14}/> {activity.skill === 'speaking' ? 'Conversação' : activity.skill === 'writing' ? 'Estrutura de frases' : 'Compreensão'}</span></div><button className="button light-button" onClick={() => setPage('learn')}>Abrir atividade <ArrowRight size={16}/></button></div>
+              <div className="today-copy"><span className="today-tag"><Sparkles size={13}/> RECOMENDADO PARA VOCÊ</span><h3>{recommendedActivity.title}</h3><p>{recommendedActivity.context} Pratique uma expressão útil para seu objetivo, com foco nas habilidades que ainda precisam de reforço.</p><div className="today-meta"><span><Clock3 size={14}/> 3–5 minutos</span><span><BookOpen size={14}/> {recommendedActivity.skill === 'speaking' ? 'Conversação' : recommendedActivity.skill === 'writing' ? 'Estrutura de frases' : 'Compreensão'}</span></div><button className="button light-button" onClick={startRecommendedActivity}>Abrir atividade <ArrowRight size={16}/></button></div>
               <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>LESSON 01</span></div>
             </section>
 
@@ -1566,13 +1696,13 @@ export default function App() {
 
           {page === 'vocabulary' && <section className="vocabulary-layout vocabulary-studio">
             <div className="page-heading"><span className="eyebrow">YOUR WORD BANK</span><h1>Transforme palavras <em>em repertório.</em></h1><p>Guarde expressões com significado, exemplos e áudio. Depois revise até conseguir lembrar sem olhar.</p></div>
-            <div className="vocab-summary-grid"><article><span>EXPRESSÕES SALVAS</span><strong>{words.length}</strong></article><article><span>REVISÃO DE HOJE</span><strong>{Math.min(words.length,5)}</strong></article><article><span>FORMATO</span><strong>Ativo</strong></article></div>
-            <div className="vocab-toolbar"><div className="vocab-tabs"><button className={vocabMode === 'library' ? 'active' : ''} onClick={() => setVocabMode('library')}>Meu vocabulário</button><button className={vocabMode === 'review' ? 'active' : ''} onClick={() => { setVocabMode('review'); setReviewIndex(0); setShowReviewAnswer(false) }}>Revisar cartões</button></div><form className="add-word-form" onSubmit={saveWord}><input value={newWord} onChange={event => setNewWord(event.target.value)} placeholder="Nova palavra ou expressão…"/><button className="button primary" type="submit" disabled={!newWord.trim()}><Plus size={16}/> Adicionar</button></form></div>
+            <div className="vocab-summary-grid"><article><span>EXPRESSÕES SALVAS</span><strong>{words.length}</strong></article><article><span>REVISÃO DE HOJE</span><strong>{dueWords.length}</strong></article><article><span>FORMATO</span><strong>Espaçado</strong></article></div>
+            <div className="vocab-toolbar"><div className="vocab-tabs"><button className={vocabMode === 'library' ? 'active' : ''} onClick={() => setVocabMode('library')}>Meu vocabulário</button><button className={vocabMode === 'review' ? 'active' : ''} onClick={() => { setVocabMode('review'); setReviewIndex(0); setShowReviewAnswer(false); setReviewComplete(false) }}>Revisar cartões</button></div><form className="add-word-form" onSubmit={saveWord}><input value={newWord} onChange={event => setNewWord(event.target.value)} placeholder="Nova palavra ou expressão…"/><button className="button primary" type="submit" disabled={!newWord.trim()}><Plus size={16}/> Adicionar</button></form></div>
             {vocabMode === 'library' ? <>
               <div className="vocab-filter"><Search size={16}/><input value={vocabSearch} onChange={event => setVocabSearch(event.target.value)} placeholder="Filtrar palavras salvas…"/></div>
-              <div className="vocab-list">{words.filter(word => word.toLowerCase().includes(vocabSearch.toLowerCase())).map((word,index)=><article className="vocab-item vocabulary-rich-card" key={word}><span className="vocab-number">{String(index+1).padStart(2,'0')}</span><div><strong>{word}</strong><small>{wordDetails[word]?.meaning || (word === 'actually' ? 'na verdade · de fato' : word === 'figure out' ? 'descobrir · entender' : word === 'I am looking forward to' ? 'estou ansioso por' : 'Adicione significado ao revisar')}</small>{wordDetails[word]?.example && <p>{wordDetails[word].example}</p>}</div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setVocabMode('review'); setReviewIndex(Math.max(0,words.indexOf(word))); setShowReviewAnswer(true) }} aria-label="Revisar esta palavra"><BookOpen size={16}/></button><button className="remove-word" onClick={() => void deleteWord(word)} aria-label={'Remover '+word}><Trash2 size={15}/></button></article>)}</div>
+              <div className="vocab-list">{words.filter(word => word.toLowerCase().includes(vocabSearch.toLowerCase())).map((word,index)=><article className="vocab-item vocabulary-rich-card" key={word}><span className="vocab-number">{String(index+1).padStart(2,'0')}</span><div><strong>{word}</strong><small>{wordDetails[word]?.meaning || (word === 'actually' ? 'na verdade · de fato' : word === 'figure out' ? 'descobrir · entender' : word === 'I am looking forward to' ? 'estou ansioso por' : 'Adicione significado ao revisar')}</small>{wordDetails[word]?.example && <p>{wordDetails[word].example}</p>}</div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setVocabMode('review'); setReviewIndex(Math.max(0,reviewQueue.indexOf(word))); setShowReviewAnswer(true); setReviewComplete(false) }} aria-label="Revisar esta palavra"><BookOpen size={16}/></button><button className="remove-word" onClick={() => void deleteWord(word)} aria-label={'Remover '+word}><Trash2 size={15}/></button></article>)}</div>
               {words.length===0 && <div className="empty-state"><Bookmark size={26}/><strong>Seu caderno ainda está vazio.</strong><p>Adicione palavras novas durante conversas, leituras ou músicas.</p></div>}
-            </> : <div className="vocab-review-stage">{words.length ? <><span className="eyebrow">CARTÃO {Math.min(reviewIndex+1,words.length)} DE {words.length}</span><strong className="review-term">{words[reviewIndex % words.length]}</strong>{showReviewAnswer ? <div className="review-answer"><p>{wordDetails[words[reviewIndex % words.length]]?.meaning || 'Tente criar seu próprio significado e um exemplo.'}</p><small>{wordDetails[words[reviewIndex % words.length]]?.example || 'Use a expressão em uma frase sobre sua rotina.'}</small><button className="button primary" onClick={() => { setReviewIndex((reviewIndex+1)%words.length); setShowReviewAnswer(false) }}>Próximo cartão <ArrowRight size={15}/></button></div> : <button className="button primary" onClick={() => setShowReviewAnswer(true)}>Revelar significado <Eye size={15}/></button>}</> : <p>Adicione palavras para começar a revisão.</p>}</div>}
+            </> : <div className="vocab-review-stage">{reviewComplete ? <div className="review-complete"><CheckCircle2 size={28}/><strong>Revisão concluída.</strong><p>Você zerou a fila de expressões pendentes de hoje. As próximas revisões já estão programadas.</p><button className="button primary" onClick={() => setVocabMode('library')}>Voltar ao vocabulário</button></div> : reviewQueue.length ? <><span className="eyebrow">{dueWords.length ? `${Math.min(reviewIndex + 1, dueWords.length)} DE ${dueWords.length} PENDENTES` : 'REVISÃO EXTRA'}</span><strong className="review-term">{activeReviewTerm}</strong>{showReviewAnswer ? <div className="review-answer"><p>{wordDetails[activeReviewTerm]?.meaning || 'Tente criar seu próprio significado e um exemplo.'}</p><small>{wordDetails[activeReviewTerm]?.example || 'Use a expressão em uma frase sobre sua rotina.'}</small><div className="review-rating-actions"><button onClick={() => void gradeVocabularyReview('again')}>Não lembrei<small>Rever em 1 dia</small></button><button onClick={() => void gradeVocabularyReview('good')}>Lembrei<small>Intervalo maior</small></button><button onClick={() => void gradeVocabularyReview('easy')}>Fácil<small>Avançar mais</small></button></div></div> : <button className="button primary" onClick={() => setShowReviewAnswer(true)}>Revelar significado <Eye size={15}/></button>}</> : <p>Adicione palavras para começar a revisão.</p>}</div>}
             <p className="vocab-footer-note">Dica: tente lembrar o significado antes de revelar o cartão. Depois fale uma frase em voz alta usando a expressão.</p>
           </section>}
 

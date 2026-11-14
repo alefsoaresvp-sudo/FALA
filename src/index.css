@@ -1613,3 +1613,94 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .mobile-more-actions { gap:6px; }
   .mobile-more-action { font-size:10px; }
 }
+
+
+/* FALA v5 — adaptive study dashboard and spaced-repetition controls */
+.smart-study-card {
+  display:grid;
+  grid-template-columns:minmax(0,1.45fr) minmax(220px,.75fr);
+  align-items:center;
+  gap:24px;
+  padding:22px 24px;
+  margin:18px 0 24px;
+  border:1px solid #cfe1f4;
+  border-radius:20px;
+  background:linear-gradient(115deg,#edf6ff 0%,#fff 75%);
+  box-shadow:0 12px 30px rgba(34,83,133,.07);
+}
+.smart-study-main { display:grid; justify-items:start; gap:9px; }
+.smart-study-main h2 { margin:0; color:#173b61; font:800 21px Manrope,sans-serif; letter-spacing:-.6px; }
+.smart-study-main p { max-width:620px; margin:0 0 5px; color:#607991; font-size:12px; line-height:1.6; }
+.smart-study-main .eyebrow { color:#5483b1; }
+.smart-study-progress {
+  display:grid;
+  gap:9px;
+  padding:16px;
+  border:1px solid #d9e8f7;
+  border-radius:15px;
+  background:rgba(255,255,255,.76);
+}
+.smart-study-progress > span { color:#7390ad; font-size:9px; font-weight:850; letter-spacing:1.1px; }
+.smart-study-progress > strong { color:#1e4d7a; font:800 18px Manrope,sans-serif; }
+.smart-study-progress > small { color:#7188a0; font-size:10px; line-height:1.45; }
+.smart-study-track { height:8px; overflow:hidden; border-radius:10px; background:#e4effa; }
+.smart-study-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#84b9ed,#3e83c5); transition:width .25s ease; }
+.review-rating-actions {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:9px;
+  margin-top:14px;
+}
+.review-rating-actions button {
+  min-width:0;
+  min-height:66px;
+  display:grid;
+  align-content:center;
+  gap:5px;
+  padding:10px 8px;
+  border:1px solid #c9dff3;
+  border-radius:13px;
+  color:#245b91;
+  background:#f2f8ff;
+  font-size:11px;
+  font-weight:800;
+}
+.review-rating-actions button:active { transform:translateY(1px); background:#e4f1ff; }
+.review-rating-actions small { color:#7190ae; font-size:9px; font-weight:600; }
+.review-complete { display:grid; justify-items:center; gap:11px; text-align:center; }
+.review-complete > svg { color:#4383be; }
+.review-complete > strong { color:#1e4d7a; font:800 21px Manrope,sans-serif; }
+.review-complete > p { max-width:420px; color:#6e849b; font-size:12px; line-height:1.6; }
+
+:root[data-theme="dark"] .smart-study-card {
+  border-color:#294766;
+  background:linear-gradient(115deg,#192f49 0%,#17283e 78%);
+  box-shadow:0 12px 30px rgba(0,0,0,.2);
+}
+:root[data-theme="dark"] .smart-study-main h2,
+:root[data-theme="dark"] .smart-study-progress > strong,
+:root[data-theme="dark"] .review-complete > strong { color:#d6eaff; }
+:root[data-theme="dark"] .smart-study-main p,
+:root[data-theme="dark"] .smart-study-progress > small,
+:root[data-theme="dark"] .review-complete > p { color:#a4bad1; }
+:root[data-theme="dark"] .smart-study-main .eyebrow,
+:root[data-theme="dark"] .smart-study-progress > span { color:#91bce8; }
+:root[data-theme="dark"] .smart-study-progress { border-color:#345372; background:rgba(25,46,69,.78); }
+:root[data-theme="dark"] .smart-study-track { background:#29415c; }
+:root[data-theme="dark"] .review-rating-actions button {
+  color:#d1e8ff; border-color:#365b7e; background:#203b58;
+}
+:root[data-theme="dark"] .review-rating-actions button:active { background:#294b70; }
+:root[data-theme="dark"] .review-rating-actions small { color:#a0c2e2; }
+
+@media (max-width:700px) {
+  .smart-study-card { grid-template-columns:1fr; gap:16px; padding:18px; margin:14px 0 22px; border-radius:18px; }
+  .smart-study-main h2 { font-size:19px; line-height:1.2; }
+  .smart-study-main p { font-size:12px; }
+  .smart-study-progress { gap:8px; padding:13px; }
+  .smart-study-progress > strong { font-size:17px; }
+  .review-rating-actions { gap:6px; }
+  .review-rating-actions button { min-height:62px; padding:9px 5px; font-size:10px; }
+  .review-rating-actions small { font-size:8px; }
+  .review-complete > strong { font-size:19px; }
+}
