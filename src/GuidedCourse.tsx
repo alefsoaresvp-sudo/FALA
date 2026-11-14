@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ArrowRight, BookOpen, Check, CheckCircle2, CircleHelp, Headphones,
+  ArrowRight, BookOpen, Check, CheckCircle2, CircleHelp,
   LockKeyhole, MessageCircle, Mic, Play, RotateCcw, Sparkles, Star, Volume2,
   X, Zap,
 } from 'lucide-react'
@@ -194,6 +194,12 @@ const units: Unit[] = [
         objective: 'Demonstrar domínio dos primeiros fundamentos.',
         lessonTip: 'Faça o teste sem consultar as respostas. Você precisa acertar pelo menos 70% para liberar a próxima unidade. Se não atingir a nota, poderá tentar novamente depois de revisar.',
         pattern: 'Meta de aprovação: 70% de acertos',
+        teach: [
+          { term: 'Hello', meaning: 'olá', example: 'Hello! = Olá!' },
+          { term: 'five', meaning: 'cinco', example: 'Five books = Cinco livros.' },
+          { term: 'she is', meaning: 'ela é / está', example: 'She is happy. = Ela está feliz.' },
+          { term: 'an orange', meaning: 'uma laranja', example: 'An orange is a fruit. = Uma laranja é uma fruta.' },
+        ],
         isCheckpoint: true,
         exercises: [
           { kind: 'choice', prompt: 'Como se diz “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
