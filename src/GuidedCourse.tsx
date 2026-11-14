@@ -1261,7 +1261,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round(((step + 1) / (currentLesson.exercises.length + 1)) * 100)
+    const progressPercent = Math.round(10 + ((step + 1) / currentLesson.exercises.length) * 90)
     const hintText = currentExercise.hint ?? (currentExercise.kind === 'choice'
       ? 'Traduza as opções e elimine as que não combinam com a pergunta.'
       : currentExercise.kind === 'build'
@@ -1280,7 +1280,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })); resetExercise() }} aria-label="Sair da aula"><X size={19}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '14%' }}/></div>
+          <div className="lesson-progress-track"><i style={{ width: '10%' }}/></div>
           <span>ETAPA 1/2</span>
         </div>
         <div className="lesson-context">
