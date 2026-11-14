@@ -725,12 +725,13 @@ export default function App() {
           { user_id: user.id, role: 'assistant', content: reply, metadata: data?.correction ? { correction: data.correction } : {} },
         ])
         if (data?.learning_insight?.observation && data?.learning_insight?.recommendation) {
-          await supabase.from('learner_insights').insert({
+          const { data: savedInsight, error: insightError } = await supabase.from('learner_insights').insert({
             user_id: user.id, skill: data.learning_insight.skill || 'speaking',
             observation: data.learning_insight.observation, recommendation: data.learning_insight.recommendation,
             confidence: Math.max(0, Math.min(1, Number(data.learning_insight.confidence) || 0)),
             evidence: { source: 'conversation' },
-          })
+          }).select('skill,observation,recommendation,confidence').single()
+          if (!insightError && savedInsight) setLearnerInsights(current => [savedInsight as LearnerInsight, ...current].slice(0, 5))
         }
       } else {
         await new Promise(resolve => window.setTimeout(resolve, 500))
