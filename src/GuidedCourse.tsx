@@ -610,7 +610,7 @@ const units: Unit[] = [
         ],
         exercises: [
           { kind: 'choice', prompt: 'Complete: “They ___ already finished.”', options: ['has', 'have', 'are'], answer: 'have', explanation: 'Com they usamos have + particípio.' },
-          { kind: 'build', prompt: 'Monte: “Eu nunca estive em Nova York.”', tokens: ['York.', 'New', 'in', 'been', 'never', 'have', 'I'], answer: 'I have never been in New York.', explanation: 'I + have + never + been + in New York. Em muitos contextos, também se diz been to New York.' },
+          { kind: 'build', prompt: 'Monte: “Eu nunca estive em Nova York.”', tokens: ['York.', 'New', 'in', 'been', 'never', 'have', 'I'], answer: 'I have never been to New York.', explanation: 'I + have + never + been + in New York. Em muitos contextos, também se diz been to New York.' },
           { kind: 'type', prompt: 'Escreva: “Você deveria descansar porque está cansado.”', answer: 'You should rest because you are tired.', explanation: 'Should + verbo base; because introduz a razão.' },
           { kind: 'choice', prompt: 'Qual frase expressa contraste?', options: ['I stayed because it rained.', 'Although it rained, I went out.', 'I went out to buy food.'], answer: 'Although it rained, I went out.', explanation: 'Although indica que a segunda ação ocorreu apesar da primeira condição.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'Have you ever worked with an international team?', explanation: 'Have you ever + particípio forma uma pergunta sobre experiência.' },
@@ -768,6 +768,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [typedAnswer, setTypedAnswer] = useState('')
   const [checked, setChecked] = useState<boolean | null>(null)
   const [mistakes, setMistakes] = useState(0)
+  const [checkpointNotice, setCheckpointNotice] = useState('')
   const [audioNotice, setAudioNotice] = useState('')
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
@@ -808,6 +809,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setActiveLessonId(lessonId)
     setStep(0)
     setMistakes(0)
+    setCheckpointNotice('')
     resetExercise()
     setProgress(current => ({ ...current, activeLessonId: lessonId }))
   }
@@ -839,6 +841,14 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       return
     }
     const score = Math.max(0, Math.round((currentLesson.exercises.length - mistakes) / currentLesson.exercises.length * 100))
+    if (currentLesson.isCheckpoint && score < 70) {
+      setCheckpointNotice('Você acertou ' + score + '%. Para concluir esta unidade, precisa de pelo menos 70%. Revise as explicações e tente novamente.')
+      setStep(0)
+      setMistakes(0)
+      resetExercise()
+      return
+    }
+    setCheckpointNotice('')
     setProgress(current => ({
       ...current,
       completedLessonIds: current.completedLessonIds.includes(currentLesson.id)
@@ -947,6 +957,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           </div>
           <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.pattern}</span></div>
         </article>
+        {checkpointNotice && <div className="checkpoint-retry-notice"><strong>Você ainda não passou no teste.</strong><span>{checkpointNotice}</span></div>}
         <article className="lesson-exercise-card">
           <div className="exercise-card-topline"><span>AGORA É SUA VEZ</span><span>{currentExercise.kind === 'choice' ? 'ESCOLHA' : currentExercise.kind === 'build' ? 'MONTE A FRASE' : currentExercise.kind === 'type' ? 'ESCRITA' : currentExercise.kind === 'listen' ? 'ESCUTA' : 'FALA'}</span></div>
           <h2>{currentExercise.prompt}</h2>
