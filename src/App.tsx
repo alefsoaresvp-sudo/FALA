@@ -131,6 +131,32 @@ const navItems = [
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
 ]
 
+function LumiPortrait() {
+  return <svg className="lumi-portrait" viewBox="0 0 112 112" role="img" aria-label="Personagem Lumi">
+    <circle cx="56" cy="56" r="55" fill="#eaf4ed"/>
+    <path d="M17 106c2-20 15-31 39-31s38 11 40 31" fill="#27664e"/>
+    <path d="M43 70h26v17c-5 6-21 6-26 0z" fill="#dca887"/>
+    <path d="M25 50c-1-25 12-39 31-39 22 0 34 15 31 42l-3 25c-4 13-16 21-29 21S29 90 25 76z" fill="#352c2a"/>
+    <ellipse cx="56" cy="54" rx="27" ry="33" fill="#e9b995"/>
+    <path d="M29 49c2-21 13-34 29-34 17 0 28 12 28 30-7-1-13-5-17-13-8 8-22 13-40 13z" fill="#352c2a"/>
+    <path d="M31 42c-7 15-6 36-2 45-9-7-13-19-11-31 1-16 9-29 20-36z" fill="#352c2a"/>
+    <path d="M83 39c8 15 8 33 1 47 11-7 16-21 13-35-2-13-8-23-18-29z" fill="#352c2a"/>
+    <path d="M18 49c-1-20 15-39 38-39 24 0 38 16 38 39" fill="none" stroke="#247253" strokeWidth="6" strokeLinecap="round"/>
+    <rect x="15" y="45" width="12" height="25" rx="6" fill="#247253"/>
+    <rect x="85" y="45" width="12" height="25" rx="6" fill="#247253"/>
+    <path d="M42 53c3-3 8-3 11 0M60 53c3-3 8-3 11 0" fill="none" stroke="#5b3b31" strokeWidth="2.5" strokeLinecap="round"/>
+    <ellipse cx="47" cy="59" rx="2.3" ry="3" fill="#302b2a"/>
+    <ellipse cx="65" cy="59" rx="2.3" ry="3" fill="#302b2a"/>
+    <path d="M54 63l-2 6 5 1" fill="none" stroke="#c98970" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M48 75c5 4 12 4 17-1" fill="none" stroke="#a64f50" strokeWidth="2.4" strokeLinecap="round"/>
+    <circle cx="39" cy="67" r="4" fill="#df8d81" opacity=".35"/>
+    <circle cx="73" cy="67" r="4" fill="#df8d81" opacity=".35"/>
+    <path d="M34 105c3-11 11-17 22-17s20 6 23 17" fill="#f8fbf8"/>
+    <path d="M56 90l-7 9 7 7 7-7z" fill="#d7eadd"/>
+    <path d="M88 17l2.2 5.8L96 25l-5.8 2.2L88 33l-2.2-5.8L80 25l5.8-2.2z" fill="#d49b5f"/>
+  </svg>
+}
+
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [user, setUser] = useState<User | null>(null)
@@ -1305,7 +1331,7 @@ export default function App() {
           {page === 'lumi' && <section className="lumi-layout">
             <div className="page-heading"><span className="eyebrow">TUTORA DE INGLÊS · LUMI</span><h1>Converse para evoluir.</h1><p>Use o inglês no seu nível. A Lumi prioriza comunicação e corrige um ponto importante por vez.</p></div>
             <section className="voice-session-card">
-              <div className={'voice-lumi-orb ' + voiceStatus}><span>L</span><i/></div>
+              <div className={'voice-lumi-orb ' + voiceStatus}><LumiPortrait/><i/></div>
               <div className="voice-session-copy">
                 <span className="eyebrow">PERSONAGEM DE VOZ · ELEVENLABS</span>
                 <h2>Converse com a Lumi.</h2>
