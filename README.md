@@ -45,11 +45,13 @@ supabase --help
 supabase link --project-ref SEU_PROJECT_REF
 supabase functions deploy tutor
 supabase functions deploy transcribe
+supabase functions deploy lumi-session
 ```
 
 5. No Supabase Dashboard, configure **Edge Function Secrets**:
    - `OPENAI_API_KEY`: chave nova, nunca a chave que foi exposta em uma conversa.
    - `OPENAI_MODEL`: `gpt-6-luna` (opcional; é o padrão do código).
+   - `ELEVENLABS_API_KEY`: chave da ElevenLabs usada apenas pela função `lumi-session` para emitir tokens temporários de conversa por voz. Nunca use `VITE_ELEVENLABS_API_KEY` nem coloque essa chave no navegador.
 
 A chave OpenAI existe somente no backend. Nunca use `VITE_OPENAI_API_KEY`, `service_role` ou qualquer chave secreta no navegador.
 
@@ -78,6 +80,7 @@ Abra o endereço publicado no Chrome/Edge do celular e use **Instalar app** ou *
 - Frontend: React 19 + TypeScript + Vite.
 - Dados e autenticação: Supabase Auth + Postgres + RLS.
 - Tutor: OpenAI Responses API dentro de uma Supabase Edge Function autenticada.
+- Lumi por voz: agente Conversational AI da ElevenLabs com WebRTC e token emitido pela Edge Function autenticada `lumi-session`; a chave persistente fica somente nos secrets do Supabase.
 - Transcrição: `gpt-transcribe` dentro de uma Supabase Edge Function autenticada.
 - Fonte e publicação: GitHub + GitHub Actions + GitHub Pages.
 
