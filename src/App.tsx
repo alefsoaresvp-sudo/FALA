@@ -42,6 +42,7 @@ type LearningActivity = {
 
 const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
+const SESSIONS_KEY = 'fala-local-sessions-v1'
 const initialProfile: Profile = {
   name: '', goal: 'conversation', level: 'unsure', interests: [], customInterest: '',
   focuses: ['speaking', 'listening'], minutes: 10, accent: 'us', style: 'mixed',
@@ -143,7 +144,7 @@ export default function App() {
   const [recordingNotice, setRecordingNotice] = useState('')
   const [transcript, setTranscript] = useState('')
   const [audioUrl, setAudioUrl] = useState('')
-  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -191,7 +192,7 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !user) {
       setCloudLoading(false)
-      setSessions([])
+      setSessions(readLocal(SESSIONS_KEY, []))
       setChat(initialChat)
       return
     }
@@ -350,7 +351,15 @@ export default function App() {
   }
 
   const recordSession = async (type: string, seconds: number, score: number | null = null, details: Record<string, unknown> = {}) => {
-    if (!supabase || !user) return
+    if (!supabase || !user) {
+      const localEntry: SessionRow = { id: 'local-' + Date.now(), activity_type: type, duration_seconds: seconds, score, completed_at: new Date().toISOString() }
+      setSessions(current => {
+        const updated = [localEntry, ...current].slice(0, 100)
+        try { window.localStorage.setItem(SESSIONS_KEY, JSON.stringify(updated)) } catch { /* local progress is optional */ }
+        return updated
+      })
+      return
+    }
     const { data, error } = await supabase.from('learning_sessions').insert({
       user_id: user.id, activity_type: type, duration_seconds: seconds, score, details,
     }).select('id,activity_type,duration_seconds,score,completed_at').single()
@@ -424,8 +433,8 @@ export default function App() {
         score: correct ? 100 : 0,
       })
       if (error) console.error('FALA activity attempt failed', error)
-      await recordSession('lesson', 180, correct ? 100 : 0, { title: activity.title, skill: activity.skill })
     }
+    await recordSession('lesson', 180, correct ? 100 : 0, { title: activity.title, skill: activity.skill })
   }
 
   const nextActivity = () => {
@@ -472,11 +481,11 @@ export default function App() {
         if (error) throw error
         if (typeof data?.reply !== 'string' || !data.reply) throw new Error('A Lumi não retornou uma análise.')
         setWritingFeedback(data.reply)
-        await recordSession('writing', 240, null, { word_count: writingText.trim().split(/\s+/).length })
       } else {
         const count = writingText.trim().split(/\s+/).filter(Boolean).length
         setWritingFeedback('Você escreveu ' + count + ' palavras. Revise se cada frase tem sujeito, verbo e pontuação. No modo demonstração, esta tela não atribui nota nem inventa correções; entre para receber a análise da Lumi.')
       }
+      await recordSession('writing', 240, null, { word_count: writingText.trim().split(/\s+/).length })
     } catch (error) {
       setWritingFeedback('Não foi possível analisar: ' + friendlyError(error))
     } finally {
@@ -520,6 +529,7 @@ export default function App() {
         }
         if (!supabase || !user) {
           setRecordingNotice('Gravação disponível neste aparelho. Entre na conta para solicitar a transcrição com a Lumi.')
+          await recordSession('speaking', 30, null, { source: 'local_recording' })
           return
         }
         setRecordingNotice('Enviando o áudio para transcrição...')
