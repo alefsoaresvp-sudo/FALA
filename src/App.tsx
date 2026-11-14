@@ -1347,9 +1347,9 @@ export default function App() {
             </section>
             {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
             <div className="chat-panel">
-              <div className="chat-header"><div className="lumi-avatar">L<span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
+              <div className="chat-header"><div className="lumi-avatar"><LumiPortrait/><span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
-                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? 'L' : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <small className="correction-note">{item.note}</small>}</div></div>)}
+                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? <LumiPortrait/> : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <small className="correction-note">{item.note}</small>}</div></div>)}
                 {chatBusy && <div className="chat-row assistant"><div className="chat-avatar">L</div><div className="chat-bubble typing"><i/><i/><i/></div></div>}
                 <div ref={chatEndRef}/>
               </div>
