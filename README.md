@@ -7,9 +7,9 @@ O FALA é um ambiente de aprendizagem de inglês com uma tutora virtual chamada 
 - **Acesso demo-first:** o conteúdo básico abre sem cadastro; autenticação Supabase é opcional para sincronizar dados e acessar funções de IA.
 - **Perfil completo:** objetivo, nível estimado, interesses, habilidades prioritárias, dificuldades, contexto de uso, prazo, minutos por dia, sotaque e estilo de correção.
 - **Lumi por texto:** conversa contextual, correção curta e explicações em português quando necessário. Requer login e a Edge Function `tutor`.
-- **Lumi por voz:** personagem de voz com conversa em tempo real via ElevenLabs Conversational AI e WebRTC. Requer login, microfone, HTTPS e a Edge Function `lumi-session`.
+- **Lumi por voz:** personagem de voz com avatar ilustrado próprio no frontend e conversa em tempo real via ElevenLabs Conversational AI e WebRTC. Requer login, microfone, HTTPS e a Edge Function `lumi-session`.
 - **Plano adaptativo:** geração e salvamento do plano individual na tabela `learning_plans`. A geração com IA exige login e `OPENAI_API_KEY`.
-- **Aprender:** microlições introdutórias com expressão-chave, tradução, alternativas e feedback.
+- **Aprender:** microlições introdutórias e atividades adaptativas geradas pela Lumi; aceita múltipla escolha e respostas abertas com avaliação de IA.
 - **Trilhas:** seis trilhas com situações práticas, etapas sequenciais e mini prova final. A aprovação exige 70%. O progresso usa `track_progress`.
 - **Music Lab:** versos originais do FALA, vocabulário, tradução, leitura por voz e recuperação ativa. A voz das linhas usa Speech Synthesis do navegador; não é áudio cantado.
 - **Escrita:** revisão de texto com a Lumi e envio opcional de foto de exercício, com compressão no navegador antes do envio.
