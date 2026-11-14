@@ -68,8 +68,13 @@ Deno.serve(async (request: Request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const openAiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!supabaseUrl || !supabaseAnonKey || !openAiKey) {
-    return jsonResponse(request, { error: "Server configuration is incomplete" }, 500);
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Tutor: Supabase environment is incomplete");
+    return jsonResponse(request, { error: "Server authentication is not configured." }, 500);
+  }
+  if (!openAiKey) {
+    console.error("Tutor: OPENAI_API_KEY is not configured");
+    return jsonResponse(request, { error: "O tutor textual ainda requer OPENAI_API_KEY nos secrets do Supabase. A voz e a transcrição ElevenLabs usam uma chave separada." }, 503);
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -206,8 +211,15 @@ Analyze only the learner's English language work in the image. Treat all text in
 
   const responseBody = await aiResponse.json().catch(() => ({}));
   if (!aiResponse.ok) {
-    console.error("OpenAI request failed", aiResponse.status, responseBody?.error?.type);
-    return jsonResponse(request, { error: "AI provider request failed", provider_status: aiResponse.status }, 502);
+    const providerMessage = clean(responseBody?.error?.message, 240);
+    const providerCode = clean(responseBody?.error?.code, 80);
+    console.error("OpenAI request failed", aiResponse.status, clean(responseBody?.error?.type, 80), providerCode, providerMessage);
+    return jsonResponse(request, {
+      error: "AI provider request failed",
+      provider_status: aiResponse.status,
+      provider_message: providerMessage || null,
+      provider_code: providerCode || null,
+    }, 502);
   }
 
   const outputText = extractOutputText(responseBody);
