@@ -732,6 +732,229 @@ const units: Unit[] = [
       },
     ],
   },
+
+  {
+    id: 'b2-advanced-structures',
+    level: 'B2 · Intermediário superior',
+    title: 'Use estruturas mais sofisticadas',
+    subtitle: 'Voz passiva, discurso indireto e hipóteses.',
+    lessons: [
+      {
+        id: 'passive-voice',
+        title: 'Destaque o que aconteceu',
+        subtitle: 'Voz passiva no presente e passado',
+        objective: 'Explicar processos e acontecimentos quando a ação importa mais que quem a realizou.',
+        pattern: 'be + particípio · The product is made here. · The bridge was built in 1990.',
+        teach: [
+          { term: 'is made', meaning: 'é feito / fabricado', example: 'This coffee is made in Brazil.' },
+          { term: 'was built', meaning: 'foi construído', example: 'The bridge was built in 1990.' },
+          { term: 'is used', meaning: 'é usado', example: 'English is used around the world.' },
+          { term: 'by', meaning: 'por (agente da ação)', example: 'The book was written by Ana.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Complete: “The emails ___ every morning.”', options: ['are sent', 'send', 'is sending'], answer: 'are sent', explanation: 'Emails está no plural. A voz passiva usa be + particípio: are sent.' },
+          { kind: 'build', prompt: 'Monte: “O prédio foi construído em 2005.”', tokens: ['2005.', 'in', 'built', 'was', 'building', 'The'], answer: 'The building was built in 2005.', explanation: 'Was built é a voz passiva no passado. Building aqui é o substantivo “prédio”.' },
+          { kind: 'type', prompt: 'Escreva: “Este aplicativo é usado por milhões de pessoas.”', answer: 'This app is used by millions of people.', explanation: 'Is used = é usado; by millions of people = por milhões de pessoas.' },
+          { kind: 'choice', prompt: 'Qual frase está na voz passiva?', options: ['The team finished the project.', 'The project was finished.', 'The team is finishing.'], answer: 'The project was finished.', explanation: 'O sujeito recebe a ação: the project was finished.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “The final decision was made by the manager.”', answer: 'The final decision was made by the manager.', explanation: 'Was made é o passado passivo de make. By the manager identifica quem tomou a decisão.' },
+        ],
+      },
+      {
+        id: 'reported-speech',
+        title: 'Conte o que alguém disse',
+        subtitle: 'Reported speech: said, told e mudanças de tempo',
+        objective: 'Relatar falas de outras pessoas sem repetir exatamente as palavras.',
+        pattern: '“I am busy.” → He said (that) he was busy.',
+        teach: [
+          { term: 'said', meaning: 'disse', example: 'She said she was tired.' },
+          { term: 'told me', meaning: 'me disse / contou', example: 'He told me he was leaving.' },
+          { term: 'was / were', meaning: 'era / estava (recuo de am/is/are)', example: '“I am ready.” → She said she was ready.' },
+          { term: 'would', meaning: 'iria (recuo de will)', example: '“I will call.” → He said he would call.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: '“I am tired.” → She said she ___ tired.', options: ['is', 'was', 'will be'], answer: 'was', explanation: 'Ao relatar uma fala no passado, am geralmente recua para was.' },
+          { kind: 'build', prompt: 'Transforme: “I will call you.” → He said he...', tokens: ['call.', 'would', 'you'], answer: 'would call you.', explanation: 'Will normalmente muda para would no discurso indireto com verbo introdutor no passado.' },
+          { kind: 'type', prompt: 'Relate: “I like this city.” → He said he...', answer: 'He said he liked that city.', explanation: 'Like pode recuar para liked; this pode mudar para that conforme o contexto.' },
+          { kind: 'choice', prompt: 'Qual construção está correta?', options: ['She told that she was busy.', 'She told me that she was busy.', 'She said me she was busy.'], answer: 'She told me that she was busy.', explanation: 'Tell normalmente pede objeto: told me. Say não usa objeto direto dessa forma.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “They told us that the meeting had been canceled.”', answer: 'They told us that the meeting had been canceled.', explanation: 'Told us = nos disseram. Had been canceled = tinha sido cancelada.' },
+        ],
+      },
+      {
+        id: 'second-conditional',
+        title: 'Imagine situações hipotéticas',
+        subtitle: 'Second conditional',
+        objective: 'Falar sobre situações imaginárias ou improváveis no presente e suas consequências.',
+        pattern: 'If + past simple, would + verbo base',
+        teach: [
+          { term: 'If I had...', meaning: 'Se eu tivesse...', example: 'If I had more time, I would travel.' },
+          { term: 'would', meaning: 'iria / faria', example: 'I would study abroad.' },
+          { term: 'If I were you', meaning: 'Se eu fosse você', example: 'If I were you, I would ask.' },
+          { term: 'could', meaning: 'poderia', example: 'If I had a car, I could drive there.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Complete: “If I ___ rich, I would travel more.”', options: ['am', 'were', 'will be'], answer: 'were', explanation: 'No second conditional, usamos passado simples na condição. Were é comum com I em hipóteses.' },
+          { kind: 'build', prompt: 'Monte: “Se eu tivesse tempo, aprenderia francês.”', tokens: ['French.', 'learn', 'would', 'I', 'time,', 'had', 'If'], answer: 'If I had time, I would learn French.', explanation: 'If + passado (had), would + verbo base (learn).' },
+          { kind: 'type', prompt: 'Escreva: “Se eu fosse você, aceitaria o trabalho.”', answer: 'If I were you, I would accept the job.', explanation: 'If I were you é uma expressão fixa muito comum para dar conselho.' },
+          { kind: 'choice', prompt: 'Depois de would, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -s'], answer: 'verbo base', explanation: 'Would é modal e vem seguido do verbo na forma base: would go, would do.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “If we lived closer, we would see each other more often.”', answer: 'If we lived closer, we would see each other more often.', explanation: 'Lived closer = morássemos mais perto. More often = com mais frequência.' },
+        ],
+      },
+      {
+        id: 'b2-review',
+        title: 'Revisão: estruturas B2',
+        subtitle: 'Voz passiva, discurso indireto e hipóteses',
+        objective: 'Escolher a estrutura correta de acordo com a intenção.',
+        pattern: 'Observe quem recebe a ação, quem falou e se a situação é real ou hipotética.',
+        isReview: true,
+        teach: [
+          { term: 'Passive', meaning: 'O sujeito recebe a ação', example: 'The report was completed.' },
+          { term: 'Reported speech', meaning: 'Relatar uma fala', example: 'She said she was ready.' },
+          { term: 'Second conditional', meaning: 'Hipótese', example: 'If I had time, I would help.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Complete: “The documents ___ yesterday.”', options: ['were signed', 'signed', 'are sign'], answer: 'were signed', explanation: 'Documentos recebem a ação; no passado plural usamos were + particípio.' },
+          { kind: 'type', prompt: 'Relate: “I can help.” → She said she...', answer: 'She said she could help.', explanation: 'Can geralmente muda para could no discurso indireto.' },
+          { kind: 'build', prompt: 'Monte: “Se eu morasse aqui, iria a pé.”', tokens: ['walk.', 'would', 'I', 'here,', 'lived', 'If'], answer: 'If I lived here, I would walk.', explanation: 'If + lived; resultado com would + walk.' },
+          { kind: 'choice', prompt: 'Qual frase é uma hipótese?', options: ['If it rains, I will stay.', 'If I had wings, I would fly.', 'I have lived here for years.'], answer: 'If I had wings, I would fly.', explanation: 'A situação é imaginária: não tenho asas.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “The new policy was announced after the manager said it would improve safety.”', answer: 'The new policy was announced after the manager said it would improve safety.', explanation: 'Was announced é passiva; said it would improve é discurso indireto.' },
+        ],
+      },
+      {
+        id: 'b2-checkpoint',
+        title: 'Desafio de estruturas B2',
+        subtitle: 'Avaliação da unidade · 8 questões',
+        objective: 'Aplicar estruturas intermediárias superiores em contextos novos.',
+        pattern: 'Meta de aprovação: 70%.',
+        isCheckpoint: true,
+        teach: [
+          { term: 'Voz passiva', meaning: 'be + particípio', example: 'The results were published.' },
+          { term: 'Discurso indireto', meaning: 'Relatar falas', example: 'He said he needed help.' },
+          { term: 'Hipótese', meaning: 'If + past, would', example: 'If I knew, I would tell you.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Complete: “The office ___ every evening.”', options: ['is cleaned', 'cleans', 'is clean'], answer: 'is cleaned', explanation: 'Voz passiva no presente: is + particípio cleaned.' },
+          { kind: 'build', prompt: 'Monte: “O relatório foi enviado ontem.”', tokens: ['yesterday.', 'sent', 'was', 'report', 'The'], answer: 'The report was sent yesterday.', explanation: 'Was sent é a forma passiva no passado de send.' },
+          { kind: 'type', prompt: 'Relate: “I will be late.” → He said he...', answer: 'He said he would be late.', explanation: 'Will muda para would no discurso indireto.' },
+          { kind: 'choice', prompt: 'Complete: “If she ___ more confident, she would apply.”', options: ['is', 'were', 'will be'], answer: 'were', explanation: 'Second conditional usa passado simples na oração com if.' },
+          { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The project was completed before the deadline.', explanation: 'Was completed = foi concluído. Before the deadline = antes do prazo.' },
+          { kind: 'type', prompt: 'Escreva: “Se eu soubesse a resposta, contaria a você.”', answer: 'If I knew the answer, I would tell you.', explanation: 'If I knew + would tell: hipótese no presente.' },
+          { kind: 'choice', prompt: 'Qual frase relata corretamente “I am working”?', options: ['She said she is working.', 'She said she was working.', 'She said she working.'], answer: 'She said she was working.', explanation: 'Am working normalmente recua para was working.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “If the information were available, it would be shared with everyone.”', answer: 'If the information were available, it would be shared with everyone.', explanation: 'Were available descreve a hipótese; would be shared é a consequência passiva.' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'c1-advanced-communication',
+    level: 'C1 · Avançado',
+    title: 'Refine seu inglês avançado',
+    subtitle: 'Precisão, nuances, argumentação e combinações naturais de palavras.',
+    lessons: [
+      {
+        id: 'hedging-nuance',
+        title: 'Expresse certeza e cautela',
+        subtitle: 'Hedging: might, appears to, tends to',
+        objective: 'Apresentar opiniões e conclusões com o grau adequado de certeza.',
+        pattern: 'It seems that... · This may suggest... · It is likely that...',
+        teach: [
+          { term: 'might / may', meaning: 'pode ser que', example: 'The change might improve results.' },
+          { term: 'appears to', meaning: 'parece', example: 'The strategy appears to be effective.' },
+          { term: 'tends to', meaning: 'tende a', example: 'Demand tends to increase in summer.' },
+          { term: 'highly likely', meaning: 'muito provável', example: 'It is highly likely to happen.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Qual expressão comunica possibilidade sem afirmar certeza?', options: ['It definitely proves...', 'It might indicate...', 'It is impossible that...'], answer: 'It might indicate...', explanation: 'Might indica possibilidade. É útil quando a evidência não permite uma afirmação definitiva.' },
+          { kind: 'build', prompt: 'Monte: “A tendência parece estar mudando.”', tokens: ['changing.', 'be', 'to', 'appears', 'trend', 'The'], answer: 'The trend appears to be changing.', explanation: 'Appears to be + -ing comunica uma observação com cautela.' },
+          { kind: 'type', prompt: 'Escreva: “É provável que os custos aumentem.”', answer: 'Costs are likely to increase.', explanation: 'Be likely to + verbo base expressa probabilidade.' },
+          { kind: 'choice', prompt: '“Tends to increase” significa:', options: ['sempre aumenta', 'tende a aumentar', 'parou de aumentar'], answer: 'tende a aumentar', explanation: 'Tends to descreve uma tendência, não uma regra sem exceções.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “The available evidence seems to support a more cautious approach.”', answer: 'The available evidence seems to support a more cautious approach.', explanation: 'Seems to support = parece apoiar. Cautious approach = abordagem cautelosa.' },
+        ],
+      },
+      {
+        id: 'advanced-connectors',
+        title: 'Construa argumentos sofisticados',
+        subtitle: 'Nevertheless, whereas, therefore e despite',
+        objective: 'Organizar argumentos, contrastes e consequências com precisão.',
+        pattern: 'Despite + substantivo/-ing · Whereas + oração · Therefore = portanto',
+        teach: [
+          { term: 'nevertheless', meaning: 'ainda assim / contudo', example: 'It was difficult. Nevertheless, we succeeded.' },
+          { term: 'whereas', meaning: 'enquanto / ao passo que', example: 'Sales rose, whereas costs fell.' },
+          { term: 'therefore', meaning: 'portanto', example: 'Demand increased; therefore, prices rose.' },
+          { term: 'despite', meaning: 'apesar de', example: 'Despite the delay, we finished.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Qual palavra introduz uma consequência lógica?', options: ['therefore', 'whereas', 'despite'], answer: 'therefore', explanation: 'Therefore significa portanto e introduz uma conclusão ou consequência.' },
+          { kind: 'build', prompt: 'Monte: “Apesar do atraso, terminamos.”', tokens: ['finished.', 'we', 'delay,', 'the', 'Despite'], answer: 'Despite the delay, we finished.', explanation: 'Despite é seguido por substantivo ou forma -ing, não por uma oração completa diretamente.' },
+          { kind: 'type', prompt: 'Escreva: “As vendas aumentaram, enquanto os custos diminuíram.”', answer: 'Sales increased, whereas costs decreased.', explanation: 'Whereas contrasta duas informações.' },
+          { kind: 'choice', prompt: 'Complete: “The plan was risky. ___, it worked.”', options: ['Therefore', 'Nevertheless', 'Because'], answer: 'Nevertheless', explanation: 'Nevertheless apresenta contraste: apesar do risco, funcionou.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “Despite facing several challenges, the team delivered the project on time.”', answer: 'Despite facing several challenges, the team delivered the project on time.', explanation: 'Despite facing = apesar de enfrentar. Delivered on time = entregou no prazo.' },
+        ],
+      },
+      {
+        id: 'collocations-precision',
+        title: 'Soar mais natural com collocations',
+        subtitle: 'Combinações de palavras usadas por falantes fluentes',
+        objective: 'Escolher combinações naturais em vez de traduzir palavra por palavra.',
+        pattern: 'make a decision · take responsibility · meet a deadline · raise awareness',
+        teach: [
+          { term: 'make a decision', meaning: 'tomar uma decisão', example: 'We need to make a decision.' },
+          { term: 'take responsibility', meaning: 'assumir responsabilidade', example: 'She took responsibility for the result.' },
+          { term: 'meet a deadline', meaning: 'cumprir um prazo', example: 'We must meet the deadline.' },
+          { term: 'raise awareness', meaning: 'conscientizar / aumentar a conscientização', example: 'The campaign raises awareness.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Qual combinação é natural em inglês?', options: ['do a decision', 'make a decision', 'create a decision'], answer: 'make a decision', explanation: 'A collocation padrão é make a decision, não do a decision.' },
+          { kind: 'build', prompt: 'Monte: “Precisamos cumprir o prazo.”', tokens: ['deadline.', 'the', 'meet', 'to', 'need', 'We'], answer: 'We need to meet the deadline.', explanation: 'Meet a deadline = cumprir um prazo.' },
+          { kind: 'type', prompt: 'Escreva: “Ela assumiu a responsabilidade.”', answer: 'She took responsibility.', explanation: 'Take responsibility é a combinação natural; no passado, took responsibility.' },
+          { kind: 'choice', prompt: 'Complete: “The campaign aims to ___ awareness.”', options: ['raise', 'lift', 'grow'], answer: 'raise', explanation: 'Raise awareness é uma collocation comum para aumentar a conscientização.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “We need to weigh the options before making a final decision.”', answer: 'We need to weigh the options before making a final decision.', explanation: 'Weigh the options = ponderar as opções. Final decision = decisão final.' },
+        ],
+      },
+      {
+        id: 'c1-review',
+        title: 'Revisão: precisão e fluência avançada',
+        subtitle: 'Nuance, conectores e collocations',
+        objective: 'Ajustar a linguagem ao nível de certeza, intenção e contexto.',
+        pattern: 'Fluência avançada não é usar palavras difíceis: é escolher a expressão exata.',
+        isReview: true,
+        teach: [
+          { term: 'Hedging', meaning: 'Ajustar o grau de certeza', example: 'The results may suggest...' },
+          { term: 'Connectors', meaning: 'Organizar argumentos', example: 'Nevertheless, the evidence...' },
+          { term: 'Collocations', meaning: 'Combinações naturais', example: 'Make a decision.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Qual frase evita afirmar algo sem evidência suficiente?', options: ['This proves everything.', 'This may indicate a pattern.', 'This is always true.'], answer: 'This may indicate a pattern.', explanation: 'May indica possibilidade e evita transformar uma hipótese em certeza.' },
+          { kind: 'type', prompt: 'Escreva: “Apesar das dificuldades, cumprimos o prazo.”', answer: 'Despite the difficulties, we met the deadline.', explanation: 'Despite + substantivo; meet the deadline é a collocation correta.' },
+          { kind: 'build', prompt: 'Monte: “Portanto, precisamos tomar uma decisão.”', tokens: ['decision.', 'a', 'make', 'to', 'need', 'we', 'Therefore,'], answer: 'Therefore, we need to make a decision.', explanation: 'Therefore introduz a conclusão; make a decision é a combinação natural.' },
+          { kind: 'choice', prompt: 'Complete: “The data ___ to show a gradual increase.”', options: ['appears', 'appearing', 'appear to'], answer: 'appears', explanation: 'The data appears to show... apresenta uma interpretação cautelosa.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “The findings are likely to have significant implications for future research.”', answer: 'The findings are likely to have significant implications for future research.', explanation: 'Likely to = provável que. Implications = implicações.' },
+        ],
+      },
+      {
+        id: 'c1-checkpoint',
+        title: 'Desafio final C1',
+        subtitle: 'Avaliação avançada · 8 questões',
+        objective: 'Demonstrar precisão na comunicação, argumentação e escolha de expressões.',
+        pattern: 'Meta de aprovação: 70%. Este desafio fecha a trilha atual.',
+        isCheckpoint: true,
+        teach: [
+          { term: 'Precisão', meaning: 'Dizer exatamente o que a evidência permite', example: 'The results appear to suggest...' },
+          { term: 'Argumentação', meaning: 'Conectar ideias com lógica', example: 'Nevertheless, the evidence is limited.' },
+          { term: 'Naturalidade', meaning: 'Usar combinações idiomáticas', example: 'Meet a deadline.' },
+        ],
+        exercises: [
+          { kind: 'choice', prompt: 'Qual expressão é mais cautelosa?', options: ['This unquestionably proves...', 'This appears to suggest...', 'This can never be questioned.'], answer: 'This appears to suggest...', explanation: 'Appears to suggest comunica interpretação sem afirmar prova definitiva.' },
+          { kind: 'build', prompt: 'Monte: “Ainda assim, precisamos considerar os riscos.”', tokens: ['risks.', 'the', 'consider', 'to', 'need', 'we', 'Nevertheless,'], answer: 'Nevertheless, we need to consider the risks.', explanation: 'Nevertheless introduz contraste; consider the risks = considerar os riscos.' },
+          { kind: 'type', prompt: 'Escreva: “A equipe cumpriu o prazo apesar dos obstáculos.”', answer: 'The team met the deadline despite the obstacles.', explanation: 'Met the deadline é o passado de meet the deadline.' },
+          { kind: 'choice', prompt: 'Qual collocation significa “assumir responsabilidade”?', options: ['make responsibility', 'take responsibility', 'do responsibility'], answer: 'take responsibility', explanation: 'Take responsibility é a combinação idiomática natural.' },
+          { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The evidence is limited; therefore, the conclusion should be cautious.', explanation: 'Therefore introduz consequência; cautious = cautelosa.' },
+          { kind: 'type', prompt: 'Escreva: “É provável que a demanda aumente gradualmente.”', answer: 'Demand is likely to increase gradually.', explanation: 'Is likely to increase = é provável que aumente. Gradually = gradualmente.' },
+          { kind: 'choice', prompt: 'Complete: “___ the high cost, the project was successful.”', options: ['Despite', 'Whereas', 'Therefore'], answer: 'Despite', explanation: 'Despite + substantivo: despite the high cost.' },
+          { kind: 'repeat', prompt: 'Ouça e repita: “Although the proposal has limitations, it may provide a useful basis for further discussion.”', answer: 'Although the proposal has limitations, it may provide a useful basis for further discussion.', explanation: 'Although introduz concessão; may indica possibilidade; further discussion = discussão adicional.' },
+        ],
+      },
+    ],
+  },
 ]
 
 function loadProgress(): SavedProgress {
@@ -1011,7 +1234,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <article><Star size={18}/><strong>{progress.xp}</strong><span>pontos conquistados</span></article>
         <article><Headphones size={18}/><strong>5 tipos</strong><span>de prática por aula</span></article>
       </div>
-      <div className="course-path-heading"><div><span className="course-eyebrow">SUA TRILHA</span><h2>Uma etapa de cada vez</h2></div><span className="course-level-label">A0 → B1+ · 30 aulas sequenciais</span></div>
+      <div className="course-path-heading"><div><span className="course-eyebrow">SUA TRILHA</span><h2>Uma etapa de cada vez</h2></div><span className="course-level-label">A0 → C1 · 40 aulas sequenciais</span></div>
       {units.map((unit, unitIndex) => {
         const firstLessonIndex = allLessons.findIndex(lesson => lesson.id === unit.lessons[0].id)
         const unitDone = unit.lessons.every(lesson => progress.completedLessonIds.includes(lesson.id))
