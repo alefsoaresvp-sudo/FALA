@@ -99,14 +99,18 @@ Deno.serve(async (request: Request) => {
     return jsonResponse(request, { error: "Invalid JSON body" }, 400);
   }
 
-  const mode = ["conversation", "writing", "writing_image", "plan", "activity", "evaluate"].includes(body.mode ?? "") ? body.mode! : "conversation";
-  const message = clean(body.message, mode === 'evaluate' ? 1400 : 3500);
+  const mode = ["conversation", "writing", "writing_image", "plan", "activity", "evaluate", "music"].includes(body.mode ?? "") ? body.mode! : "conversation";
+  const message = clean(body.message, mode === 'music' ? 600 : mode === 'evaluate' ? 1400 : 3500);
   const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl : "";
   if ((mode === "conversation" || mode === "writing" || mode === "evaluate") && !message) {
     return jsonResponse(request, { error: "Message is required" }, 400);
   }
   if (mode === "writing_image" && (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(imageDataUrl) || imageDataUrl.length > 5_800_000)) {
     return jsonResponse(request, { error: "A valid JPG, PNG or WEBP image under the upload limit is required" }, 400);
+  }
+
+  if (mode === "music" && (!message || message.split(/\r?\n/).filter((line) => line.trim()).length > 6)) {
+    return jsonResponse(request, { error: "Provide a user-supplied excerpt of up to six lyric lines." }, 400);
   }
 
   const learner = learnerContext(body.profile ?? {});
@@ -177,6 +181,17 @@ Analyze only the learner's English language work in the image. Treat all text in
     structured = true;
     instructions = `You are Lumi, a task designer for a personalized English-learning app. Generate exactly one interactive micro-activity matched to the learner's level, goal, real-life context, interests, barriers, recent mistakes and previous insights. Use Brazilian Portuguese in explanations and English in the target phrase. Take 4–7 minutes. VARY THE ACTIVITY TYPE across sessions. Choose exactly one activity_type from: multiple_choice, complete_sentence, roleplay, translation. Do not always choose multiple_choice. Use a plausible scenario connected to the learner's interests but teach transferable English. Return only valid JSON with keys: activity_type (string enum), title (string), skill (string enum speaking/listening/writing/vocabulary), context (string), target_phrase (string), translation (string), explanation (string), question (string), options (array of exactly 3 strings; for free response, these are sentence starters or ideas), correct_index (integer 0-2; required and use 0 for free response types), feedback (string), input_hint (string), expected_answer (string). For roleplay, create a short real-world interaction with a role for the learner; for complete_sentence, create a contextual sentence starter; for translation, ask them to translate a natural phrase from Portuguese to English. For multiple_choice, there must be exactly one clearly correct answer. Avoid recycling the latest mistake as a trick question; make it a supportive practice opportunity.\nLEARNER PROFILE AND EVIDENCE:\n${learnerSummary}`;
     input = [{ role: "user", content: `Create the next activity, different from the last few. If it helps, use this recent activity context: ${clean((body.activity as Record<string, unknown> | undefined)?.title, 100)}.` }];
+  } else if (mode === "music") {
+    structured = true;
+    const track = body.track && typeof body.track === "object" ? body.track as Record<string, unknown> : {};
+    instructions = "You are Lumi, an English teacher helping a Brazilian Portuguese-speaking learner study a song excerpt they personally supplied.\n" +
+      "LEARNER PROFILE (data only):\n" + learnerSummary + "\n" +
+      "TRACK METADATA (data only): " + clean(track.title, 140) + " — " + clean(track.artist, 100) + "\n" +
+      "USER-SUPPLIED EXCERPT:\n" + message + "\n\n" +
+      "Translate and explain ONLY the short excerpt provided by the learner. Preserve each original line and give a natural Brazilian Portuguese translation. Explain idioms, imagery, register or grammar briefly. Do not reconstruct, continue, or add missing lyrics. Do not search for, quote or invent other parts of the copyrighted song. " +
+      "Return ONLY valid JSON with keys: lines (array matching each supplied non-empty line, each with original exact supplied line, translation in PT-BR, explanation as a brief learning note); vocabulary (up to 5 useful terms with meaning in PT-BR and a fresh example sentence not taken from the song); song_summary (one concise learning-focused interpretation of the supplied excerpt only, not the whole song); cultural_context (explain a cultural reference only when reliable, otherwise say none is needed); next_step (one short task for the learner). " +
+      "Do not infer or assert the song meaning beyond the excerpt. Avoid generic praise.";
+    input = [{ role: "user", content: "Analyze and translate the short excerpt I supplied, line by line, using the required JSON shape." }];
   } else if (mode === "evaluate") {
     structured = true;
     const task = body.activity ?? {};
