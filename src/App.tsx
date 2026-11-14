@@ -465,7 +465,8 @@ export default function App() {
     if (error) setToast('Não foi possível sair: ' + error.message)
     else {
       setUser(null)
-      setSessions([])
+      // Restore the guest-mode session history instead of hiding it after sign-out.
+      setSessions(readLocal<SessionRow[]>(SESSIONS_KEY, []))
       setChat(initialChat)
       setToast('Você saiu da conta. O modo demonstração continua disponível.')
     }
