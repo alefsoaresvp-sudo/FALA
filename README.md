@@ -1,21 +1,52 @@
-# FALA English — Lumi adaptive tutor
+# FALA English — Lumi, tutora virtual de inglês
 
-O FALA é uma plataforma de inglês orientada por objetivos, interesses e evidências de aprendizagem. A Lumi é a tutora virtual: conversa com o aluno, corrige erros relevantes, cria atividades contextualizadas e adapta as próximas etapas a partir do histórico disponível.
+O FALA é um ambiente de aprendizagem de inglês com uma tutora virtual chamada Lumi. A aplicação combina prática guiada, trilhas, conversa, escrita, fala, vocabulário e acompanhamento de progresso.
 
-## Produto nesta versão
+## O que existe no frontend v2
 
-- **Onboarding em 6 etapas:** objetivo, nível percebido, interesses, dificuldades, situação real de uso, disponibilidade, sotaque e preferência de feedback.
-- **Perfil individual:** dados do aluno enviados junto às chamadas do tutor e armazenados na conta autenticada.
-- **Lumi conversacional:** diálogo em inglês no nível estimado, com explicações pontuais em português e correção de no máximo um erro importante por turno.
-- **Trilha de aprendizagem:** plano estruturado com foco atual, etapas, prática sugerida e critério de sucesso.
-- **Atividade adaptativa:** microatividade criada com base nos interesses, objetivo, barreiras e histórico de tentativas.
-- **Sinais de aprendizagem:** observações da IA são registradas como hipóteses com confiança estimada; a Lumi deve confirmá-las com evidências, não tratar um erro isolado como diagnóstico.
-- **Escrita:** revisão contextual, versão mais natural, explicações e tarefa de reescrita.
-- **Fala:** leitura por voz, gravação e transcrição autenticada no backend quando disponível. Transcrição não é avaliação fonética. Nas etapas de fala das trilhas há opção de digitar quando o microfone não estiver disponível.
-- **Vocabulário e progresso:** palavras, sessões, tentativas, histórico de conversa, indicadores por habilidade e atividade semanal.
-- **Mobile/PWA:** interface responsiva, navegação inferior em telas pequenas e suporte para instalação no celular/offline shell.
+- **Acesso demo-first:** o conteúdo básico abre sem cadastro; autenticação Supabase é opcional para sincronizar dados e acessar funções de IA.
+- **Perfil completo:** objetivo, nível estimado, interesses, habilidades prioritárias, dificuldades, contexto de uso, prazo, minutos por dia, sotaque e estilo de correção.
+- **Lumi por texto:** conversa contextual, correção curta e explicações em português quando necessário. Requer login e a Edge Function `tutor`.
+- **Lumi por voz:** personagem de voz com avatar ilustrado próprio no frontend e conversa em tempo real via ElevenLabs Conversational AI e WebRTC. Requer login, microfone, HTTPS e a Edge Function `lumi-session`.
+- **Plano adaptativo:** geração e salvamento do plano individual na tabela `learning_plans`. A geração com IA exige login e `OPENAI_API_KEY`.
+- **Aprender:** microlições introdutórias e atividades adaptativas geradas pela Lumi; aceita múltipla escolha e respostas abertas com avaliação de IA.
+- **Trilhas:** seis trilhas com situações práticas, etapas sequenciais e mini prova final. A aprovação exige 70%. O progresso usa `track_progress`.
+- **Music Lab:** versos originais do FALA, vocabulário, tradução, leitura por voz e recuperação ativa. A voz das linhas usa Speech Synthesis do navegador; não é áudio cantado.
+- **Escrita:** revisão de texto com a Lumi e envio opcional de foto de exercício, com compressão no navegador antes do envio.
+- **Fala:** gravação local, reprodução e transcrição autenticada via ElevenLabs Scribe.
+- **Vocabulário e progresso:** caderno de palavras, histórico de sessões e média dos resultados registrados.
+- **Mobile:** layout responsivo, dock inferior e menu expandido no celular.
 
-## Rodar localmente
+## Limites entre modo demo e conta conectada
+
+Sem login, o aluno pode explorar as telas, fazer exercícios locais, ouvir frases pela voz do navegador e manter dados locais neste aparelho. O modo demo não finge que respostas heurísticas são IA.
+
+Login é necessário para sincronização entre dispositivos, conversa real com a Lumi, sessão de voz, transcrição com Scribe, análise de escrita por IA, avaliação aberta das etapas de trilhas, análise de foto e plano adaptativo.
+
+As chamadas de IA dependem das quotas e condições de cobrança dos provedores. O código não promete uso ilimitado ou gratuito. A interface deve manter as tarefas locais acessíveis quando um provedor estiver indisponível.
+
+## Arquitetura
+
+- Frontend: React 19, TypeScript, Vite.
+- Auth e dados: Supabase Auth, Postgres, RLS.
+- Chat, plano, avaliação de texto/foto: OpenAI Responses API, dentro da Edge Function autenticada `tutor`.
+- Voz em tempo real: ElevenLabs Conversational AI, agente `Lumi — FALA English`, via `lumi-session`.
+- Transcrição de áudio gravado: ElevenLabs Speech to Text Scribe v2, via `transcribe`.
+- Publicação: GitHub Actions + GitHub Pages.
+
+## Secrets do Supabase
+
+Cadastre em **Project → Edge Functions → Secrets**. Não coloque chaves privadas no repositório, no Vite, no navegador ou em variáveis `VITE_*`.
+
+| Secret | Uso |
+|---|---|
+| `ELEVENLABS_API_KEY` | Geração de token para conversa por voz e transcrição Scribe |
+| `OPENAI_API_KEY` | Chat textual, plano adaptativo, avaliações, revisão de texto e análise de foto |
+| `OPENAI_MODEL` | Opcional; padrão atual do código: `gpt-6-luna` |
+
+A chave ElevenLabs precisa ter permissão para Conversational AI e Speech to Text. A Edge Function valida JWT e retorna apenas tokens efêmeros de sessão para o cliente. A chave persistente nunca sai do backend.
+
+## Executar localmente
 
 Requisitos: Node.js 20.19+ ou 22.12+.
 
@@ -25,107 +56,42 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Abra `http://localhost:5173`. Sem credenciais do Supabase, o frontend exibe uma experiência de demonstração. O tutor com IA e a sincronização entre dispositivos exigem uma sessão autenticada e as funções de backend implantadas.
+Abra `http://localhost:5173`. As funções do Supabase precisam estar implantadas e os secrets definidos para as experiências conectadas.
 
-## Configuração do Supabase
+## Supabase
 
-1. Crie um projeto Supabase dedicado ao FALA.
-2. Execute o conteúdo de `supabase/schema.sql` no SQL Editor do projeto. Todas as tabelas têm RLS e políticas que restringem as linhas ao `auth.uid()` do usuário.
-3. Copie a Project URL e a publishable key para `.env.local`:
+As tabelas existentes são mantidas, sem migrações destrutivas:
 
-```env
-VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-```
+- `profiles`
+- `learning_plans`
+- `learning_sessions`
+- `track_progress`
+- `activity_attempts`
+- `learner_insights`
+- `vocabulary_items`
+- `chat_messages`
 
-4. Faça login no CLI e vincule o projeto. Consulte os comandos suportados pela versão instalada antes de executar:
+RLS deve permanecer habilitado em todas as tabelas expostas. Não remova contas, histórico ou dados existentes.
 
-```bash
-supabase --help
-supabase link --project-ref SEU_PROJECT_REF
-supabase functions deploy tutor
-supabase functions deploy transcribe
-```
+Edge Functions:
+- `tutor` — JWT obrigatório; usa `OPENAI_API_KEY`.
+- `transcribe` — JWT obrigatório; usa `ELEVENLABS_API_KEY` e Scribe v2.
+- `lumi-session` — JWT obrigatório; emite token temporário para o agente Conversational AI.
 
-5. No Supabase Dashboard, configure **Edge Function Secrets**:
-   - `OPENAI_API_KEY`: chave nova, nunca a chave que foi exposta em uma conversa.
-   - `OPENAI_MODEL`: `gpt-6-luna` (opcional; é o padrão do código).
+## GitHub Pages
 
-A chave OpenAI existe somente no backend. Nunca use `VITE_OPENAI_API_KEY`, `service_role` ou qualquer chave secreta no navegador.
+O repositório usa GitHub Actions para compilar Vite e publicar a pasta `dist`. A URL configurada é:
 
-6. Em Supabase Auth, configure cadastro/login por e-mail e as URLs de redirecionamento para `https://alefsoaresvp-sudo.github.io/FALA/` e `http://localhost:5173/`.
-7. Verifique os advisors de segurança e teste as políticas RLS com duas contas diferentes antes de abrir o app a outras pessoas.
+https://alefsoaresvp-sudo.github.io/FALA/
 
-## Publicação no GitHub Pages
+As variáveis públicas do Supabase usadas no build são `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`. A publishable key é pública por desenho e deve ser protegida por RLS e permissões mínimas.
 
-O repositório usa GitHub Actions para compilar Vite e publicar a pasta `dist`.
+## Segurança, privacidade e limitações
 
-1. No GitHub, abra **Settings → Pages** e selecione **GitHub Actions** como Source.
-2. Em **Settings → Secrets and variables → Actions → Variables**, cadastre:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_PUBLISHABLE_KEY`
-3. Faça push na branch `main` ou execute manualmente o workflow **Deploy FALA English** na aba Actions.
-4. A URL publicada será `https://alefsoaresvp-sudo.github.io/FALA/`.
-
-A publishable key é pública por desenho e só pode ser usada com RLS e grants mínimos. A OpenAI API key permanece nos Edge Function Secrets do Supabase.
-
-## Instalar no celular
-
-Abra o endereço publicado no Chrome/Edge do celular e use **Instalar app** ou **Adicionar à tela inicial** no menu do navegador. O shell da aplicação tem cache offline; chamadas de IA e dados sincronizados exigem internet.
-
-## Arquitetura
-
-- Frontend: React 19 + TypeScript + Vite.
-- Dados e autenticação: Supabase Auth + Postgres + RLS.
-- Tutor: OpenAI Responses API dentro de uma Supabase Edge Function autenticada.
-- Transcrição: `gpt-transcribe` dentro de uma Supabase Edge Function autenticada.
-- Fonte e publicação: GitHub + GitHub Actions + GitHub Pages.
-
-## Limitações honestas do MVP
-
-- A pontuação de habilidade só se torna confiável com um histórico maior de tentativas. Poucas respostas não são uma avaliação formal de proficiência.
-- A transcrição identifica palavras, mas não mede fonemas, ritmo, entonação ou inteligibilidade. A avaliação fonética específica precisa de um serviço dedicado e validação por sotaque.
-- A revisão de escrita usa IA quando o usuário está autenticado e a função está configurada; sem backend, há apenas experiência de demonstração.
-- O cache PWA cobre o shell. O uso de IA, login e banco exige conexão.
-- Antes de produção: adicionar limites/rate limits por usuário, controles de gasto, telemetria consentida, tratamento de abuso, testes automatizados e política de privacidade/termos.
-
-## Segurança e dados
-
-- Nunca commitar `.env.local`, chaves privadas, tokens, áudios ou dados de usuários.
-- RLS está ligado em todas as tabelas de aprendizagem; as políticas filtram `user_id` pela sessão autenticada.
-- A aplicação não persiste gravações de voz por padrão; envia o blob para transcrição e registra apenas uma transcrição curta nos detalhes da sessão.
-- Observações geradas pela IA são hipóteses para orientar prática, não rótulos permanentes do aluno.
-
-
-## Ativar a versão conectada
-
-1. Crie um projeto Supabase dedicado ao FALA e execute `supabase/schema.sql` nele. O script cria o estado de módulos em `track_progress` com RLS por proprietário.
-2. Implante as Edge Functions `tutor` e `transcribe`, mantendo a verificação de JWT habilitada.
-3. Cadastre `OPENAI_API_KEY` e, opcionalmente, `OPENAI_MODEL` como secrets das Edge Functions. Nunca coloque a chave privada no Vite, no GitHub Pages ou em `VITE_*`.
-4. Cadastre `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` como variáveis do GitHub Actions para o build publicado. Para desenvolvimento local, use `.env.local`.
-5. Em Authentication, configure o endereço do site publicado e os redirects permitidos.
-
-A análise de foto exige autenticação válida, Edge Function implantada e suporte a entrada de imagem do modelo configurado. O navegador comprime a imagem, envia-a diretamente para a Edge Function e não salva o arquivo enviado. A qualidade da transcrição depende de foco, iluminação, rotação e tamanho da letra.
-
-O progresso local funciona sem login no próprio navegador. Para sincronizar entre dispositivos, é necessário concluir a integração do Supabase e aplicar o esquema desta versão.
-
-
-## FALA 4.0 — áudio mobile e organização
-
-### Gravação no celular
-- A captura usa `getUserMedia` e `MediaRecorder` sempre que o navegador oferece suporte, independentemente do login.
-- A gravação é limitada a 45 segundos e usa cancelamento de eco, redução de ruído e ganho automático quando suportados pelo aparelho.
-- O aluno pode reproduzir o arquivo gravado no próprio dispositivo. A transcrição com a Lumi exige uma sessão Supabase autenticada e a Edge Function `transcribe` ativa.
-- O código tenta WEBM/Opus e MP4, comuns em navegadores móveis. Tipos e extensões são normalizados no backend antes de enviar ao provedor.
-- O arquivo de áudio não é persistido no banco ou em Storage. A sessão registra apenas o texto transcrito e metadados mínimos.
-- O microfone do navegador exige HTTPS e permissão. Abra o endereço do GitHub Pages no Chrome/Safari atualizado, não dentro de um navegador incorporado, e permita o acesso ao microfone nas configurações do site.
-
-### Modelo de dados para reutilização
-O banco do FALA é dividido logicamente em:
-- **Identidade e preferências:** `profiles`.
-- **Planejamento e progresso:** `learning_plans`, `learning_sessions`, `track_progress`.
-- **Avaliação e adaptação:** `activity_attempts`, `learner_insights`.
-- **Conteúdo do aluno:** `vocabulary_items`.
-- **Conversas:** `chat_messages`.
-
-Todas as tabelas expostas em `public` têm RLS e políticas por `auth.uid()`. Consulte `supabase/DATABASE_ARCHITECTURE.md` antes de copiar ou adaptar o modelo para outro produto. Para sistemas independentes, crie outro projeto Supabase e aplique o esquema nele; não misture dados de produtos diferentes no projeto de produção do FALA.
+- Nenhuma chave privada pode ser incluída no bundle do frontend.
+- Voz e transcrição exigem autenticação; áudio de fala gravada não é salvo em Storage pelo app.
+- O agente de voz está configurado para não gravar áudio e excluir o áudio de conversas; transcrições seguem a retenção configurada na ElevenLabs.
+- A transcrição reconhece palavras, mas não fornece avaliação fonética ou pontuação de pronúncia.
+- A análise de foto exige login e uma função `tutor` funcional; a imagem é comprimida no navegador e enviada ao backend, sem persistência em Storage.
+- O modo demo mantém progresso local e não substitui sincronização entre dispositivos.
+- Uma compilação bem-sucedida não substitui teste real de login, microfone e chamadas a provedores externos.
