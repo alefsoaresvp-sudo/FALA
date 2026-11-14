@@ -3,12 +3,11 @@ import { Conversation } from '@elevenlabs/client'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
-  BriefcaseBusiness, Car, Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2,
-  PenLine, Play, Plus, Send, ShoppingBag, Sparkles, Target, Trash2, Trophy,
-  Utensils, Users, UserRound, Volume2, X,
+  Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2, PenLine, Play, Plus,
+  Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
-import { learningTracks, type TrackProgress, type TrackLesson, type TrackQuestion } from './learningTracks'
+import { learningTracks, type TrackProgress } from './learningTracks'
 import { readMusicSet } from './musicLab'
 import { supabase } from './supabase'
 
@@ -239,7 +238,7 @@ export default function App() {
     setCloudLoading(true)
     void (async () => {
       try {
-        const [profileResult, vocabularyResult, sessionsResult, messagesResult] = await Promise.all([
+        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('vocabulary_items').select('term').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
@@ -1081,7 +1080,7 @@ export default function App() {
                   <><textarea className="track-response-area" value={trackResponse} onChange={event => { setTrackResponse(event.target.value); setTrackEvaluation(null); setTrackFeedback('') }} rows={4} placeholder={activeTrackLesson.input_hint || (activeTrackLesson.kind === 'speak' ? 'Digite o que você conseguiu dizer…' : 'Escreva sua resposta em inglês…')}/>{activeTrackLesson.kind === 'speak' && <div className="track-speaking-tools"><button className="button ghost" onClick={() => speak(activeTrackLesson.target_phrase)}><Volume2 size={15}/> Ouvir frase</button><button className="button ghost" onClick={() => setPage('speak')}><Mic size={15}/> Abrir treino de fala</button><small>Você também pode gravar na tela “Falar” e retornar para digitar ou colar a transcrição.</small></div>}</>}
                 {trackEvaluation && <div className="track-evaluation"><strong>Feedback da Lumi · {trackEvaluation.score}/100</strong><p>{trackEvaluation.strengths}</p><p><b>Correção:</b> {trackEvaluation.correction}</p><p><b>Versão natural:</b> {trackEvaluation.improved_answer}</p><p><b>Próximo passo:</b> {trackEvaluation.next_step}</p></div>}
                 {trackFeedback && <p className="inline-notice">{trackFeedback}</p>}
-                <div className="track-lesson-actions"><small>{activeTrackLesson.kind === 'choice' ? 'Escolha a opção correta.' : 'Escreva ao menos cinco palavras para concluir.'}</small><button className="button primary" onClick={() => void completeTrackLesson()} disabled={trackBusy || (activeTrackLesson.kind === 'choice' ? trackChoice === null : trackResponse.trim().split(/\s+/).filter(Boolean).length < 5)}>{trackBusy ? 'Avaliando…' : 'Concluir etapa'} <ArrowRight size={15}/></button></div>
+                <div className="track-lesson-actions"><small>{activeTrackLesson.kind === 'choice' ? 'Escolha a opção correta.' : 'Escreva ao menos cinco palavras para concluir.'}</small><button className="button primary" onClick={() => void completeTrackLesson()} disabled={trackBusy || (activeTrackLesson.kind === 'choice' ? trackChoice === null : (activeTrackLesson.kind === 'speak' ? (transcript.trim() || trackResponse.trim()).split(/\s+/).filter(Boolean).length < 5 : trackResponse.trim().split(/\s+/).filter(Boolean).length < 5))}>{trackBusy ? 'Avaliando…' : 'Concluir etapa'} <ArrowRight size={15}/></button></div>
               </div>}
               {trackMode === 'exam' && <div className="track-exam-panel">
                 <span className="eyebrow">MINI PROVA · {activeTrack.exam.length} QUESTÕES</span><h3>Você precisa acertar pelo menos 70%.</h3>
