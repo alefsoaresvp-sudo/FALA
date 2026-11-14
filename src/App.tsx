@@ -279,7 +279,7 @@ export default function App() {
   }, [sessions])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Prática guiada', lumi: 'Converse com a Lumi',
-    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso',
+    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
   }
 
   useEffect(() => {
