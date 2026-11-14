@@ -30,6 +30,7 @@ type Profile = {
   feedbackStyle: 'gentle' | 'balanced' | 'direct'
 }
 type ChatMessage = { role: 'user' | 'assistant'; text: string; note?: string }
+type LearningPlan = { headline: string; today: string; focus_order: string[]; weeks: { period: string; objective: string; practice: string }[]; success_metric: string; adaptation_note: string }
 type SessionRow = { id?: string; activity_type: string; duration_seconds: number; score: number | null; completed_at?: string }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
 type LearningActivity = {
@@ -141,6 +142,17 @@ export default function App() {
   const [levelDraft, setLevelDraft] = useState<Level>(profile.level)
   const [interestsDraft, setInterestsDraft] = useState<string[]>(profile.interests)
   const [customInterestDraft, setCustomInterestDraft] = useState(profile.customInterest)
+  const [focusesDraft, setFocusesDraft] = useState<string[]>(profile.focuses)
+  const [minutesDraft, setMinutesDraft] = useState(profile.minutes)
+  const [accentDraft, setAccentDraft] = useState<'us' | 'uk'>(profile.accent)
+  const [styleDraft, setStyleDraft] = useState<Profile['style']>(profile.style)
+  const [barriersDraft, setBarriersDraft] = useState<string[]>(profile.barriers)
+  const [scenarioDraft, setScenarioDraft] = useState(profile.scenario)
+  const [timeHorizonDraft, setTimeHorizonDraft] = useState(profile.timeHorizon)
+  const [feedbackStyleDraft, setFeedbackStyleDraft] = useState<Profile['feedbackStyle']>(profile.feedbackStyle)
+  const [learningPlan, setLearningPlan] = useState<LearningPlan | null>(null)
+  const [planBusy, setPlanBusy] = useState(false)
+  const [planNotice, setPlanNotice] = useState('')
   const [chat, setChat] = useState<ChatMessage[]>(initialChat)
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
@@ -238,12 +250,13 @@ export default function App() {
     setCloudLoading(true)
     void (async () => {
       try {
-        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult] = await Promise.all([
+        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('vocabulary_items').select('term').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
+          supabase.from('learning_plans').select('plan').eq('user_id', user.id).maybeSingle(),
         ])
         if (!active) return
         if (profileResult.data) {
@@ -287,6 +300,8 @@ export default function App() {
           setTrackProgress(restored)
           try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(restored)) } catch { /* local cache is optional */ }
         }
+        const savedPlan = learningPlanResult.data?.plan as LearningPlan | undefined
+        setLearningPlan(savedPlan?.headline ? savedPlan : null)
       } catch (error) {
         console.error('FALA account sync failed', error)
         setToast('Não foi possível carregar todos os dados sincronizados.')
@@ -324,7 +339,9 @@ export default function App() {
     event.preventDefault()
     const nextProfile: Profile = {
       ...profile, name: nameDraft.trim(), goal: goalDraft, level: levelDraft,
-      interests: interestsDraft, customInterest: customInterestDraft.trim(),
+      interests: interestsDraft, customInterest: customInterestDraft.trim(), focuses: focusesDraft,
+      minutes: minutesDraft, accent: accentDraft, style: styleDraft, barriers: barriersDraft,
+      scenario: scenarioDraft, timeHorizon: timeHorizonDraft, feedbackStyle: feedbackStyleDraft,
     }
     setProfile(nextProfile)
     try { window.localStorage.setItem(PROFILE_KEY, JSON.stringify(nextProfile)) } catch { /* local cache is optional */ }
@@ -783,6 +800,35 @@ export default function App() {
     }
   }
 
+  const generateLearningPlan = async () => {
+    if (!supabase || !user) {
+      setPlanNotice('Entre na sua conta para gerar e salvar um plano personalizado com a Lumi.')
+      setAuthMode('signin')
+      setAuthOpen(true)
+      return
+    }
+    setPlanBusy(true)
+    setPlanNotice('')
+    try {
+      const { data, error } = await supabase.functions.invoke('tutor', {
+        body: { mode: 'plan', profile, learningEvidence: { skillScores: {}, recentMistakes: [], previousInsights: [] } },
+      })
+      if (error) throw error
+      const plan = data?.structured as LearningPlan | undefined
+      if (!plan?.headline || !Array.isArray(plan.weeks)) throw new Error('A Lumi não retornou um plano válido.')
+      const { error: saveError } = await supabase.from('learning_plans').upsert({
+        user_id: user.id, plan, updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+      if (saveError) throw saveError
+      setLearningPlan(plan)
+      setPlanNotice('Plano salvo e sincronizado com sua conta.')
+    } catch (error) {
+      setPlanNotice('Não foi possível gerar seu plano: ' + friendlyError(error))
+    } finally {
+      setPlanBusy(false)
+    }
+  }
+
   const saveWord = async (event: FormEvent) => {
     event.preventDefault()
     const term = newWord.trim()
@@ -922,6 +968,14 @@ export default function App() {
     setLevelDraft(profile.level)
     setInterestsDraft(profile.interests)
     setCustomInterestDraft(profile.customInterest)
+    setFocusesDraft(profile.focuses)
+    setMinutesDraft(profile.minutes)
+    setAccentDraft(profile.accent)
+    setStyleDraft(profile.style)
+    setBarriersDraft(profile.barriers)
+    setScenarioDraft(profile.scenario)
+    setTimeHorizonDraft(profile.timeHorizon)
+    setFeedbackStyleDraft(profile.feedbackStyle)
     setProfileOpen(true)
   }
 
@@ -1008,6 +1062,13 @@ export default function App() {
               <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>LESSON 01</span></div>
             </section>
 
+            <section className="learning-plan-card">
+              <div className="learning-plan-heading"><div><span className="eyebrow">PLANO ADAPTATIVO · LUMI</span><h2>{learningPlan?.headline || 'Monte um plano para seu objetivo.'}</h2><p>{learningPlan?.today || 'Organize suas práticas por objetivo, nível e tempo disponível. O plano é salvo na sua conta.'}</p></div><button className="button primary" onClick={() => void generateLearningPlan()} disabled={planBusy}>{planBusy ? 'Montando…' : learningPlan ? 'Atualizar plano' : 'Gerar meu plano'} <Sparkles size={15}/></button></div>
+              {learningPlan?.weeks?.length ? <div className="learning-plan-weeks">{learningPlan.weeks.slice(0,3).map((week,index)=><article key={week.period+index}><small>{week.period}</small><strong>{week.objective}</strong><p>{week.practice}</p></article>)}</div> : <div className="learning-plan-placeholder"><span>01 · Prática focada</span><span>02 · Repetição e recuperação</span><span>03 · Aplicação em contexto real</span></div>}
+              {learningPlan?.success_metric && <p className="learning-plan-metric"><Target size={14}/> {learningPlan.success_metric}</p>}
+              {planNotice && <p className="inline-notice">{planNotice}</p>}
+              {!user && <small className="photo-privacy-note">A geração de plano personalizado com IA exige conta conectada e pode consumir a cota de IA do projeto.</small>}
+            </section>
             <div className="section-heading"><div><span className="eyebrow">SUAS FERRAMENTAS</span><h2>Escolha como praticar</h2></div></div>
             <div className="tool-grid">
               <button className="tool-card" onClick={() => setPage('tracks')}><span className="tool-icon blue"><Map size={20}/></span><strong>Trilhas práticas</strong><small>Missões em etapas e mini provas com aprovação.</small><ArrowRight size={16}/></button>
@@ -1181,7 +1242,18 @@ export default function App() {
 
       {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><div className="brand-mark">f.</div><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
 
-      {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="dialog-card profile-dialog"><button className="dialog-close" onClick={() => setProfileOpen(false)} aria-label="Fechar"><X size={18}/></button><span className="eyebrow">PERSONALIZAÇÃO</span><h2>Seu inglês começa com você.</h2><p>Essas preferências ajudam a escolher contextos e exemplos mais relevantes.</p><form onSubmit={saveProfile}><label>Como podemos chamar você?<input value={nameDraft} onChange={event => setNameDraft(event.target.value)} placeholder="Seu primeiro nome"/></label><label>Objetivo principal<select value={goalDraft} onChange={event => setGoalDraft(event.target.value as Goal)}><option value="conversation">Conversar com confiança</option><option value="work">Trabalho e carreira</option><option value="travel">Viagens</option><option value="study">Estudos</option><option value="life">Um pouco de tudo</option></select></label><label>Nível atual<select value={levelDraft} onChange={event => setLevelDraft(event.target.value as Level)}><option value="unsure">Ainda não sei</option><option value="beginner">Começando do zero</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select></label><div className="form-label">Seus interesses</div><div className="interest-pills">{interestOptions.map(item => <button type="button" key={item} className={interestsDraft.includes(item) ? 'chosen' : ''} onClick={() => setInterestsDraft(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])}>{interestsDraft.includes(item) && <Check size={13}/>} {item}</button>)}</div><label>Outro interesse (opcional)<input value={customInterestDraft} onChange={event => setCustomInterestDraft(event.target.value)} placeholder="Ex.: Fórmula 1, Python, empreendedorismo…"/></label><button className="button primary dialog-submit" type="submit">Salvar preferências <Check size={16}/></button></form></section></div>}
+      {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="dialog-card profile-dialog"><button className="dialog-close" onClick={() => setProfileOpen(false)} aria-label="Fechar"><X size={18}/></button><span className="eyebrow">PERSONALIZAÇÃO</span><h2>Seu inglês começa com você.</h2><p>Essas preferências ajudam a escolher contextos e exemplos mais relevantes.</p><form onSubmit={saveProfile}><label>Como podemos chamar você?<input value={nameDraft} onChange={event => setNameDraft(event.target.value)} placeholder="Seu primeiro nome"/></label><label>Objetivo principal<select value={goalDraft} onChange={event => setGoalDraft(event.target.value as Goal)}><option value="conversation">Conversar com confiança</option><option value="work">Trabalho e carreira</option><option value="travel">Viagens</option><option value="study">Estudos</option><option value="life">Um pouco de tudo</option></select></label><label>Nível atual<select value={levelDraft} onChange={event => setLevelDraft(event.target.value as Level)}><option value="unsure">Ainda não sei</option><option value="beginner">Começando do zero</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select></label><div className="form-label">Seus interesses</div><div className="interest-pills">{interestOptions.map(item => <button type="button" key={item} className={interestsDraft.includes(item) ? 'chosen' : ''} onClick={() => setInterestsDraft(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])}>{interestsDraft.includes(item) && <Check size={13}/>} {item}</button>)}</div><label>Outro interesse (opcional)<input value={customInterestDraft} onChange={event => setCustomInterestDraft(event.target.value)} placeholder="Ex.: Fórmula 1, Python, empreendedorismo…"/></label>
+          <div className="profile-settings-grid">
+            <label>Tempo diário<select value={minutesDraft} onChange={event => setMinutesDraft(Number(event.target.value))}>{[5,10,15,20,30,45,60].map(value => <option key={value} value={value}>{value} minutos</option>)}</select></label>
+            <label>Sotaque de referência<select value={accentDraft} onChange={event => setAccentDraft(event.target.value as 'us'|'uk')}><option value="us">Inglês americano</option><option value="uk">Inglês britânico</option></select></label>
+            <label>Estilo de aprendizagem<select value={styleDraft} onChange={event => setStyleDraft(event.target.value as Profile['style'])}><option value="mixed">Misto</option><option value="conversation">Conversação</option><option value="guided">Passo a passo</option></select></label>
+            <label>Prazo principal<select value={timeHorizonDraft} onChange={event => setTimeHorizonDraft(event.target.value)}><option value="30-days">Próximos 30 dias</option><option value="90-days">1 a 3 meses</option><option value="6-months">3 a 6 meses</option><option value="flexible">Sem prazo definido</option></select></label>
+            <label>Contexto principal<select value={scenarioDraft} onChange={event => setScenarioDraft(event.target.value)}><option value="travel">Viagens e temporada fora</option><option value="work">Trabalho e negócios</option><option value="relocation">Morar fora</option><option value="study">Estudos e provas</option><option value="social">Conversas e amizades</option><option value="general">Interesse pessoal</option><option value="daily">Dia a dia</option></select></label>
+            <label>Tom das correções<select value={feedbackStyleDraft} onChange={event => setFeedbackStyleDraft(event.target.value as Profile['feedbackStyle'])}><option value="gentle">Com calma</option><option value="balanced">Equilibrado</option><option value="direct">Direto ao ponto</option></select></label>
+          </div>
+          <div className="profile-focus-block"><strong>Habilidades prioritárias</strong><div className="interest-pills">{['speaking','listening','pronunciation','writing','vocabulary','grammar'].map(value => <button type="button" key={value} className={focusesDraft.includes(value) ? 'chosen' : ''} onClick={() => setFocusesDraft(current => current.includes(value) ? current.filter(item => item !== value) : [...current,value])}>{focusesDraft.includes(value) && <Check size={13}/>} {value === 'speaking' ? 'Fala' : value === 'listening' ? 'Compreensão' : value === 'pronunciation' ? 'Pronúncia' : value === 'writing' ? 'Escrita' : value === 'vocabulary' ? 'Vocabulário' : 'Gramática'}</button>)}</div></div>
+          <div className="profile-focus-block"><strong>Principais dificuldades</strong><div className="interest-pills">{[{id:'freeze',label:'Travo para falar'},{id:'translate',label:'Traduzo mentalmente'},{id:'vocabulary',label:'Falta vocabulário'},{id:'listening',label:'Entendo pouco ouvindo'},{id:'pronunciation',label:'Vergonha da pronúncia'},{id:'grammar',label:'Dificuldade para formar frases'}].map(item => <button type="button" key={item.id} className={barriersDraft.includes(item.id) ? 'chosen' : ''} onClick={() => setBarriersDraft(current => current.includes(item.id) ? current.filter(value => value !== item.id) : [...current,item.id])}>{barriersDraft.includes(item.id) && <Check size={13}/>} {item.label}</button>)}</div></div>
+          <button className="button primary dialog-submit" type="submit">Salvar preferências <Check size={16}/></button></form></section></div>}
 
       {toast && <div className="toast-message" role="status">{toast}</div>}
     </div>
