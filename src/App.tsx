@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Conversation } from '@elevenlabs/client'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
@@ -137,6 +138,8 @@ export default function App() {
   const [chatInput, setChatInput] = useState('')
   const [chatBusy, setChatBusy] = useState(false)
   const [chatNotice, setChatNotice] = useState('')
+  const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
   const [answerIndex, setAnswerIndex] = useState<number | null>(null)
   const [activityFeedback, setActivityFeedback] = useState('')
@@ -160,6 +163,7 @@ export default function App() {
   const streamRef = useRef<MediaStream | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
+  const voiceConversationRef = useRef<{ endSession: () => Promise<void> } | null>(null)
 
   const activity = activityBank[activityIndex % activityBank.length]
   const isConnected = !!user
@@ -346,6 +350,9 @@ export default function App() {
 
   const signOut = async () => {
     if (!supabase) return
+    try { await voiceConversationRef.current?.endSession() } catch { /* Continue sign-out even if voice shutdown fails. */ }
+    voiceConversationRef.current = null
+    setVoiceStatus('idle')
     const { error } = await supabase.auth.signOut()
     if (error) setToast('Não foi possível sair: ' + error.message)
     else {
@@ -374,6 +381,89 @@ export default function App() {
       return
     }
     if (data) setSessions(current => [data as SessionRow, ...current])
+  }
+
+  const appendVoiceLine = (role: 'user' | 'assistant', rawText: string) => {
+    const text = rawText.trim()
+    if (!text) return
+    setChat(current => [...current, { role, text }])
+    if (supabase && user) {
+      void supabase.from('chat_messages').insert({ user_id: user.id, role, content: text, metadata: { source: 'elevenlabs_voice' } })
+        .then(({ error }) => { if (error) console.error('Lumi voice transcript sync failed', error) })
+    }
+  }
+
+  const endLumiVoice = async () => {
+    const conversation = voiceConversationRef.current
+    voiceConversationRef.current = null
+    try {
+      await conversation?.endSession()
+      setVoiceStatus('idle')
+      setVoiceMessage('Conversa encerrada. Seu treino de texto continua disponível.')
+    } catch (error) {
+      setVoiceStatus('error')
+      setVoiceMessage('Não consegui encerrar a sessão de voz corretamente: ' + friendlyError(error))
+    }
+  }
+
+  const startLumiVoice = async () => {
+    if (voiceStatus === 'connected') {
+      await endLumiVoice()
+      return
+    }
+    if (!supabase || !user) {
+      setAuthMode('signin')
+      setAuthOpen(true)
+      setAuthMessage('Entre na sua conta para iniciar uma conversa de voz privada com a Lumi.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+      setVoiceStatus('error')
+      setVoiceMessage('A conversa por voz exige HTTPS e um navegador com acesso ao microfone. Abra o FALA no Safari ou Chrome atualizado.')
+      return
+    }
+    setVoiceStatus('connecting')
+    setVoiceMessage('Solicitando acesso ao microfone e preparando a sessão segura…')
+    try {
+      const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      permissionStream.getTracks().forEach(track => track.stop())
+      const { data, error } = await supabase.functions.invoke('lumi-session', { body: {} })
+      if (error) throw error
+      if (typeof data?.conversation_token !== 'string' || !data.conversation_token) {
+        throw new Error('O servidor não retornou um token válido. Verifique ELEVENLABS_API_KEY nos secrets do Supabase.')
+      }
+      const conversation = await Conversation.startSession({
+        conversationToken: data.conversation_token,
+        connectionType: 'webrtc',
+        userId: user.id,
+        onConnect: () => {
+          setVoiceStatus('connected')
+          setVoiceMessage('Lumi está ouvindo. Fale naturalmente em inglês ou peça uma explicação em português.')
+        },
+        onDisconnect: () => {
+          voiceConversationRef.current = null
+          setVoiceStatus('idle')
+        },
+        onMessage: (event: { message?: string; source?: string }) => {
+          const text = typeof event?.message === 'string' ? event.message : ''
+          appendVoiceLine(event?.source === 'user' ? 'user' : 'assistant', text)
+        },
+        onError: (error: unknown) => {
+          setVoiceStatus('error')
+          setVoiceMessage('A conversa por voz encontrou um erro: ' + friendlyError(error))
+        },
+      })
+      voiceConversationRef.current = conversation
+      setVoiceStatus('connected')
+      setVoiceMessage('Conectado. Converse com a Lumi e use o botão Encerrar quando terminar.')
+    } catch (error) {
+      voiceConversationRef.current = null
+      setVoiceStatus('error')
+      const name = error instanceof DOMException ? error.name : ''
+      setVoiceMessage(name === 'NotAllowedError'
+        ? 'O acesso ao microfone foi negado. Libere a permissão do microfone no navegador e tente novamente.'
+        : 'Não foi possível iniciar a Lumi por voz: ' + friendlyError(error))
+    }
   }
 
   const sendChat = async (event: FormEvent) => {
@@ -700,6 +790,22 @@ export default function App() {
 
           {page === 'lumi' && <section className="lumi-layout">
             <div className="page-heading"><span className="eyebrow">TUTORA DE INGLÊS · LUMI</span><h1>Converse para evoluir.</h1><p>Use o inglês no seu nível. A Lumi prioriza comunicação e corrige um ponto importante por vez.</p></div>
+            <section className="voice-session-card">
+              <div className={'voice-lumi-orb ' + voiceStatus}><span>L</span><i/></div>
+              <div className="voice-session-copy">
+                <span className="eyebrow">PERSONAGEM DE VOZ · ELEVENLABS</span>
+                <h2>Converse com a Lumi.</h2>
+                <p>Uma tutora com voz própria, imersão em inglês e explicações curtas em português quando você precisar.</p>
+                <small className={'voice-state ' + voiceStatus}>{voiceStatus === 'connected' ? 'AO VIVO · MICROFONE ATIVO' : voiceStatus === 'connecting' ? 'CONECTANDO…' : voiceStatus === 'error' ? 'CONEXÃO NÃO INICIADA' : 'PRONTA PARA CONVERSAR'}</small>
+              </div>
+              <div className="voice-session-actions">
+                <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
+                  {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
+                </button>
+                <small>{user ? 'Acesso autenticado · sem gravação de áudio' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
+              </div>
+            </section>
+            {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
             <div className="chat-panel">
               <div className="chat-header"><div className="lumi-avatar">L<span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
