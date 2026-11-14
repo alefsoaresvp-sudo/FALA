@@ -670,7 +670,14 @@ function App() {
         localStorage.removeItem(trackProgressKey)
       }
       const result = mode === 'signup'
-        ? await supabase.auth.signUp({ email: authEmail.trim(), password: authPassword })
+        ? await supabase.auth.signUp({
+            email: authEmail.trim(),
+            password: authPassword,
+            options: {
+              // GitHub Pages project route; keep confirmation links out of localhost.
+              emailRedirectTo: new URL('/FALA/', window.location.origin).toString(),
+            },
+          })
         : await supabase.auth.signInWithPassword({ email: authEmail.trim(), password: authPassword })
       if (result.error) throw result.error
       if (result.data.user && result.data.session) {
