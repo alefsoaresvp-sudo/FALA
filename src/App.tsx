@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
-  ChevronRight, Clock3, Flame, Headphones, Home, Languages, LogIn, LogOut,
+  ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
   MessageCircle, Mic, MoreHorizontal, PenLine, Play, Plus, Send, Sparkles,
   Target, Trash2, Trophy, UserRound, Volume2, X,
 } from 'lucide-react'
