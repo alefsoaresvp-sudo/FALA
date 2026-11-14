@@ -413,7 +413,7 @@ export default function App() {
             intervalDays: Math.max(1, Number(item.review_interval_days) || 1),
           }])) as Record<string, VocabularySchedule>
           setWords(restoredWords)
-          setWordDetails(restoredDetails)
+          setWordDetails(current => ({ ...restoredDetails, ...current }))
           setVocabSchedule(restoredSchedule)
           try {
             window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords))
