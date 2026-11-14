@@ -1435,3 +1435,20 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 /* Keep every former lilac accent inside the Blue Ice palette */
 .metric-icon.lilac { color:#3f72a5; background:#e6f0fb; }
 :root[data-theme="dark"] .metric-icon.lilac { color:#c2e0ff; background:#203d5f; }
+
+
+/* iPhone Dynamic Island / notch clearance: keep the app header below the safe area */
+@supports (-webkit-touch-callout:none) {
+  @media (max-width:700px) {
+    .fala-app {
+      padding-top:max(env(safe-area-inset-top, 0px), 56px);
+    }
+    .topbar {
+      top:max(calc(env(safe-area-inset-top, 0px) + 8px), 64px);
+      margin-top:8px;
+    }
+    .mobile-menu {
+      top:max(calc(env(safe-area-inset-top, 0px) + 70px), 126px);
+    }
+  }
+}
