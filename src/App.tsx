@@ -196,6 +196,7 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false)
   const [chatNotice, setChatNotice] = useState('')
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [lumiVoiceId, setLumiVoiceId] = useState('MEJe6hPrI48Kt2lFuVe3')
   const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
   const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
@@ -545,6 +546,7 @@ export default function App() {
         conversationToken: data.conversation_token,
         connectionType: 'webrtc',
         userId: user.id,
+        overrides: { tts: { voiceId: lumiVoiceId } },
         onConnect: () => {
           setVoiceStatus('connected')
           setVoiceMessage('Lumi está ouvindo. Fale naturalmente em inglês ou peça uma explicação em português.')
@@ -1117,9 +1119,17 @@ export default function App() {
       return
     }
     window.speechSynthesis.cancel()
+    const lang = profile.accent === 'uk' ? 'en-GB' : 'en-US'
+    const voices = window.speechSynthesis.getVoices()
+    const voice = voices.find(item => item.lang === lang && /natural|premium|samantha|aria|jenny|google/i.test(item.name))
+      ?? voices.find(item => item.lang === lang)
+      ?? voices.find(item => item.lang.startsWith('en'))
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = profile.accent === 'uk' ? 'en-GB' : 'en-US'
-    utterance.rate = 0.88
+    utterance.lang = lang
+    if (voice) utterance.voice = voice
+    utterance.rate = 0.96
+    utterance.pitch = 1.04
+    utterance.volume = 0.95
     window.speechSynthesis.speak(utterance)
   }
 
@@ -1320,13 +1330,14 @@ export default function App() {
 
           {page === 'music' && <section className="music-layout">
             <div className="page-heading"><span className="eyebrow">MUSIC LAB · VERSOS ORIGINAIS</span><h1>Aprenda inglês <em>com música.</em></h1><p>Escute, leia, repita e recupere uma expressão sem olhar. As letras são originais do FALA.</p></div>
-            <article className="music-hero"><div><span className="eyebrow">{musicSet.theme.toUpperCase()}</span><h2>{musicSet.title}</h2><p>Primeiro escute devagar. Depois tente repetir cada linha no seu ritmo.</p><div className="music-controls"><button className="button primary" onClick={() => speak(musicSet.lyrics.join('. '))}><Play size={15}/> Ouvir devagar</button><button className="button ghost" onClick={() => speak(musicSet.lyrics.join('. '))}><Volume2 size={15}/> Ouvir novamente</button></div></div><span className="music-disc"><Music2 size={35}/><b>FALA<br/>MUSIC LAB</b></span></article>
+            <article className="music-hero"><div><span className="eyebrow">{musicSet.theme.toUpperCase()}</span><h2>{musicSet.title}</h2><p>Pratique com áudio real, acompanhe a letra original do FALA e use a pronúncia como apoio.</p><div className="music-controls"><a className="button primary" href="https://open.spotify.com/search/english%20songs" target="_blank" rel="noreferrer"><Play size={15}/> Buscar músicas no Spotify</a><button className="button ghost" onClick={() => speak(musicSet.lyrics.join('. '))}><Volume2 size={15}/> Ouvir pronúncia</button></div></div><span className="music-disc"><Music2 size={35}/><b>FALA<br/>MUSIC LAB</b></span></article>
+            <article className="music-player-card"><div className="music-player-heading"><div><span className="eyebrow">PLAYER DE MÚSICA · SPOTIFY</span><h3>Ouça músicas de verdade</h3><p>Use a busca do Spotify para escolher a faixa que quer estudar. A reprodução e eventuais anúncios são controlados pelo Spotify.</p></div><a href="https://open.spotify.com/search/english%20songs" target="_blank" rel="noreferrer">Abrir Spotify <ArrowRight size={14}/></a></div><iframe title="Spotify — músicas em inglês" src="https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M?utm_source=generator&theme=0" width="100%" height="352" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"/></article>
             <div className="music-grid">
               <article className="music-panel"><span className="eyebrow">OUVIR · LER · REPETIR</span><h3>Verso em inglês</h3>{musicSet.lyrics.map((line,index) => <button className="music-line" key={line} onClick={() => speak(line)}><span>0{index+1}</span><strong>{line}</strong><Volume2 size={15}/></button>)}<p>{musicSet.translation}</p></article>
               <article className="music-panel"><span className="eyebrow">VOCABULÁRIO DO VERSO</span><h3>Palavras para guardar</h3>{musicSet.words.map(([word,meaning]) => <div className="music-word" key={word}><div><strong>{word}</strong><small>{meaning}</small></div><button className="round-action" onClick={() => speak(word)} aria-label={'Ouvir '+word}><Volume2 size={16}/></button><button className="round-action" onClick={() => { setNewWord(word); setToast('Expressão preenchida. Salve-a no seu caderno de vocabulário.') }} aria-label={'Preparar '+word+' para salvar'}><Plus size={16}/></button></div>)}</article>
             </div>
             <article className="music-quiz"><div><span className="eyebrow">RECUPERAÇÃO ATIVA</span><h3>Complete o verso sem olhar.</h3><p>“{musicSet.lyrics.find(line => line.toLowerCase().includes(musicSet.gap))?.replace(new RegExp(musicSet.gap,'i'),'_____')}”</p></div><div className="music-options">{musicSet.options.map(option => <button key={option} className={musicAnswer === option ? 'selected' : ''} onClick={() => { setMusicAnswer(option); setMusicFeedback(option === musicSet.gap ? 'Correto. Agora ouça a linha completa e repita sem ler.' : 'Ainda não. Ouça o verso e tente outra vez.') }}>{option}</button>)}</div>{musicFeedback && <p className="inline-notice">{musicFeedback}</p>}<button className="text-button" onClick={() => { setMusicAnswer(''); setMusicFeedback('') }}>Refazer desafio</button></article>
-            <p className="music-disclaimer">Este laboratório usa versos originais do FALA. A voz sintetizada ajuda a praticar ritmo e vocabulário, mas não é canto humano e não mede afinação.</p>
+            <p className="music-disclaimer">Este laboratório usa versos originais do FALA. O player Spotify funciona de forma independente. O FALA não sincroniza músicas externas com letras; a leitura das frases originais é um exercício separado de pronúncia.</p>
           </section>}
 
           {page === 'lumi' && <section className="lumi-layout">
@@ -1340,6 +1351,13 @@ export default function App() {
                 <small className={'voice-state ' + voiceStatus}>{voiceStatus === 'connected' ? 'AO VIVO · MICROFONE ATIVO' : voiceStatus === 'connecting' ? 'CONECTANDO…' : voiceStatus === 'error' ? 'CONEXÃO NÃO INICIADA' : 'PRONTA PARA CONVERSAR'}</small>
               </div>
               <div className="voice-session-actions">
+                <label className="voice-choice">Voz da Lumi
+                  <select value={lumiVoiceId} onChange={event => setLumiVoiceId(event.target.value)} disabled={voiceStatus === 'connected' || voiceStatus === 'connecting'}>
+                    <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · jovem e expressiva</option>
+                    <option value="r1KmysJdVYZjJCm4mL3b">Jessica · brilhante e acolhedora</option>
+                    <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · natural e descontraída</option>
+                  </select>
+                </label>
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
                   {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
                 </button>
