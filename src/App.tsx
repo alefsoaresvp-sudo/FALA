@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
-import { readMusicSet } from './musicLab'
 import { supabase } from './supabase'
 
 type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'profile'
@@ -247,8 +246,6 @@ export default function App() {
   const [trackBusy, setTrackBusy] = useState(false)
   const [trackExamAnswers, setTrackExamAnswers] = useState<Record<number, number>>({})
   const [trackExamScore, setTrackExamScore] = useState<number | null>(null)
-  const [musicAnswer, setMusicAnswer] = useState('')
-  const [musicFeedback, setMusicFeedback] = useState('')
   const [recording, setRecording] = useState(false)
   const [recordingNotice, setRecordingNotice] = useState('')
   const [transcript, setTranscript] = useState('')
@@ -272,7 +269,6 @@ export default function App() {
   const activeTrack = learningTracks.find(item => item.id === activeTrackId) ?? null
   const activeTrackProgress = activeTrack ? (trackProgress[activeTrack.id] ?? EMPTY_TRACK_PROGRESS) : EMPTY_TRACK_PROGRESS
   const activeTrackLesson = activeTrack?.lessons[trackLessonIndex] ?? null
-  const musicSet = useMemo(() => readMusicSet(profile), [profile])
   const averageScore = useMemo(() => {
     const scores = sessions.map(item => item.score).filter((value): value is number => typeof value === 'number')
     return scores.length ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length) : null
