@@ -13,7 +13,8 @@
     "@supabase/supabase-js": "2.82.0",
     "lucide-react": "0.468.0",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "@elevenlabs/client": "^1.36.1"
   },
   "devDependencies": {
     "@types/react": "19.1.10",
