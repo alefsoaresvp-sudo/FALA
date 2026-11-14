@@ -120,7 +120,13 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [authMessage, setAuthMessage] = useState('')
-  const [profile, setProfile] = useState<Profile>(() => readLocal(PROFILE_KEY, initialProfile))
+  const [profile, setProfile] = useState<Profile>(() => {
+    const currentProfile = readLocal<Profile | null>(PROFILE_KEY, null)
+    if (currentProfile) return { ...initialProfile, ...currentProfile }
+    // Preserve guest preferences saved by the previous FALA version.
+    const legacyProfile = readLocal<Partial<Profile> | null>('fala-profile-v2', null)
+    return legacyProfile ? { ...initialProfile, ...legacyProfile } : initialProfile
+  })
   const [profileOpen, setProfileOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState(profile.name)
   const [goalDraft, setGoalDraft] = useState<Goal>(profile.goal)
