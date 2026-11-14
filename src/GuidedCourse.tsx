@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, CircleHelp, Headphones,
+  ArrowRight, BookOpen, Check, CheckCircle2, CircleHelp, Headphones,
   LockKeyhole, MessageCircle, Mic, Play, RotateCcw, Sparkles, Star, Volume2,
   X, Zap,
 } from 'lucide-react'
@@ -490,7 +490,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         return <article className={unitUnlocked ? 'course-unit-card' : 'course-unit-card locked'} key={unit.id}>
           <div className="course-unit-heading"><span className="course-unit-number">{String(unitIndex + 1).padStart(2, '0')}</span><div><h3>{unit.title}</h3><p>{unit.subtitle}</p></div>{unitDone ? <span className="unit-complete-pill"><CheckCircle2 size={14}/> Concluída</span> : !unitUnlocked ? <LockKeyhole size={18}/> : <span className="unit-open-pill">EM ANDAMENTO</span>}</div>
           <div className="course-lesson-list">
-            {unit.lessons.map((lesson, lessonIndex) => {
+            {unit.lessons.map(lesson => {
               const globalIndex = allLessons.findIndex(item => item.id === lesson.id)
               const done = progress.completedLessonIds.includes(lesson.id)
               const unlocked = globalIndex === 0 || progress.completedLessonIds.includes(allLessons[globalIndex - 1].id)
