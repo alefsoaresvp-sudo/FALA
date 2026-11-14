@@ -204,7 +204,7 @@ export default function App() {
   const [chatBusy, setChatBusy] = useState(false)
   const [chatNotice, setChatNotice] = useState('')
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
-  const [lumiVoiceId, setLumiVoiceId] = useState('MEJe6hPrI48Kt2lFuVe3')
+  const [lumiVoiceId, setLumiVoiceId] = useState(() => readLocal('fala-lumi-voice-v1', 'MEJe6hPrI48Kt2lFuVe3'))
   const [voiceMessage, setVoiceMessage] = useState('')
   const [activityIndex, setActivityIndex] = useState(0)
   const [activity, setActivity] = useState<LearningActivity>(activityBank[0])
@@ -287,6 +287,10 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
+    try { window.localStorage.setItem('fala-lumi-voice-v1', lumiVoiceId) } catch { /* Voice preference is optional. */ }
+  }, [lumiVoiceId])
+
+  useEffect(() => {
     if (!supabase) {
       setAuthReady(true)
       return
@@ -320,7 +324,7 @@ export default function App() {
       try {
         const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-          supabase.from('vocabulary_items').select('term').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
+          supabase.from('vocabulary_items').select('term,meaning').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
@@ -355,8 +359,13 @@ export default function App() {
         }
         if (vocabularyResult.data) {
           const restoredWords = vocabularyResult.data.map(item => item.term)
+          const restoredDetails = Object.fromEntries(vocabularyResult.data.filter(item => item.meaning).map(item => [item.term, { meaning: item.meaning, example: '' }]))
           setWords(restoredWords)
-          try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords)) } catch { /* local cache is optional */ }
+          setWordDetails(current => ({ ...restoredDetails, ...current }))
+          try {
+            window.localStorage.setItem(WORDS_KEY, JSON.stringify(restoredWords))
+            window.localStorage.setItem(VOCAB_DETAILS_KEY, JSON.stringify(restoredDetails))
+          } catch { /* local cache is optional */ }
         }
         if (sessionsResult.data) setSessions(sessionsResult.data as SessionRow[])
         if (messagesResult.data?.length) {
@@ -1121,7 +1130,7 @@ export default function App() {
     setNewWord('')
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
     if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: '' }, { onConflict: 'user_id,term' })
+      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '' }, { onConflict: 'user_id,term' })
       if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
     }
   }
@@ -1488,6 +1497,8 @@ export default function App() {
                     <option value="MEJe6hPrI48Kt2lFuVe3">Yumi · jovem e expressiva</option>
                     <option value="r1KmysJdVYZjJCm4mL3b">Jessica · brilhante e acolhedora</option>
                     <option value="AhjZC0ZjjAe9YVCMX0PH">Didi · natural e descontraída</option>
+                    <option value="rLl4PSDTzX3VHL4wjSFI">Jesse · personagem amigável</option>
+                    <option value="L6s7ahP9mHOb2S1Qynng">Zane · amigo animado</option>
                   </select>
                 </label>
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
