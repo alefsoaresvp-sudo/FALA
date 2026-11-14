@@ -307,3 +307,92 @@
 :root[data-theme="dark"] .lesson-tip-box { border-color: #365674; border-left-color: #75afe0; background: #1b354f; }
 :root[data-theme="dark"] .lesson-tip-box strong { color: #c4e2ff; }
 :root[data-theme="dark"] .lesson-tip-box p { color: #b3c9dd; }
+
+
+/* FALA v9 — etapas explícitas de aprendizagem e prática */
+.lesson-prep-actions {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  padding: 2px 3px 8px;
+}
+.lesson-prep-actions .course-primary-button {
+  min-width: 210px;
+}
+.lesson-prep-actions p {
+  margin: 0;
+  color: #8196aa;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.course-review-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  margin-top: 3px;
+  padding: 6px 0;
+  border: 0;
+  color: #477fae;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+}
+.exercise-hint-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  margin: -8px 0 13px;
+  padding: 0 10px;
+  border: 1px solid #d9e7f3;
+  border-radius: 9px;
+  color: #477fae;
+  background: #f8fbff;
+  font-size: 10px;
+  font-weight: 800;
+}
+.exercise-hint-panel {
+  display: grid;
+  gap: 5px;
+  margin: 0 0 14px;
+  padding: 12px 13px;
+  border: 1px solid #d6e6f4;
+  border-left: 3px solid #77acd7;
+  border-radius: 11px;
+  background: #f5faff;
+}
+.exercise-hint-panel strong {
+  color: #356c99;
+  font-size: 10px;
+}
+.exercise-hint-panel p {
+  margin: 0;
+  color: #58758f;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.exercise-hint-panel small {
+  color: #7993aa;
+  font-size: 9px;
+  line-height: 1.5;
+}
+:root[data-theme="dark"] .lesson-prep-actions p { color: #a3b8cc; }
+:root[data-theme="dark"] .course-review-button { color: #a8ccef; }
+:root[data-theme="dark"] .exercise-hint-toggle {
+  border-color: #3a5b78;
+  color: #b9d8f5;
+  background: #1d354e;
+}
+:root[data-theme="dark"] .exercise-hint-panel {
+  border-color: #395976;
+  border-left-color: #78b5e5;
+  background: #1b354f;
+}
+:root[data-theme="dark"] .exercise-hint-panel strong { color: #c5e2ff; }
+:root[data-theme="dark"] .exercise-hint-panel p { color: #b4cbe0; }
+:root[data-theme="dark"] .exercise-hint-panel small { color: #9fb8ce; }
+
+@media (max-width:700px) {
+  .lesson-prep-actions .course-primary-button { width: 100%; min-height: 47px; }
+  .lesson-prep-actions { width: 100%; }
+}

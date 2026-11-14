@@ -1087,6 +1087,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
+  const [lessonPhase, setLessonPhase] = useState<'learn' | 'practice'>('learn')
+  const [showHint, setShowHint] = useState(false)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [builtWords, setBuiltWords] = useState<string[]>([])
   const [typedAnswer, setTypedAnswer] = useState('')
@@ -1128,10 +1130,13 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setTypedAnswer('')
     setChecked(null)
     setAudioNotice('')
+    setShowHint(false)
   }
   const beginLesson = (lessonId: string) => {
     setActiveLessonId(lessonId)
     setStep(0)
+    setLessonPhase('learn')
+    setShowHint(false)
     setMistakes(0)
     setCheckpointNotice('')
     resetExercise()
@@ -1256,25 +1261,35 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round(((step + 1) / currentLesson.exercises.length) * 100)
+    const progressPercent = Math.round(10 + ((step + 1) / currentLesson.exercises.length) * 90)
+    const hintText = currentExercise.hint ?? (currentExercise.kind === 'choice'
+      ? 'Traduza as opções e elimine as que não combinam com a pergunta.'
+      : currentExercise.kind === 'build'
+        ? 'Comece pelo sujeito (quem faz a ação). Depois encontre o verbo e complete a ideia.'
+        : currentExercise.kind === 'type'
+          ? 'Recupere a estrutura apresentada na explicação e escreva a frase completa, sem copiar.'
+          : currentExercise.kind === 'listen'
+            ? 'Ouça a frase inteira uma vez. Depois escute novamente e preste atenção em cada palavra.'
+            : 'Ouça o modelo, identifique os grupos de palavras e repita em voz alta no seu ritmo.')
     const canCheck = currentExercise.kind === 'choice' ? !!selectedChoice
       : currentExercise.kind === 'build' ? builtWords.length > 0
         : currentExercise.kind === 'repeat' ? checked === true
           : !!typedAnswer.trim()
-    return (
+
+    if (lessonPhase === 'learn') return (
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
-          <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
-          <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
-          <span>{step + 1}/{currentLesson.exercises.length}</span>
+          <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })); resetExercise() }} aria-label="Sair da aula"><X size={19}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '10%' }}/></div>
+          <span>ETAPA 1/2</span>
         </div>
         <div className="lesson-context">
-          <span className="course-eyebrow">AULA GUIADA · {currentLesson.subtitle.toUpperCase()}</span>
+          <span className="course-eyebrow">PRIMEIRO, APRENDA · {currentLesson.subtitle.toUpperCase()}</span>
           <h1>{currentLesson.title}</h1>
           <p>{currentLesson.objective}</p>
         </div>
         <article className="lesson-teaching-card">
-          <div className="teaching-card-heading"><span><BookOpen size={17}/> Primeiro, entenda</span><span className="lesson-step-chip">LIÇÃO {allLessons.findIndex(item => item.id === currentLesson.id) + 1}</span></div>
+          <div className="teaching-card-heading"><span><BookOpen size={17}/> Entenda antes de praticar</span><span className="lesson-step-chip">LIÇÃO {allLessons.findIndex(item => item.id === currentLesson.id) + 1}</span></div>
           <div className="teaching-word-grid">
             {currentLesson.teach.map(item => <div className="teaching-word" key={item.term}>
               <strong>{item.term}</strong><span>{item.meaning}</span><small>{item.example}</small>
@@ -1284,10 +1299,32 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.pattern}</span></div>
           {currentLesson.lessonTip && <div className="lesson-tip-box"><strong>Entenda a regra</strong><p>{currentLesson.lessonTip}</p></div>}
         </article>
+        <div className="lesson-prep-actions">
+          <button className="course-primary-button" onClick={() => { setLessonPhase('practice'); setShowHint(false) }}>Começar exercícios <ArrowRight size={17}/></button>
+          <p>Você já viu a explicação. Agora tente lembrar e usar o inglês sem olhar para os exemplos.</p>
+        </div>
+      </section>
+    )
+
+    return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
+          <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
+          <span>EXERCÍCIO {step + 1}/{currentLesson.exercises.length}</span>
+        </div>
+        <div className="lesson-context">
+          <span className="course-eyebrow">AULA GUIADA · {currentLesson.subtitle.toUpperCase()}</span>
+          <h1>{currentLesson.title}</h1>
+          <p>{currentLesson.objective}</p>
+          <button className="course-review-button" onClick={() => setLessonPhase('learn')}><BookOpen size={14}/> Rever explicação</button>
+        </div>
         {checkpointNotice && <div className="checkpoint-retry-notice"><strong>Você ainda não passou no teste.</strong><span>{checkpointNotice}</span></div>}
         <article className="lesson-exercise-card">
           <div className="exercise-card-topline"><span>AGORA É SUA VEZ</span><span>{currentExercise.kind === 'choice' ? 'ESCOLHA' : currentExercise.kind === 'build' ? 'MONTE A FRASE' : currentExercise.kind === 'type' ? 'ESCRITA' : currentExercise.kind === 'listen' ? 'ESCUTA' : 'FALA'}</span></div>
           <h2>{currentExercise.prompt}</h2>
+          <button className="exercise-hint-toggle" onClick={() => setShowHint(value => !value)} aria-expanded={showHint}>{showHint ? 'Ocultar dica' : 'Precisa de uma dica?'}</button>
+          {showHint && <div className="exercise-hint-panel"><strong>Pense no caminho, não na resposta</strong><p>{hintText}</p><small>Padrão desta aula: {currentLesson.pattern}</small></div>}
           {(currentExercise.kind === 'listen' || currentExercise.kind === 'repeat') && <button className="listen-model-button" onClick={() => playModel(currentExercise.answer)}><Volume2 size={20}/> Ouvir modelo em inglês</button>}
           {currentExercise.kind === 'choice' && <div className="course-choice-list">
             {currentExercise.options?.map(option => <button key={option} disabled={checked !== null} className={selectedChoice === option ? 'selected' : ''} onClick={() => setSelectedChoice(option)}>{option}{selectedChoice === option && <CheckCircle2 size={17}/>}</button>)}
@@ -1338,7 +1375,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <article><Star size={18}/><strong>{progress.xp}</strong><span>pontos conquistados</span></article>
         <article><Zap size={18}/><strong>{progress.streakDays ?? 0} dias</strong><span>sequência de estudo</span></article>
       </div>
-      <div className="course-path-heading"><div><span className="course-eyebrow">SUA TRILHA</span><h2>Uma etapa de cada vez</h2></div><span className="course-level-label">A0 → C1 · 40 aulas sequenciais</span></div>
+      <div className="course-path-heading"><div><span className="course-eyebrow">SUA TRILHA</span><h2>Uma etapa de cada vez</h2></div><span className="course-level-label">A0 → C1 · {allLessons.length} aulas sequenciais</span></div>
       {units.map((unit, unitIndex) => {
         const firstLessonIndex = allLessons.findIndex(lesson => lesson.id === unit.lessons[0].id)
         const unitDone = unit.lessons.every(lesson => progress.completedLessonIds.includes(lesson.id))
