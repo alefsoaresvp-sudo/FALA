@@ -2541,3 +2541,39 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   .global-search { display:none; }
   .sidebar { overflow:visible; }
 }
+
+
+/* FALA brand identity: mascot, wordmark and compact mobile mark */
+.brand-lockup {
+  min-height: 94px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0 0 26px;
+}
+.brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 218px;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+.boot-brand-icon {
+  display: block;
+  width: 78px;
+  height: 78px;
+  margin-bottom: 13px;
+  border-radius: 22px;
+  box-shadow: 0 12px 28px rgba(16,45,80,.18);
+}
+.topbar-brand-icon { display: none; }
+@media (max-width: 700px) {
+  .topbar-title { gap: 8px; }
+  .topbar-brand-icon {
+    display: block;
+    width: 27px;
+    height: 27px;
+    flex: 0 0 27px;
+    border-radius: 8px;
+  }
+}
