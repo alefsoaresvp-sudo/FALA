@@ -1288,7 +1288,6 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title">
             <button className="mobile-menu-button" onClick={() => setMenuOpen(value => !value)} aria-label="Abrir menu"><MoreHorizontal size={20}/></button>
-            <img className="topbar-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
             <span>FALA / <strong>{titleByPage[page]}</strong></span>
           </div>
           <div className="global-search">
@@ -1322,6 +1321,10 @@ export default function App() {
         {menuOpen && <div className="mobile-menu">{navItems.map(item => <button key={item.id} onClick={() => { setPage(item.id); setMenuOpen(false) }}>{item.label}</button>)}</div>}
 
         <main className="page-content">
+          <div className="mobile-brand-lockup">
+            <img className="brand-logo mobile-brand-logo brand-logo-light" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English" />
+            <img className="brand-logo mobile-brand-logo brand-logo-dark" src={`${import.meta.env.BASE_URL}fala-logo-dark.svg`} alt="" aria-hidden="true" />
+          </div>
           {page === 'home' && <>
             <section className="welcome-strip">
               <div>
