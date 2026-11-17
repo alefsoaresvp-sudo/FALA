@@ -230,6 +230,7 @@ export default function App() {
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [globalSearch, setGlobalSearch] = useState('')
   const [showDemoHint, setShowDemoHint] = useState(true)
   const [toast, setToast] = useState('')
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -1288,6 +1289,26 @@ export default function App() {
           <div className="topbar-title">
             <button className="mobile-menu-button" onClick={() => setMenuOpen(value => !value)} aria-label="Abrir menu"><MoreHorizontal size={20}/></button>
             <span>FALA / <strong>{titleByPage[page]}</strong></span>
+          </div>
+          <div className="global-search">
+            <Search size={17}/>
+            <input value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} placeholder="Buscar ferramentas e trilhas…" aria-label="Buscar ferramentas e trilhas" onKeyDown={event => {
+              if (event.key !== 'Enter' || !globalSearch.trim()) return
+              const query = globalSearch.trim().toLocaleLowerCase('pt-BR')
+              const navMatch = navItems.find(item => item.label.toLocaleLowerCase('pt-BR').includes(query))
+              const trackMatch = learningTracks.find(track => track.title.toLocaleLowerCase('pt-BR').includes(query))
+              if (navMatch) setPage(navMatch.id)
+              else if (trackMatch) { openTrack(trackMatch.id); setPage('tracks') }
+              setGlobalSearch('')
+            }}/>
+            {globalSearch.trim() && <div className="global-search-results">
+              {navItems.filter(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).map(item => {
+                const Icon = item.icon
+                return <button key={item.id} onClick={() => { setPage(item.id); setGlobalSearch('') }}><Icon size={16}/><span>{item.label}</span><ChevronRight size={14}/></button>
+              })}
+              {learningTracks.filter(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(track => <button key={track.id} onClick={() => { openTrack(track.id); setPage('tracks'); setGlobalSearch('') }}><Map size={16}/><span>{track.title}</span><ChevronRight size={14}/></button>)}
+              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhuma ferramenta ou trilha encontrada.</p>}
+            </div>}
           </div>
           <div className="topbar-actions">
             <button className="theme-toggle" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'} title={theme === 'light' ? 'Tema escuro' : 'Tema claro'}>{theme === 'light' ? <Moon size={17}/> : <Sun size={17}/>}</button>
