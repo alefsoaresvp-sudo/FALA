@@ -1,7 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="120" fill="#173858"/>
-  <circle cx="256" cy="256" r="174" fill="#b9dcff"/>
-  <path d="M300 160c-18-17-43-25-75-25-69 0-112 44-112 118 0 74 43 119 112 119 36 0 66-12 87-36l-40-38c-11 13-25 20-44 20-35 0-55-25-55-65 0-40 20-65 55-65 15 0 28 5 39 14z" fill="#173858"/>
-  <circle cx="352" cy="303" r="34" fill="#173858"/>
-  <circle cx="364" cy="292" r="8" fill="#fff"/>
+  <defs>
+    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2675d7"/>
+      <stop offset="1" stop-color="#16b6b0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#102d50"/>
+  <path d="M135 92h244c33 0 59 26 59 59v155c0 33-26 59-59 59H256l-92 73v-73h-29c-33 0-59-26-59-59V151c0-33 26-59 59-59Z" fill="url(#bubble)"/>
+  <path d="M175 166h185v38H220v48h119v38H220v92h-45z" fill="#fff"/>
+  <path d="M382 103l25-31m6 78 38-22m-26 69 42-4" stroke="#52e4cf" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="390" cy="369" r="17" fill="#52e4cf"/>
 </svg>

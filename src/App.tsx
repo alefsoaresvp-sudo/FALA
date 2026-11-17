@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Conversation } from '@elevenlabs/client'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
@@ -11,7 +10,7 @@ import { learningTracks, type TrackProgress } from './learningTracks'
 import GuidedCourse from './GuidedCourse'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'profile'
+type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -55,6 +54,13 @@ const initialChat: ChatMessage[] = [
   { role: 'assistant', text: 'Hi! I am Lumi, your English practice partner. Tell me what you would like to talk about today.' },
 ]
 const interestOptions = ['Tecnologia e IA', 'Carros e automobilismo', 'Games', 'Negócios', 'Música', 'Filmes e séries', 'Viagens', 'Esportes', 'Ciência', 'Programação']
+const diagnosticQuestions = [
+  { question: 'Escolha a frase correta para dizer “Eu sou estudante”.', options: ['I am a student.', 'I have student.', 'I student am.'], answer: 0, explanation: 'Usamos I am para dizer “eu sou/estou”.' },
+  { question: 'Complete: “My sister ___ English every day.”', options: ['study', 'studies', 'studying'], answer: 1, explanation: 'Com he, she ou it no Simple Present, normalmente acrescentamos -s ou -es ao verbo.' },
+  { question: 'Complete: “Yesterday, we ___ to the museum.”', options: ['go', 'goed', 'went'], answer: 2, explanation: 'Went é o passado irregular de go.' },
+  { question: 'Complete: “If I had more time, I ___ travel more.”', options: ['would', 'will', 'am'], answer: 0, explanation: 'Would + verbo base forma o resultado hipotético do Second Conditional.' },
+  { question: 'Complete: “I have worked here ___ 2022.”', options: ['for', 'since', 'during'], answer: 1, explanation: 'Since indica o ponto de início; for indica duração.' },
+]
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key)
@@ -98,8 +104,12 @@ const navItems = [
   { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
+  { id: 'diagnostic' as Page, label: 'Descobrir meu nível', icon: Target },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
 ]
+const primaryNavIds: Page[] = ['home', 'learn', 'lumi', 'speak', 'progress']
+const primaryNavItems = navItems.filter(item => primaryNavIds.includes(item.id))
+const toolNavItems = navItems.filter(item => !primaryNavIds.includes(item.id))
 
 function LumiPortrait() {
   return <svg className="lumi-portrait" viewBox="0 0 112 112" role="img" aria-label="Personagem Lumi">
@@ -129,6 +139,8 @@ function LumiPortrait() {
 
 export default function App() {
   const [page, setPage] = useState<Page>('home')
+  const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
+  const [diagnosticResult, setDiagnosticResult] = useState<{ score: number; level: Level } | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => readLocal(THEME_KEY, 'light'))
   const [profilePhoto, setProfilePhoto] = useState<string>(() => readLocal(PROFILE_PHOTO_KEY, ''))
   const [user, setUser] = useState<User | null>(null)
@@ -217,6 +229,7 @@ export default function App() {
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [globalSearch, setGlobalSearch] = useState('')
   const [showDemoHint, setShowDemoHint] = useState(true)
   const [toast, setToast] = useState('')
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -272,7 +285,7 @@ export default function App() {
   }, [recentAttempts, learnerInsights])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
-    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
+    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', diagnostic: 'Diagnóstico de nível', profile: 'Meu perfil',
   }
 
   useEffect(() => {
@@ -599,6 +612,7 @@ export default function App() {
       if (typeof data?.conversation_token !== 'string' || !data.conversation_token) {
         throw new Error('O servidor não retornou um token válido. Verifique ELEVENLABS_API_KEY nos secrets do Supabase.')
       }
+      const { Conversation } = await import('@elevenlabs/client')
       const conversation = await Conversation.startSession({
         conversationToken: data.conversation_token,
         connectionType: 'webrtc',
@@ -1232,22 +1246,31 @@ export default function App() {
   }
 
   if (!authReady) {
-    return <div className="boot-screen"><div className="brand-mark">f.</div><strong>FALA English</strong><span>Preparando seu espaço de aprendizagem…</span></div>
+    return <div className="boot-screen"><img className="boot-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" /><strong>FALA English</strong><span>Preparando seu espaço de aprendizagem…</span></div>
   }
 
   return (
     <div className="fala-app">
       <aside className="sidebar">
         <div className="brand-lockup">
-          <div className="brand-mark">f.</div>
-          <div><strong>fala<span>english</span></strong><small>APRENDIZAGEM COM IA</small></div>
+          <img className="brand-logo brand-logo-light" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English — Aprenda, pratique e converse" />
+          <img className="brand-logo brand-logo-dark" src={`${import.meta.env.BASE_URL}fala-logo-dark.svg`} alt="" aria-hidden="true" />
         </div>
-        <div className="side-label">SEU ESPAÇO</div>
+        <div className="side-label">APRENDIZAGEM</div>
         <nav className="side-nav" aria-label="Navegação principal">
-          {navItems.map(item => {
+          {primaryNavItems.map(item => {
             const Icon = item.icon
-            return <button key={item.id} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
+            return <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
               <Icon size={18}/><span>{item.label}</span>{item.id === 'lumi' && <i className="nav-ai-dot"/>}
+            </button>
+          })}
+        </nav>
+        <div className="side-label side-label-tools">FERRAMENTAS</div>
+        <nav className="side-nav side-nav-tools" aria-label="Ferramentas complementares">
+          {toolNavItems.map(item => {
+            const Icon = item.icon
+            return <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
+              <Icon size={18}/><span>{item.label}</span>
             </button>
           })}
         </nav>
@@ -1267,6 +1290,26 @@ export default function App() {
             <button className="mobile-menu-button" onClick={() => setMenuOpen(value => !value)} aria-label="Abrir menu"><MoreHorizontal size={20}/></button>
             <span>FALA / <strong>{titleByPage[page]}</strong></span>
           </div>
+          <div className="global-search">
+            <Search size={17}/>
+            <input value={globalSearch} onChange={event => setGlobalSearch(event.target.value)} placeholder="Buscar ferramentas e trilhas…" aria-label="Buscar ferramentas e trilhas" onKeyDown={event => {
+              if (event.key !== 'Enter' || !globalSearch.trim()) return
+              const query = globalSearch.trim().toLocaleLowerCase('pt-BR')
+              const navMatch = navItems.find(item => item.label.toLocaleLowerCase('pt-BR').includes(query))
+              const trackMatch = learningTracks.find(track => track.title.toLocaleLowerCase('pt-BR').includes(query))
+              if (navMatch) setPage(navMatch.id)
+              else if (trackMatch) { openTrack(trackMatch.id); setPage('tracks') }
+              setGlobalSearch('')
+            }}/>
+            {globalSearch.trim() && <div className="global-search-results">
+              {navItems.filter(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).map(item => {
+                const Icon = item.icon
+                return <button key={item.id} onClick={() => { setPage(item.id); setGlobalSearch('') }}><Icon size={16}/><span>{item.label}</span><ChevronRight size={14}/></button>
+              })}
+              {learningTracks.filter(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(track => <button key={track.id} onClick={() => { openTrack(track.id); setPage('tracks'); setGlobalSearch('') }}><Map size={16}/><span>{track.title}</span><ChevronRight size={14}/></button>)}
+              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhuma ferramenta ou trilha encontrada.</p>}
+            </div>}
+          </div>
           <div className="topbar-actions">
             <button className="theme-toggle" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'} title={theme === 'light' ? 'Tema escuro' : 'Tema claro'}>{theme === 'light' ? <Moon size={17}/> : <Sun size={17}/>}</button>
             <button className="profile-top-button" onClick={() => setPage('profile')} aria-label="Abrir meu perfil">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</button>
@@ -1278,6 +1321,10 @@ export default function App() {
         {menuOpen && <div className="mobile-menu">{navItems.map(item => <button key={item.id} onClick={() => { setPage(item.id); setMenuOpen(false) }}>{item.label}</button>)}</div>}
 
         <main className="page-content">
+          <div className="mobile-brand-lockup">
+            <img className="brand-logo mobile-brand-logo brand-logo-light" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English" />
+            <img className="brand-logo mobile-brand-logo brand-logo-dark" src={`${import.meta.env.BASE_URL}fala-logo-dark.svg`} alt="" aria-hidden="true" />
+          </div>
           {page === 'home' && <>
             <section className="welcome-strip">
               <div>
@@ -1310,15 +1357,47 @@ export default function App() {
               <article className="metric-card"><span className="metric-icon lilac"><Trophy size={18}/></span><div><small>APROVEITAMENTO</small><strong>{averageScore === null ? '—' : averageScore + '%'}</strong><span>{averageScore === null ? 'ainda sem dados suficientes' : 'média das tentativas'}</span></div></article>
             </div>
 
-            <section className="smart-study-card">
-              <div className="smart-study-main"><span className="eyebrow">{dueWords.length ? 'REVISÃO ESPAÇADA' : 'CURSO GUIADO · DO ZERO'}</span><h2>{dueWords.length ? dueWords.length + ' expressões para revisar' : 'Seu próximo passo está organizado.'}</h2><p>{dueWords.length ? 'Recupere o significado antes de olhar a resposta. O FALA ajusta o intervalo conforme sua lembrança.' : 'Aprenda palavras, entenda como as frases são montadas e pratique antes de avançar para situações reais.'}</p><button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar o curso'} <ArrowRight size={16}/></button></div>
-              <aside className="smart-study-progress"><span>META DIÁRIA</span><strong>{todayPracticeMinutes} / {profile.minutes} min</strong><div className="smart-study-track"><i style={{ width: dailyGoalProgress + '%' }}/></div><small>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos de prática.'}</small></aside>
+            <section className="dashboard-command-grid" aria-label="Plano de aprendizagem de hoje">
+              <article className="dashboard-next-card">
+                <div className="dashboard-next-topline">
+                  <span className="dashboard-live-label"><i/> SUA PRÓXIMA AÇÃO</span>
+                  <span className="dashboard-level-chip">{profile.level === 'unsure' ? 'NÍVEL A DESCOBRIR' : profile.level.toUpperCase()}</span>
+                </div>
+                <div className="dashboard-next-copy">
+                  <span className="eyebrow">{dueWords.length ? 'REVISÃO INTELIGENTE' : 'CURSO PRINCIPAL'}</span>
+                  <h2>{dueWords.length ? 'Vamos recuperar o que você aprendeu.' : 'Continue de onde você parou.'}</h2>
+                  <p>{dueWords.length ? dueWords.length + ' expressões estão prontas para revisão. Tente lembrar antes de revelar a resposta.' : 'Uma aula curta agora vale mais do que esperar pelo momento perfeito. Aprenda, pratique e use uma nova estrutura em inglês.'}</p>
+                </div>
+                <div className="dashboard-next-footer">
+                  <div className="dashboard-next-meta"><span><Clock3 size={14}/>{profile.minutes} min por dia</span><span><BookOpen size={14}/>Aulas guiadas</span></div>
+                  <button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button>
+                </div>
+              </article>
+              <aside className="dashboard-side-stack">
+                <article className="dashboard-goal-card">
+                  <div className="dashboard-card-heading"><span className="dashboard-icon goal"><Target size={17}/></span><span>META DE HOJE</span></div>
+                  <strong>{todayPracticeMinutes} <small>/ {profile.minutes} min</small></strong>
+                  <div className="dashboard-progress-track"><i style={{ width: dailyGoalProgress + '%' }}/></div>
+                  <p>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos para sua meta.'}</p>
+                </article>
+                <article className="dashboard-review-card">
+                  <div className="dashboard-card-heading"><span className="dashboard-icon review"><Bookmark size={17}/></span><span>REVISÃO PENDENTE</span></div>
+                  <strong>{dueWords.length ? dueWords.length + ' expressões' : 'Tudo em dia'}</strong>
+                  <p>{dueWords.length ? 'Recupere o significado sem olhar a resposta.' : 'Suas palavras salvas não têm revisão vencida.'}</p>
+                  <button className="dashboard-text-action" onClick={() => dueWords.length ? startVocabularyReview() : setPage('vocabulary')}>{dueWords.length ? 'Começar revisão' : 'Abrir vocabulário'} <ChevronRight size={15}/></button>
+                </article>
+              </aside>
             </section>
 
-            <div className="section-heading"><div><span className="eyebrow">PLANO DE HOJE</span><h2>Um passo de cada vez</h2></div><span className="muted-caption">{profile.minutes} minutos sugeridos</span></div>
-            <section className="today-card">
-              <div className="today-copy"><span className="today-tag"><BookOpen size={13}/> CURSO PRINCIPAL</span><h3>Comece pela primeira palavra.</h3><p>O curso começa com cumprimentos, números, cores e frases básicas. Cada aula ensina o conteúdo antes de apresentar os exercícios.</p><div className="today-meta"><span><Clock3 size={14}/> Aulas curtas</span><span><Headphones size={14}/> Escuta, fala e escrita</span></div><button className="button light-button" onClick={() => setPage('learn')}>Abrir curso guiado <ArrowRight size={16}/></button></div>
-              <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>DO ZERO AO INGLÊS PRÁTICO</span></div>
+            <section className="dashboard-quick-practice">
+              <div className="section-heading"><div><span className="eyebrow">ESCOLHA UMA HABILIDADE</span><h2>Pratique do seu jeito</h2></div><span className="muted-caption">Atalhos para treinar</span></div>
+              <div className="dashboard-practice-grid">
+                <button className="dashboard-practice-card" onClick={() => setPage('speak')}><span className="dashboard-practice-icon speaking"><Mic size={19}/></span><span><strong>Falar</strong><small>Treine sua resposta em voz alta</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('write')}><span className="dashboard-practice-icon writing"><PenLine size={19}/></span><span><strong>Escrever</strong><small>Transforme ideias em frases</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('lumi')}><span className="dashboard-practice-icon conversation"><MessageCircle size={19}/></span><span><strong>Conversar com a Lumi</strong><small>Pratique um diálogo no seu nível</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('tracks')}><span className="dashboard-practice-icon missions"><Map size={19}/></span><span><strong>Situações reais</strong><small>Resolva uma missão em inglês</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}><span className="dashboard-practice-icon diagnosis"><Target size={19}/></span><span><strong>Descobrir meu nível</strong><small>Faça uma avaliação inicial rápida</small></span><ArrowRight size={16}/></button>
+              </div>
             </section>
 
             <section className="learning-plan-card">
@@ -1458,6 +1537,14 @@ export default function App() {
               </div>
             </section>
             {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
+            <div className="lumi-quick-start">
+              <div><span className="eyebrow">COMECE POR AQUI</span><strong>Escolha como a Lumi pode ajudar</strong></div>
+              <div className="lumi-quick-prompts">
+                <button onClick={() => setChatInput('Explain this English phrase in simple Portuguese and give me two examples: ')}>Explicar uma frase</button>
+                <button onClick={() => setChatInput('Let us practice a short conversation at my English level. Ask me one question at a time.')}>Praticar conversa</button>
+                <button onClick={() => setChatInput('Give me a short English question. Wait for my answer, then correct one important mistake.')}>Desafio rápido</button>
+              </div>
+            </div>
             <div className="chat-panel">
               <div className="chat-header"><div className="lumi-avatar"><LumiPortrait/><span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
@@ -1501,6 +1588,39 @@ export default function App() {
             <p className="vocab-footer-note">Dica: tente lembrar o significado antes de revelar o cartão. Depois fale uma frase em voz alta usando a expressão.</p>
           </section>}
 
+          {page === 'diagnostic' && <section className="diagnostic-layout">
+            <div className="page-heading"><span className="eyebrow">PONTO DE PARTIDA · 5 QUESTÕES</span><h1>Descubra seu <em>nível inicial.</em></h1><p>Uma avaliação breve para sugerir por onde começar. Responda sem consultar materiais; não é uma certificação oficial de proficiência.</p></div>
+            <div className="diagnostic-intro-card">
+              <div className="diagnostic-intro-icon"><Target size={22}/></div>
+              <div><strong>Como funciona</strong><p>São cinco questões de dificuldade crescente. O resultado é uma estimativa inicial e pode ser ajustado conforme você pratica leitura, escuta, escrita e conversação.</p></div>
+            </div>
+            <div className="diagnostic-question-list">
+              {diagnosticQuestions.map((question,index) => <article className="diagnostic-question-card" key={question.question}>
+                <div className="diagnostic-question-top"><span>QUESTÃO {index+1} DE {diagnosticQuestions.length}</span><span>{diagnosticAnswers[index] === undefined ? 'PENDENTE' : 'RESPONDIDA'}</span></div>
+                <h2>{question.question}</h2>
+                <div className="diagnostic-options">
+                  {question.options.map((option,optionIndex) => <button key={option} className={diagnosticAnswers[index] === optionIndex ? 'selected' : ''} onClick={() => { setDiagnosticAnswers(current => ({...current,[index]:optionIndex})); setDiagnosticResult(null) }}><span>{String.fromCharCode(65+optionIndex)}</span>{option}</button>)}
+                </div>
+                {diagnosticResult && <p className={diagnosticAnswers[index] === question.answer ? 'diagnostic-explanation correct' : 'diagnostic-explanation'}><strong>{diagnosticAnswers[index] === question.answer ? 'Correto. ' : 'Resposta para revisar: '}</strong>{question.explanation}</p>}
+              </article>)}
+            </div>
+            <div className="diagnostic-submit-row">
+              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões respondidas</span>
+              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length} onClick={() => {
+                const score = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
+                const level: Level = score <= 1 ? 'beginner' : score === 2 ? 'basic' : score === 3 ? 'intermediate' : 'advanced'
+                setDiagnosticResult({ score, level })
+                setProfile(current => ({ ...current, level }))
+              }}>Ver meu resultado <ArrowRight size={16}/></button>
+            </div>
+            {diagnosticResult && <article className="diagnostic-result-card">
+              <span className="eyebrow">SUGESTÃO DE PONTO DE PARTIDA</span>
+              <strong>{diagnosticResult.level === 'beginner' ? 'Iniciante' : diagnosticResult.level === 'basic' ? 'Básico' : diagnosticResult.level === 'intermediate' ? 'Intermediário' : 'Avançado'}</strong>
+              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões. O perfil foi atualizado com essa estimativa. Ela não representa um nível CEFR certificado; o FALA deve confirmar seu progresso em atividades reais.</p>
+              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => setPage('learn')}>Ir para o curso <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null) }}>Refazer avaliação</button></div>
+            </article>}
+          </section>}
+
           {page === 'profile' && <section className="profile-page">
             <div className="page-heading"><span className="eyebrow">SEU ESPAÇO</span><h1>Seu perfil. <em>Seu plano.</em></h1><p>Personalize como você aprende e acompanhe seu espaço de estudo.</p></div>
             <article className="profile-hero-card"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Sua foto de perfil"/> : <CircleUserRound size={46}/>}</div><div><span className="eyebrow">PERFIL DO ESTUDANTE</span><h2>{profile.name || 'Estudante FALA'}</h2><p>{profile.goal === 'work' ? 'Trabalho e carreira' : profile.goal === 'travel' ? 'Viagens' : profile.goal === 'study' ? 'Estudos' : 'Conversação e vida diária'} · {profile.level === 'unsure' ? 'Nível a descobrir' : profile.level}</p><div className="profile-page-actions"><label className="button ghost profile-photo-picker">Alterar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label><button className="button primary" onClick={beginProfileEdit}>Editar preferências <ArrowRight size={15}/></button></div></div></article>
@@ -1510,6 +1630,58 @@ export default function App() {
           {page === 'progress' && <section className="progress-layout">
             <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
+            <section className="skills-progress-panel">
+              <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
+              <div className="skills-progress-grid">
+                {['speaking', 'listening', 'writing', 'grammar', 'vocabulary'].map(skill => {
+                  const score = learningEvidence.skillScores[skill]
+                  const labels: Record<string, string> = { speaking: 'Conversação', listening: 'Compreensão auditiva', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
+                  return <article className="skill-progress-card" key={skill}>
+                    <div><strong>{labels[skill]}</strong><span>{typeof score === 'number' ? score + '% nas tentativas registradas' : 'Aguardando dados suficientes'}</span></div>
+                    <div className="skill-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
+                  </article>
+                })}
+              </div>
+              <p className="skills-progress-note">As barras mostram médias das tentativas registradas por habilidade. Uma área sem dados ainda não foi avaliada; isso não significa desempenho zero.</p>
+            </section>
+            <section className="learning-rhythm-panel">
+              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 7 dias</h2></div><span className="muted-caption">Dias com sessões registradas</span></div>
+              <div className="learning-week-grid">
+                {Array.from({ length: 7 }, (_, index) => {
+                  const date = new Date()
+                  date.setHours(0, 0, 0, 0)
+                  date.setDate(date.getDate() - (6 - index))
+                  const active = sessions.some(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
+                  return <div className={active ? 'learning-day active' : 'learning-day'} key={date.toISOString()}>
+                    <small>{date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small>
+                    <strong>{date.getDate()}</strong>
+                    <i>{active ? <Check size={13}/> : null}</i>
+                  </div>
+                })}
+              </div>
+              <p className="learning-rhythm-note">O calendário usa sessões com data registrada. Um dia sem marcação significa que não há sessão registrada, não que você necessariamente deixou de estudar.</p>
+            </section>
+            <section className="achievement-center">
+              <div className="section-heading"><div><span className="eyebrow">CONQUISTAS</span><h2>Marcos da sua aprendizagem</h2></div><span className="muted-caption">Competências e consistência</span></div>
+              <div className="achievement-grid">
+                {[
+                  { icon: BookOpen, title: 'Primeiro passo', detail: 'Conclua sua primeira sessão', unlocked: completedSessions >= 1, current: Math.min(completedSessions, 1), target: 1 },
+                  { icon: Flame, title: 'Criando ritmo', detail: 'Registre 5 sessões de estudo', unlocked: completedSessions >= 5, current: Math.min(completedSessions, 5), target: 5 },
+                  { icon: Bookmark, title: 'Caderno vivo', detail: 'Salve 5 palavras ou expressões', unlocked: words.length >= 5, current: Math.min(words.length, 5), target: 5 },
+                  { icon: Trophy, title: 'Consistência', detail: 'Alcance média de 70% nas tentativas', unlocked: averageScore !== null && averageScore >= 70, current: averageScore ?? 0, target: 70 },
+                ].map(achievement => {
+                  const Icon = achievement.icon
+                  const progress = Math.min(100, Math.round(achievement.current / achievement.target * 100))
+                  return <article className={achievement.unlocked ? 'achievement-card unlocked' : 'achievement-card'} key={achievement.title}>
+                    <span className="achievement-icon"><Icon size={20}/></span>
+                    <div><strong>{achievement.title}</strong><p>{achievement.detail}</p></div>
+                    <span className="achievement-status">{achievement.unlocked ? 'Conquistado' : progress + '%'}</span>
+                    <div className="achievement-progress"><i style={{ width: progress + '%' }}/></div>
+                  </article>
+                })}
+              </div>
+              <p className="achievement-note">As conquistas usam somente sessões, palavras e notas registradas no aplicativo. Elas não equivalem a certificados de proficiência.</p>
+            </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
@@ -1518,12 +1690,12 @@ export default function App() {
       </div>
 
       <nav className="mobile-dock" aria-label="Navegação no celular">
-        {navItems.slice(0,4).map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.id === 'home' ? 'Início' : item.id === 'learn' ? 'Aprender' : item.id === 'lumi' ? 'Lumi' : 'Falar'}</span></button> })}
+        {primaryNavItems.slice(0,4).map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.id === 'home' ? 'Início' : item.id === 'learn' ? 'Aprender' : item.id === 'lumi' ? 'Lumi' : 'Falar'}</span></button> })}
         <button className={mobileMore ? 'active' : ''} onClick={() => setMobileMore(value => !value)}><MoreHorizontal size={19}/><span>Mais</span></button>
       </nav>
-      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{navItems.slice(4).map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
+      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{toolNavItems.concat(primaryNavItems.slice(4)).map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
 
-      {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><div className="brand-mark">f.</div><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
+      {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><img className="dialog-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" aria-hidden="true" /><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
 
       {profileOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setProfileOpen(false) }}><section className="dialog-card profile-dialog"><button className="dialog-close" onClick={() => setProfileOpen(false)} aria-label="Fechar"><X size={18}/></button><span className="eyebrow">PERSONALIZAÇÃO</span><h2>Seu inglês começa com você.</h2><p>Essas preferências ajudam a escolher contextos e exemplos mais relevantes.</p><div className="profile-photo-editor"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Foto do perfil"/> : <CircleUserRound size={38}/>}</div><label className="button ghost profile-photo-picker">Adicionar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label>{profilePhoto && <button type="button" className="text-button" onClick={() => { setProfilePhoto(''); try { window.localStorage.removeItem(PROFILE_PHOTO_KEY) } catch { /* optional */ } }}>Remover foto</button>}</div><form onSubmit={saveProfile}><label>Como podemos chamar você?<input value={nameDraft} onChange={event => setNameDraft(event.target.value)} placeholder="Seu primeiro nome"/></label><label>Objetivo principal<select value={goalDraft} onChange={event => setGoalDraft(event.target.value as Goal)}><option value="conversation">Conversar com confiança</option><option value="work">Trabalho e carreira</option><option value="travel">Viagens</option><option value="study">Estudos</option><option value="life">Um pouco de tudo</option></select></label><label>Nível atual<select value={levelDraft} onChange={event => setLevelDraft(event.target.value as Level)}><option value="unsure">Ainda não sei</option><option value="beginner">Começando do zero</option><option value="basic">Básico</option><option value="intermediate">Intermediário</option><option value="advanced">Avançado</option></select></label><div className="form-label">Seus interesses</div><div className="interest-pills">{interestOptions.map(item => <button type="button" key={item} className={interestsDraft.includes(item) ? 'chosen' : ''} onClick={() => setInterestsDraft(current => current.includes(item) ? current.filter(value => value !== item) : [...current, item])}>{interestsDraft.includes(item) && <Check size={13}/>} {item}</button>)}</div><label>Outro interesse (opcional)<input value={customInterestDraft} onChange={event => setCustomInterestDraft(event.target.value)} placeholder="Ex.: Fórmula 1, Python, empreendedorismo…"/></label>
           <div className="profile-settings-grid">
