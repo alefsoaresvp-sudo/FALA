@@ -77,23 +77,17 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 })
   await assertNoHorizontalOverflow(page, 'Mobile 390px')
-  const mobileProbe = await page.evaluate(() => {
-    const icon = document.querySelector('.topbar-brand-icon')
-    return {
-      innerWidth: window.innerWidth,
-      mediaMatches: window.matchMedia('(max-width: 700px)').matches,
-      iconDisplay: icon ? getComputedStyle(icon).display : 'missing',
-      iconBox: icon ? icon.getBoundingClientRect().toJSON() : null,
-    }
-  })
-  console.log('Mobile viewport probe:', JSON.stringify(mobileProbe))
-  assert.ok(mobileProbe.mediaMatches, 'Mobile viewport must activate the 700px responsive breakpoint.')
-  await page.locator('.topbar-brand-icon').waitFor({ state: 'visible' })
-  await page.getByRole('button', { name: 'Abrir menu' }).click()
-  const mobileMenu = page.locator('.mobile-menu')
-  await mobileMenu.waitFor({ state: 'visible' })
-  await mobileMenu.getByRole('button', { name: 'Descobrir meu nível', exact: true }).click()
-  assert.match(await page.locator('.topbar-title').innerText(), /Diagnóstico de nível/)
+  const mobileLogo = page.locator('.mobile-brand-lockup .brand-logo-light')
+  await mobileLogo.waitFor({ state: 'visible' })
+  const mobileLogoLoaded = await mobileLogo.evaluate(img => img.complete && img.naturalWidth > 0)
+  assert.ok(mobileLogoLoaded, 'The mobile page must show the FALA wordmark.')
+  await page.screenshot({ path: 'artifacts/fala-mobile.png', fullPage: true })
+  await page.locator('.mobile-dock').getByRole('button', { name: 'Mais', exact: true }).click()
+  const mobileMoreSheet = page.locator('.mobile-more-sheet')
+  await mobileMoreSheet.waitFor({ state: 'visible' })
+  await mobileMoreSheet.getByRole('button', { name: 'Descobrir meu nível', exact: true }).click()
+  await page.locator('.diagnostic-layout').waitFor({ state: 'visible' })
+  await assertNoHorizontalOverflow(page, 'Mobile diagnostic 390px')
   await page.screenshot({ path: 'artifacts/fala-mobile-diagnostic.png', fullPage: true })
 
   const answers = [0, 1, 2, 0, 1]
