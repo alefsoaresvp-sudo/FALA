@@ -1,21 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#35e5d0"/><stop offset="1" stop-color="#169aca"/></linearGradient>
-    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#173d68"/><stop offset="1" stop-color="#071c38"/></linearGradient>
-    <linearGradient id="book" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#cceafa"/></linearGradient>
+    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2675d7"/>
+      <stop offset="1" stop-color="#16b6b0"/>
+    </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="116" fill="#102d50"/>
-  <path d="M258 64c-107 0-190 78-190 181 0 69 37 126 94 157l-12 54 75-37c12 3 22 5 34 5 108 0 191-79 191-182S366 64 258 64Z" fill="url(#bubble)"/>
-  <path d="M257 91c-84 0-151 62-151 148 0 39 14 73 39 99" fill="none" stroke="#a7fff0" stroke-width="12" stroke-linecap="round" opacity=".65"/>
-  <path d="M257 93V66m-23 0h46" stroke="#102d50" stroke-width="16" stroke-linecap="round"/>
-  <rect x="151" y="151" width="215" height="166" rx="53" fill="#f8fcff" stroke="#d8f0fb" stroke-width="8"/>
-  <rect x="172" y="177" width="173" height="113" rx="39" fill="url(#visor)"/>
-  <path d="M205 224c9-15 26-15 35 0m38 0c9-15 26-15 35 0" fill="none" stroke="#8ff8e4" stroke-width="12" stroke-linecap="round"/>
-  <path d="M240 257c14 13 27 13 41 0" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
-  <rect x="125" y="196" width="31" height="83" rx="15" fill="#18b4d2"/>
-  <rect x="361" y="196" width="31" height="83" rx="15" fill="#18b4d2"/>
-  <path d="M150 319c27-19 58-18 107 8 48-26 80-27 107-8l-5 89c-35-19-66-17-102 8-37-25-68-27-102-8z" fill="url(#book)" stroke="#b7dced" stroke-width="7"/>
-  <path d="M257 329v89m-68-58 47 15m89-15-47 15" fill="none" stroke="#4da8c7" stroke-width="9" stroke-linecap="round"/>
-  <path d="M163 407c34-19 64-16 94 8 31-24 64-27 96-8v22c-35-17-66-14-96 10-31-24-63-27-94-10z" fill="#0a3159"/>
-  <path d="M404 117l15-25m10 49 26-14m-8 47 29-1" stroke="#44e0c2" stroke-width="14" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="112" fill="#102d50"/>
+  <path d="M135 92h244c33 0 59 26 59 59v155c0 33-26 59-59 59H256l-92 73v-73h-29c-33 0-59-26-59-59V151c0-33 26-59 59-59Z" fill="url(#bubble)"/>
+  <path d="M175 166h185v38H220v48h119v38H220v92h-45z" fill="#fff"/>
+  <path d="M382 103l25-31m6 78 38-22m-26 69 42-4" stroke="#52e4cf" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="390" cy="369" r="17" fill="#52e4cf"/>
 </svg>
