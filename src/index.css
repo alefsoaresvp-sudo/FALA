@@ -2582,3 +2582,54 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .brand-logo-dark { display:none; }
 :root[data-theme="dark"] .brand-logo-light { display:none; }
 :root[data-theme="dark"] .brand-logo-dark { display:block; }
+
+
+/* Visual QA fixes: preserve contrast and prevent tablet header collisions */
+:root[data-theme="light"] .welcome-strip h1 { color:#f7fbff; }
+:root[data-theme="light"] .welcome-strip h1 em { color:#bfe5ec; }
+:root[data-theme="light"] .welcome-strip p { color:#dcebf5; }
+:root[data-theme="light"] .welcome-strip .eyebrow { color:#b7d8e8; }
+
+@media (min-width:701px) and (max-width:880px) {
+  .topbar {
+    gap:10px;
+    padding-left:18px;
+    padding-right:18px;
+    justify-content:flex-start;
+  }
+  .topbar-title {
+    min-width:0;
+    flex:0 1 160px;
+    white-space:nowrap;
+  }
+  .topbar-title span {
+    display:block;
+    min-width:0;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .global-search {
+    width:190px;
+    min-width:145px;
+    flex:0 1 190px;
+    margin-left:0;
+  }
+  .topbar-actions {
+    flex:0 0 auto;
+    gap:6px;
+    margin-left:auto;
+  }
+  .connection-pill { display:none; }
+}
+
+@media screen and (max-width:700px) {
+  .topbar-title .topbar-brand-icon {
+    display:block !important;
+    visibility:visible;
+    width:27px;
+    height:27px;
+    flex:0 0 27px;
+  }
+}
