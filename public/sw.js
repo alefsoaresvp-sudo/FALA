@@ -1,5 +1,5 @@
-const CACHE_NAME = 'fala-shell-v4'
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg']
+const CACHE_NAME = 'fala-shell-v5'
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icon.svg', './fala-logo.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)))
