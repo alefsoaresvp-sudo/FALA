@@ -1081,9 +1081,42 @@ function previousLocalDateKey() {
   return localDateKey(date)
 }
 function normalize(value: string) {
-  return value.toLowerCase().trim().replace(/[.!?,]/g, '').replace(/\s+/g, ' ')
+  return value.toLowerCase().normalize('NFKD').replace(/[’‘]/g, "'")
+    .replace(/\b(i'm)\b/g, 'i am').replace(/\b(you're)\b/g, 'you are')
+    .replace(/\b(he's)\b/g, 'he is').replace(/\b(she's)\b/g, 'she is')
+    .replace(/\b(we're)\b/g, 'we are').replace(/\b(they're)\b/g, 'they are')
+    .replace(/\b(isn't)\b/g, 'is not').replace(/\b(aren't)\b/g, 'are not')
+    .replace(/\b(don't)\b/g, 'do not').replace(/\b(doesn't)\b/g, 'does not')
+    .replace(/\b(didn't)\b/g, 'did not').replace(/\b(can't)\b/g, 'cannot')
+    .replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim()
 }
-function speakEnglish(text: string, accent: 'us' | 'uk') {
+function editDistance(left: string, right: string) {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= left.length; i += 1) {
+    let diagonal = row[0]
+    row[0] = i
+    for (let j = 1; j <= right.length; j += 1) {
+      const old = row[j]
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diagonal + (left[i - 1] === right[j - 1] ? 0 : 1))
+      diagonal = old
+    }
+  }
+  return row[right.length]
+}
+function speechMatches(transcript: string, expected: string) {
+  const heard = normalize(transcript).split(' ').filter(Boolean)
+  const target = normalize(expected).split(' ').filter(Boolean)
+  if (heard.join(' ') === target.join(' ')) return true
+  if (!heard.length || !target.length || heard.length !== target.length) return false
+  let mismatches = 0
+  for (let index = 0; index < target.length; index += 1) {
+    if (heard[index] === target[index]) continue
+    if (target[index].length >= 5 && editDistance(heard[index], target[index]) <= 1) continue
+    mismatches += 1
+  }
+  return mismatches <= 1
+}
+function speakEnglish(text: string, accent: 'us' | 'uk', rate = 1) {
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
