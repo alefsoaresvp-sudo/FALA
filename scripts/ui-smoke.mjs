@@ -81,6 +81,7 @@ try {
   await mobileLogo.waitFor({ state: 'visible' })
   const mobileLogoLoaded = await mobileLogo.evaluate(img => img.complete && img.naturalWidth > 0)
   assert.ok(mobileLogoLoaded, 'The mobile page must show the FALA wordmark.')
+  assert.equal(await page.locator('.mobile-brand-lockup img:visible').count(), 1, 'Only one theme variant of the mobile wordmark may be visible.')
   await page.screenshot({ path: 'artifacts/fala-mobile.png', fullPage: true })
   await page.locator('.mobile-dock').getByRole('button', { name: 'Mais', exact: true }).click()
   const mobileMoreSheet = page.locator('.mobile-more-sheet')
