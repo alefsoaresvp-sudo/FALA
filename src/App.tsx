@@ -100,6 +100,9 @@ const navItems = [
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
 ]
+const primaryNavIds: Page[] = ['home', 'learn', 'lumi', 'speak', 'progress']
+const primaryNavItems = navItems.filter(item => primaryNavIds.includes(item.id))
+const toolNavItems = navItems.filter(item => !primaryNavIds.includes(item.id))
 
 function LumiPortrait() {
   return <svg className="lumi-portrait" viewBox="0 0 112 112" role="img" aria-label="Personagem Lumi">
@@ -1242,12 +1245,21 @@ export default function App() {
           <div className="brand-mark">f.</div>
           <div><strong>fala<span>english</span></strong><small>APRENDIZAGEM COM IA</small></div>
         </div>
-        <div className="side-label">SEU ESPAÇO</div>
+        <div className="side-label">APRENDIZAGEM</div>
         <nav className="side-nav" aria-label="Navegação principal">
-          {navItems.map(item => {
+          {primaryNavItems.map(item => {
             const Icon = item.icon
-            return <button key={item.id} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
+            return <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
               <Icon size={18}/><span>{item.label}</span>{item.id === 'lumi' && <i className="nav-ai-dot"/>}
+            </button>
+          })}
+        </nav>
+        <div className="side-label side-label-tools">FERRAMENTAS</div>
+        <nav className="side-nav side-nav-tools" aria-label="Ferramentas complementares">
+          {toolNavItems.map(item => {
+            const Icon = item.icon
+            return <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-link active' : 'nav-link'} onClick={() => { setPage(item.id); setMenuOpen(false) }}>
+              <Icon size={18}/><span>{item.label}</span>
             </button>
           })}
         </nav>
@@ -1310,15 +1322,46 @@ export default function App() {
               <article className="metric-card"><span className="metric-icon lilac"><Trophy size={18}/></span><div><small>APROVEITAMENTO</small><strong>{averageScore === null ? '—' : averageScore + '%'}</strong><span>{averageScore === null ? 'ainda sem dados suficientes' : 'média das tentativas'}</span></div></article>
             </div>
 
-            <section className="smart-study-card">
-              <div className="smart-study-main"><span className="eyebrow">{dueWords.length ? 'REVISÃO ESPAÇADA' : 'CURSO GUIADO · DO ZERO'}</span><h2>{dueWords.length ? dueWords.length + ' expressões para revisar' : 'Seu próximo passo está organizado.'}</h2><p>{dueWords.length ? 'Recupere o significado antes de olhar a resposta. O FALA ajusta o intervalo conforme sua lembrança.' : 'Aprenda palavras, entenda como as frases são montadas e pratique antes de avançar para situações reais.'}</p><button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar o curso'} <ArrowRight size={16}/></button></div>
-              <aside className="smart-study-progress"><span>META DIÁRIA</span><strong>{todayPracticeMinutes} / {profile.minutes} min</strong><div className="smart-study-track"><i style={{ width: dailyGoalProgress + '%' }}/></div><small>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos de prática.'}</small></aside>
+            <section className="dashboard-command-grid" aria-label="Plano de aprendizagem de hoje">
+              <article className="dashboard-next-card">
+                <div className="dashboard-next-topline">
+                  <span className="dashboard-live-label"><i/> SUA PRÓXIMA AÇÃO</span>
+                  <span className="dashboard-level-chip">{profile.level === 'unsure' ? 'NÍVEL A DESCOBRIR' : profile.level.toUpperCase()}</span>
+                </div>
+                <div className="dashboard-next-copy">
+                  <span className="eyebrow">{dueWords.length ? 'REVISÃO INTELIGENTE' : 'CURSO PRINCIPAL'}</span>
+                  <h2>{dueWords.length ? 'Vamos recuperar o que você aprendeu.' : 'Continue de onde você parou.'}</h2>
+                  <p>{dueWords.length ? dueWords.length + ' expressões estão prontas para revisão. Tente lembrar antes de revelar a resposta.' : 'Uma aula curta agora vale mais do que esperar pelo momento perfeito. Aprenda, pratique e use uma nova estrutura em inglês.'}</p>
+                </div>
+                <div className="dashboard-next-footer">
+                  <div className="dashboard-next-meta"><span><Clock3 size={14}/>{profile.minutes} min por dia</span><span><BookOpen size={14}/>Aulas guiadas</span></div>
+                  <button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button>
+                </div>
+              </article>
+              <aside className="dashboard-side-stack">
+                <article className="dashboard-goal-card">
+                  <div className="dashboard-card-heading"><span className="dashboard-icon goal"><Target size={17}/></span><span>META DE HOJE</span></div>
+                  <strong>{todayPracticeMinutes} <small>/ {profile.minutes} min</small></strong>
+                  <div className="dashboard-progress-track"><i style={{ width: dailyGoalProgress + '%' }}/></div>
+                  <p>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos para sua meta.'}</p>
+                </article>
+                <article className="dashboard-review-card">
+                  <div className="dashboard-card-heading"><span className="dashboard-icon review"><Bookmark size={17}/></span><span>REVISÃO PENDENTE</span></div>
+                  <strong>{dueWords.length ? dueWords.length + ' expressões' : 'Tudo em dia'}</strong>
+                  <p>{dueWords.length ? 'Recupere o significado sem olhar a resposta.' : 'Suas palavras salvas não têm revisão vencida.'}</p>
+                  <button className="dashboard-text-action" onClick={() => dueWords.length ? startVocabularyReview() : setPage('vocabulary')}>{dueWords.length ? 'Começar revisão' : 'Abrir vocabulário'} <ChevronRight size={15}/></button>
+                </article>
+              </aside>
             </section>
 
-            <div className="section-heading"><div><span className="eyebrow">PLANO DE HOJE</span><h2>Um passo de cada vez</h2></div><span className="muted-caption">{profile.minutes} minutos sugeridos</span></div>
-            <section className="today-card">
-              <div className="today-copy"><span className="today-tag"><BookOpen size={13}/> CURSO PRINCIPAL</span><h3>Comece pela primeira palavra.</h3><p>O curso começa com cumprimentos, números, cores e frases básicas. Cada aula ensina o conteúdo antes de apresentar os exercícios.</p><div className="today-meta"><span><Clock3 size={14}/> Aulas curtas</span><span><Headphones size={14}/> Escuta, fala e escrita</span></div><button className="button light-button" onClick={() => setPage('learn')}>Abrir curso guiado <ArrowRight size={16}/></button></div>
-              <div className="today-visual"><div className="visual-circle"><BookOpen size={34}/></div><span>DO ZERO AO INGLÊS PRÁTICO</span></div>
+            <section className="dashboard-quick-practice">
+              <div className="section-heading"><div><span className="eyebrow">ESCOLHA UMA HABILIDADE</span><h2>Pratique do seu jeito</h2></div><span className="muted-caption">Atalhos para treinar</span></div>
+              <div className="dashboard-practice-grid">
+                <button className="dashboard-practice-card" onClick={() => setPage('speak')}><span className="dashboard-practice-icon speaking"><Mic size={19}/></span><span><strong>Falar</strong><small>Treine sua resposta em voz alta</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('write')}><span className="dashboard-practice-icon writing"><PenLine size={19}/></span><span><strong>Escrever</strong><small>Transforme ideias em frases</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('lumi')}><span className="dashboard-practice-icon conversation"><MessageCircle size={19}/></span><span><strong>Conversar com a Lumi</strong><small>Pratique um diálogo no seu nível</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => setPage('tracks')}><span className="dashboard-practice-icon missions"><Map size={19}/></span><span><strong>Situações reais</strong><small>Resolva uma missão em inglês</small></span><ArrowRight size={16}/></button>
+              </div>
             </section>
 
             <section className="learning-plan-card">
@@ -1458,6 +1501,14 @@ export default function App() {
               </div>
             </section>
             {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
+            <div className="lumi-quick-start">
+              <div><span className="eyebrow">COMECE POR AQUI</span><strong>Escolha como a Lumi pode ajudar</strong></div>
+              <div className="lumi-quick-prompts">
+                <button onClick={() => setChatInput('Explain this English phrase in simple Portuguese and give me two examples: ')}>Explicar uma frase</button>
+                <button onClick={() => setChatInput('Let us practice a short conversation at my English level. Ask me one question at a time.')}>Praticar conversa</button>
+                <button onClick={() => setChatInput('Give me a short English question. Wait for my answer, then correct one important mistake.')}>Desafio rápido</button>
+              </div>
+            </div>
             <div className="chat-panel">
               <div className="chat-header"><div className="lumi-avatar"><LumiPortrait/><span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
@@ -1510,6 +1561,20 @@ export default function App() {
           {page === 'progress' && <section className="progress-layout">
             <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
+            <section className="skills-progress-panel">
+              <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
+              <div className="skills-progress-grid">
+                {['speaking', 'listening', 'writing', 'grammar', 'vocabulary'].map(skill => {
+                  const score = learningEvidence.skillScores[skill]
+                  const labels: Record<string, string> = { speaking: 'Conversação', listening: 'Compreensão auditiva', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
+                  return <article className="skill-progress-card" key={skill}>
+                    <div><strong>{labels[skill]}</strong><span>{typeof score === 'number' ? score + '% nas tentativas registradas' : 'Aguardando dados suficientes'}</span></div>
+                    <div className="skill-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
+                  </article>
+                })}
+              </div>
+              <p className="skills-progress-note">As barras mostram médias das tentativas registradas por habilidade. Uma área sem dados ainda não foi avaliada; isso não significa desempenho zero.</p>
+            </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
@@ -1518,10 +1583,10 @@ export default function App() {
       </div>
 
       <nav className="mobile-dock" aria-label="Navegação no celular">
-        {navItems.slice(0,4).map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.id === 'home' ? 'Início' : item.id === 'learn' ? 'Aprender' : item.id === 'lumi' ? 'Lumi' : 'Falar'}</span></button> })}
+        {primaryNavItems.slice(0,4).map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.id === 'home' ? 'Início' : item.id === 'learn' ? 'Aprender' : item.id === 'lumi' ? 'Lumi' : 'Falar'}</span></button> })}
         <button className={mobileMore ? 'active' : ''} onClick={() => setMobileMore(value => !value)}><MoreHorizontal size={19}/><span>Mais</span></button>
       </nav>
-      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{navItems.slice(4).map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
+      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{toolNavItems.concat(primaryNavItems.slice(4)).map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
 
       {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><div className="brand-mark">f.</div><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
 
