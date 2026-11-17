@@ -11,7 +11,7 @@ import { learningTracks, type TrackProgress } from './learningTracks'
 import GuidedCourse from './GuidedCourse'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'profile'
+type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -55,6 +55,13 @@ const initialChat: ChatMessage[] = [
   { role: 'assistant', text: 'Hi! I am Lumi, your English practice partner. Tell me what you would like to talk about today.' },
 ]
 const interestOptions = ['Tecnologia e IA', 'Carros e automobilismo', 'Games', 'Negócios', 'Música', 'Filmes e séries', 'Viagens', 'Esportes', 'Ciência', 'Programação']
+const diagnosticQuestions = [
+  { question: 'Escolha a frase correta para dizer “Eu sou estudante”.', options: ['I am a student.', 'I have student.', 'I student am.'], answer: 0, explanation: 'Usamos I am para dizer “eu sou/estou”.' },
+  { question: 'Complete: “My sister ___ English every day.”', options: ['study', 'studies', 'studying'], answer: 1, explanation: 'Com he, she ou it no Simple Present, normalmente acrescentamos -s ou -es ao verbo.' },
+  { question: 'Complete: “Yesterday, we ___ to the museum.”', options: ['go', 'goed', 'went'], answer: 2, explanation: 'Went é o passado irregular de go.' },
+  { question: 'Complete: “If I had more time, I ___ travel more.”', options: ['would', 'will', 'am'], answer: 0, explanation: 'Would + verbo base forma o resultado hipotético do Second Conditional.' },
+  { question: 'Complete: “I have worked here ___ 2022.”', options: ['for', 'since', 'during'], answer: 1, explanation: 'Since indica o ponto de início; for indica duração.' },
+]
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const raw = window.localStorage.getItem(key)
@@ -98,6 +105,7 @@ const navItems = [
   { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
+  { id: 'diagnostic' as Page, label: 'Descobrir meu nível', icon: Target },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
 ]
 const primaryNavIds: Page[] = ['home', 'learn', 'lumi', 'speak', 'progress']
@@ -132,6 +140,8 @@ function LumiPortrait() {
 
 export default function App() {
   const [page, setPage] = useState<Page>('home')
+  const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
+  const [diagnosticResult, setDiagnosticResult] = useState<{ score: number; level: Level } | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => readLocal(THEME_KEY, 'light'))
   const [profilePhoto, setProfilePhoto] = useState<string>(() => readLocal(PROFILE_PHOTO_KEY, ''))
   const [user, setUser] = useState<User | null>(null)
@@ -275,7 +285,7 @@ export default function App() {
   }, [recentAttempts, learnerInsights])
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
-    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', profile: 'Meu perfil',
+    speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', diagnostic: 'Diagnóstico de nível', profile: 'Meu perfil',
   }
 
   useEffect(() => {
@@ -1361,6 +1371,7 @@ export default function App() {
                 <button className="dashboard-practice-card" onClick={() => setPage('write')}><span className="dashboard-practice-icon writing"><PenLine size={19}/></span><span><strong>Escrever</strong><small>Transforme ideias em frases</small></span><ArrowRight size={16}/></button>
                 <button className="dashboard-practice-card" onClick={() => setPage('lumi')}><span className="dashboard-practice-icon conversation"><MessageCircle size={19}/></span><span><strong>Conversar com a Lumi</strong><small>Pratique um diálogo no seu nível</small></span><ArrowRight size={16}/></button>
                 <button className="dashboard-practice-card" onClick={() => setPage('tracks')}><span className="dashboard-practice-icon missions"><Map size={19}/></span><span><strong>Situações reais</strong><small>Resolva uma missão em inglês</small></span><ArrowRight size={16}/></button>
+                <button className="dashboard-practice-card" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}><span className="dashboard-practice-icon diagnosis"><Target size={19}/></span><span><strong>Descobrir meu nível</strong><small>Faça uma avaliação inicial rápida</small></span><ArrowRight size={16}/></button>
               </div>
             </section>
 
@@ -1550,6 +1561,39 @@ export default function App() {
               {words.length===0 && <div className="empty-state"><Bookmark size={26}/><strong>Seu caderno ainda está vazio.</strong><p>Adicione palavras novas durante conversas, leituras ou músicas.</p></div>}
             </> : <div className="vocab-review-stage">{reviewComplete ? <div className="review-complete"><CheckCircle2 size={28}/><strong>Revisão concluída.</strong><p>Você zerou a fila de expressões pendentes de hoje. As próximas revisões já estão programadas.</p><button className="button primary" onClick={() => setVocabMode('library')}>Voltar ao vocabulário</button></div> : reviewQueue.length ? <><span className="eyebrow">{dueWords.length ? `${Math.min(reviewIndex + 1, dueWords.length)} DE ${dueWords.length} PENDENTES` : 'REVISÃO EXTRA'}</span><strong className="review-term">{activeReviewTerm}</strong>{showReviewAnswer ? <div className="review-answer"><p>{wordDetails[activeReviewTerm]?.meaning || 'Tente criar seu próprio significado e um exemplo.'}</p><small>{wordDetails[activeReviewTerm]?.example || 'Use a expressão em uma frase sobre sua rotina.'}</small><div className="review-rating-actions"><button onClick={() => void gradeVocabularyReview('again')}>Não lembrei<small>Rever em 1 dia</small></button><button onClick={() => void gradeVocabularyReview('good')}>Lembrei<small>Intervalo maior</small></button><button onClick={() => void gradeVocabularyReview('easy')}>Fácil<small>Avançar mais</small></button></div></div> : <button className="button primary" onClick={() => setShowReviewAnswer(true)}>Revelar significado <Eye size={15}/></button>}</> : <p>Adicione palavras para começar a revisão.</p>}</div>}
             <p className="vocab-footer-note">Dica: tente lembrar o significado antes de revelar o cartão. Depois fale uma frase em voz alta usando a expressão.</p>
+          </section>}
+
+          {page === 'diagnostic' && <section className="diagnostic-layout">
+            <div className="page-heading"><span className="eyebrow">PONTO DE PARTIDA · 5 QUESTÕES</span><h1>Descubra seu <em>nível inicial.</em></h1><p>Uma avaliação breve para sugerir por onde começar. Responda sem consultar materiais; não é uma certificação oficial de proficiência.</p></div>
+            <div className="diagnostic-intro-card">
+              <div className="diagnostic-intro-icon"><Target size={22}/></div>
+              <div><strong>Como funciona</strong><p>São cinco questões de dificuldade crescente. O resultado é uma estimativa inicial e pode ser ajustado conforme você pratica leitura, escuta, escrita e conversação.</p></div>
+            </div>
+            <div className="diagnostic-question-list">
+              {diagnosticQuestions.map((question,index) => <article className="diagnostic-question-card" key={question.question}>
+                <div className="diagnostic-question-top"><span>QUESTÃO {index+1} DE {diagnosticQuestions.length}</span><span>{diagnosticAnswers[index] === undefined ? 'PENDENTE' : 'RESPONDIDA'}</span></div>
+                <h2>{question.question}</h2>
+                <div className="diagnostic-options">
+                  {question.options.map((option,optionIndex) => <button key={option} className={diagnosticAnswers[index] === optionIndex ? 'selected' : ''} onClick={() => { setDiagnosticAnswers(current => ({...current,[index]:optionIndex})); setDiagnosticResult(null) }}><span>{String.fromCharCode(65+optionIndex)}</span>{option}</button>)}
+                </div>
+                {diagnosticResult && <p className={diagnosticAnswers[index] === question.answer ? 'diagnostic-explanation correct' : 'diagnostic-explanation'}><strong>{diagnosticAnswers[index] === question.answer ? 'Correto. ' : 'Resposta para revisar: '}</strong>{question.explanation}</p>}
+              </article>)}
+            </div>
+            <div className="diagnostic-submit-row">
+              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões respondidas</span>
+              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length} onClick={() => {
+                const score = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
+                const level: Level = score <= 1 ? 'beginner' : score === 2 ? 'basic' : score === 3 ? 'intermediate' : 'advanced'
+                setDiagnosticResult({ score, level })
+                setProfile(current => ({ ...current, level }))
+              }}>Ver meu resultado <ArrowRight size={16}/></button>
+            </div>
+            {diagnosticResult && <article className="diagnostic-result-card">
+              <span className="eyebrow">SUGESTÃO DE PONTO DE PARTIDA</span>
+              <strong>{diagnosticResult.level === 'beginner' ? 'Iniciante' : diagnosticResult.level === 'basic' ? 'Básico' : diagnosticResult.level === 'intermediate' ? 'Intermediário' : 'Avançado'}</strong>
+              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões. O perfil foi atualizado com essa estimativa. Ela não representa um nível CEFR certificado; o FALA deve confirmar seu progresso em atividades reais.</p>
+              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => setPage('learn')}>Ir para o curso <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null) }}>Refazer avaliação</button></div>
+            </article>}
           </section>}
 
           {page === 'profile' && <section className="profile-page">
