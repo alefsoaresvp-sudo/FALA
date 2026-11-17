@@ -1246,15 +1246,14 @@ export default function App() {
   }
 
   if (!authReady) {
-    return <div className="boot-screen"><div className="brand-mark">f.</div><strong>FALA English</strong><span>Preparando seu espaço de aprendizagem…</span></div>
+    return <div className="boot-screen"><img className="boot-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" /><strong>FALA English</strong><span>Preparando seu espaço de aprendizagem…</span></div>
   }
 
   return (
     <div className="fala-app">
       <aside className="sidebar">
         <div className="brand-lockup">
-          <div className="brand-mark">f.</div>
-          <div><strong>fala<span>english</span></strong><small>APRENDIZAGEM COM IA</small></div>
+          <img className="brand-logo" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English — Aprenda, pratique e converse" />
         </div>
         <div className="side-label">APRENDIZAGEM</div>
         <nav className="side-nav" aria-label="Navegação principal">
@@ -1288,6 +1287,7 @@ export default function App() {
         <header className="topbar">
           <div className="topbar-title">
             <button className="mobile-menu-button" onClick={() => setMenuOpen(value => !value)} aria-label="Abrir menu"><MoreHorizontal size={20}/></button>
+            <img className="topbar-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" />
             <span>FALA / <strong>{titleByPage[page]}</strong></span>
           </div>
           <div className="global-search">
