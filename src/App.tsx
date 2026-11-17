@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Conversation } from '@elevenlabs/client'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
@@ -613,6 +612,7 @@ export default function App() {
       if (typeof data?.conversation_token !== 'string' || !data.conversation_token) {
         throw new Error('O servidor não retornou um token válido. Verifique ELEVENLABS_API_KEY nos secrets do Supabase.')
       }
+      const { Conversation } = await import('@elevenlabs/client')
       const conversation = await Conversation.startSession({
         conversationToken: data.conversation_token,
         connectionType: 'webrtc',
