@@ -31,6 +31,7 @@ type Exercise = {
   answer: string
   explanation: string
   hint?: string
+  isRetry?: boolean
 }
 type Lesson = {
   id: string
@@ -45,12 +46,24 @@ type Lesson = {
   isCheckpoint?: boolean
 }
 type Unit = { id: string; title: string; subtitle: string; level: string; lessons: Lesson[] }
-type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null }
+export type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null }
+type CourseAttemptPayload = {
+  activityType: string
+  skill: 'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'
+  prompt: string
+  answer: string
+  expected: string
+  explanation: string
+  correct: boolean
+}
 type Props = {
   accent?: 'us' | 'uk'
   goalLabel?: string
   onAskTutor: (question: string) => void
-  onLessonComplete: (score: number) => void
+  onLessonComplete: (score: number, lessonId?: string) => void
+  initialProgress?: SavedProgress | null
+  onProgressChange?: (progress: SavedProgress) => void
+  onExerciseAttempt?: (attempt: CourseAttemptPayload) => void
 }
 
 const STORAGE_KEY = 'fala-course-progress-v1'
@@ -1075,7 +1088,7 @@ function speakEnglish(text: string, accent: 'us' | 'uk') {
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = accent === 'uk' ? 'en-GB' : 'en-US'
-  utterance.rate = 0.86
+  utterance.rate = Math.max(0.7, Math.min(1, rate))
   const voices = window.speechSynthesis.getVoices()
   const preferred = voices.find(voice => voice.lang.toLowerCase() === utterance.lang.toLowerCase())
   if (preferred) utterance.voice = preferred
@@ -1083,27 +1096,30 @@ function speakEnglish(text: string, accent: 'us' | 'uk') {
   return true
 }
 
-export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete }: Props) {
+export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt }: Props) {
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
-  const [lessonPhase, setLessonPhase] = useState<'learn' | 'practice'>('learn')
+  const [lessonPhase, setLessonPhase] = useState<'learn' | 'understand' | 'practice' | 'speak' | 'review'>('learn')
   const [showHint, setShowHint] = useState(false)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [builtWords, setBuiltWords] = useState<string[]>([])
   const [typedAnswer, setTypedAnswer] = useState('')
   const [checked, setChecked] = useState<boolean | null>(null)
   const [mistakes, setMistakes] = useState(0)
+  const [retryQueue, setRetryQueue] = useState<Exercise[]>([])
   const [checkpointNotice, setCheckpointNotice] = useState('')
   const [audioNotice, setAudioNotice] = useState('')
   const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [freeSpeechTranscript, setFreeSpeechTranscript] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
   const recognitionRef = useRef<CourseSpeechInstance | null>(null)
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
 
   const allLessons = useMemo(() => units.flatMap(unit => unit.lessons), [])
   const currentLesson = allLessons.find(lesson => lesson.id === activeLessonId) ?? null
-  const currentExercise = currentLesson?.exercises[step] ?? null
+  const activeExercises = currentLesson ? [...currentLesson.exercises, ...retryQueue] : []
+  const currentExercise = activeExercises[step] ?? null
   const completedCount = progress.completedLessonIds.length
   const percentage = Math.round(completedCount / allLessons.length * 100)
   const nextLesson = allLessons.find((lesson, index) =>
@@ -1112,8 +1128,20 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   ) ?? null
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, activeLessonId })) } catch { /* Local progress remains available in this session. */ }
-  }, [progress, activeLessonId])
+    const snapshot = { ...progress, activeLessonId }
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)) } catch { /* Local progress remains available in this session. */ }
+    onProgressChange?.(snapshot)
+  }, [progress, activeLessonId, onProgressChange])
+
+  useEffect(() => {
+    if (!initialProgress) return
+    setProgress({
+      ...initialProgress,
+      completedLessonIds: Array.isArray(initialProgress.completedLessonIds) ? initialProgress.completedLessonIds : [],
+    })
+    setActiveLessonId(initialProgress.activeLessonId ?? null)
+    setIntroShown(!initialProgress.introDone)
+  }, [initialProgress])
 
   useEffect(() => () => {
     recognitionRef.current?.stop()
@@ -1133,6 +1161,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setShowHint(false)
   }
   const beginLesson = (lessonId: string) => {
+    setRetryQueue([])
+    setFreeSpeechTranscript('')
     setActiveLessonId(lessonId)
     setStep(0)
     setLessonPhase('learn')
@@ -1155,25 +1185,70 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   }
   const verify = () => {
     if (!currentExercise || checked !== null) return
-    const correct = currentExercise.kind === 'repeat' || normalize(currentAnswer()) === normalize(currentExercise.answer)
+    const answer = currentAnswer()
+    const correct = currentExercise.kind === 'repeat' || normalize(answer) === normalize(currentExercise.answer)
     setChecked(correct)
-    if (!correct) setMistakes(value => value + 1)
+    onExerciseAttempt?.({
+      activityType: currentExercise.kind === 'listen' ? 'listening' : currentExercise.kind === 'repeat' ? 'speaking' : 'course_exercise',
+      skill: currentExercise.kind === 'listen' ? 'listening' : currentExercise.kind === 'repeat' ? 'speaking' : currentExercise.kind === 'type' || currentExercise.kind === 'build' ? 'writing' : 'grammar',
+      prompt: currentExercise.prompt,
+      answer,
+      expected: currentExercise.answer,
+      explanation: currentExercise.explanation,
+      correct,
+    })
+    if (!correct) {
+      setMistakes(value => value + 1)
+      if (!currentExercise.isRetry) {
+        const retry: Exercise = {
+          ...currentExercise,
+          kind: currentExercise.kind === 'choice' || currentExercise.kind === 'build' ? 'type' : currentExercise.kind,
+          prompt: 'Revisão adaptativa: responda novamente sem consultar as opções. ' + currentExercise.prompt,
+          options: undefined,
+          tokens: undefined,
+          isRetry: true,
+          hint: 'Você errou esta estrutura antes. Relembre a explicação e formule a resposta com suas próprias palavras.',
+        }
+        setRetryQueue(current => [...current, retry])
+      }
+    }
   }
   const retry = () => {
     resetExercise()
   }
   const nextStep = () => {
     if (!currentLesson || !currentExercise) return
-    if (step < currentLesson.exercises.length - 1) {
+    if (step < activeExercises.length - 1) {
       setStep(value => value + 1)
       resetExercise()
       return
     }
-    const score = Math.max(0, Math.round((currentLesson.exercises.length - mistakes) / currentLesson.exercises.length * 100))
+    const score = Math.max(0, Math.round((activeExercises.length - mistakes) / Math.max(1, activeExercises.length) * 100))
     if (currentLesson.isCheckpoint && score < 70) {
       setCheckpointNotice('Você acertou ' + score + '%. Para concluir esta unidade, precisa de pelo menos 70%. Revise as explicações e tente novamente.')
       setStep(0)
       setMistakes(0)
+      setRetryQueue([])
+      setLessonPhase('practice')
+      resetExercise()
+      return
+    }
+    setCheckpointNotice('')
+    setLessonPhase('speak')
+    setFreeSpeechTranscript('')
+    resetExercise()
+    return
+  }
+
+  const finishLesson = () => {
+    if (!currentLesson) return
+    const score = Math.max(0, Math.round((activeExercises.length - mistakes) / Math.max(1, activeExercises.length) * 100))
+    if (currentLesson.isCheckpoint && score < 70) {
+      setCheckpointNotice('Você acertou ' + score + '%. Para concluir esta unidade, precisa de pelo menos 70%. Revise as explicações e tente novamente.')
+      setLessonPhase('practice')
+      setStep(0)
+      setMistakes(0)
+      setRetryQueue([])
       resetExercise()
       return
     }
@@ -1189,7 +1264,43 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       activeLessonId: null,
     }))
     setActiveLessonId(null)
-    onLessonComplete(score)
+    onLessonComplete(score, currentLesson.id)
+  }
+  const startFreeSpeaking = () => {
+    const browserWindow = window as BrowserSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setAudioNotice('O reconhecimento de fala não está disponível neste navegador. Você ainda pode escrever uma resposta e avançar.')
+      return
+    }
+    try {
+      setAudioNotice('')
+      setFreeSpeechTranscript('')
+      const recognition = new Recognition()
+      recognition.lang = accent === 'uk' ? 'en-GB' : 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 3
+      recognition.onresult = event => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+        setFreeSpeechTranscript(transcript)
+        setVoiceTranscript(transcript)
+        setAudioNotice('Transcrição capturada. Ela registra as palavras reconhecidas; não é uma nota fonética.')
+        onExerciseAttempt?.({
+          activityType: 'speaking', skill: 'speaking',
+          prompt: 'Produção oral livre: ' + (currentLesson?.pattern || 'estrutura da aula'),
+          answer: transcript, expected: currentLesson?.pattern || '',
+          explanation: 'Resposta oral transcrita pelo navegador, sem avaliação fonética automática.', correct: transcript.length > 0,
+        })
+      }
+      recognition.onerror = event => setAudioNotice('Não foi possível acessar o microfone (' + (event.error || 'erro') + '). Verifique a permissão.')
+      recognition.onend = () => { setVoiceListening(false); recognitionRef.current = null }
+      recognitionRef.current = recognition
+      setVoiceListening(true)
+      recognition.start()
+    } catch {
+      setVoiceListening(false)
+      setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
+    }
   }
   const startSpeechCapture = () => {
     if (!currentExercise || currentExercise.kind !== 'repeat' || checked !== null) return
@@ -1209,7 +1320,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       recognition.onresult = event => {
         const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
         setVoiceTranscript(transcript)
-        const matched = normalize(transcript) === normalize(currentExercise.answer)
+        const matched = speechMatches(transcript, currentExercise.answer)
         setChecked(matched)
         if (!matched) setMistakes(value => value + 1)
         setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
@@ -1229,8 +1340,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
     }
   }
-  const playModel = (text: string) => {
-    const played = speakEnglish(text, accent)
+  const playModel = (text: string, rate = 1) => {
+    const played = speakEnglish(text, accent, rate)
     setAudioNotice(played ? '' : 'A leitura em voz alta não está disponível neste navegador.')
   }
   const chooseWord = (word: string) => {
@@ -1261,7 +1372,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round(10 + ((step + 1) / currentLesson.exercises.length) * 90)
+    const progressPercent = Math.round(10 + ((step + 1) / Math.max(1, activeExercises.length)) * 90)
     const hintText = currentExercise.hint ?? (currentExercise.kind === 'choice'
       ? 'Traduza as opções e elimine as que não combinam com a pergunta.'
       : currentExercise.kind === 'build'
@@ -1281,7 +1392,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })); resetExercise() }} aria-label="Sair da aula"><X size={19}/></button>
           <div className="lesson-progress-track"><i style={{ width: '10%' }}/></div>
-          <span>ETAPA 1/2</span>
+          <span>ETAPA 1/5</span>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">PRIMEIRO, APRENDA · {currentLesson.subtitle.toUpperCase()}</span>
@@ -1300,8 +1411,92 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           {currentLesson.lessonTip && <div className="lesson-tip-box"><strong>Entenda a regra</strong><p>{currentLesson.lessonTip}</p></div>}
         </article>
         <div className="lesson-prep-actions">
-          <button className="course-primary-button" onClick={() => { setLessonPhase('practice'); setShowHint(false) }}>Começar exercícios <ArrowRight size={17}/></button>
+          <button className="course-primary-button" onClick={() => { setLessonPhase('understand'); setShowHint(false) }}>Avançar para escuta <ArrowRight size={17}/></button>
           <p>Você já viu a explicação. Agora tente lembrar e usar o inglês sem olhar para os exemplos.</p>
+        </div>
+      </section>
+    )
+
+    if (lessonPhase === 'understand') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('learn')} aria-label="Voltar para aprender"><BookOpen size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '40%' }}/></div>
+          <span>ETAPA 2/5</span>
+        </div>
+        <div className="lesson-context">
+          <span className="course-eyebrow">OUÇA E ENTENDA · SEM TRADUÇÃO IMEDIATA</span>
+          <h1>{currentLesson.title}</h1>
+          <p>Escute o exemplo completo. Primeiro em velocidade normal, depois mais devagar. Tente identificar a estrutura antes de revelar o significado.</p>
+        </div>
+        <article className="lesson-teaching-card">
+          <div className="teaching-card-heading"><span><Volume2 size={17}/> Escuta guiada</span><span className="lesson-step-chip">1.0x / 0.75x</span></div>
+          {currentLesson.teach.slice(0, 3).map(item => <div className="understand-audio-row" key={item.term}>
+            <strong>{item.example}</strong>
+            <div>
+              <button className="course-secondary-button" onClick={() => playModel(item.example, 1)}><Play size={14}/> Normal 1.0x</button>
+              <button className="course-secondary-button" onClick={() => playModel(item.example, .75)}><Play size={14}/> Lenta 0.75x</button>
+            </div>
+            <details><summary>Revelar contexto</summary><p>{item.meaning} · {item.term}</p></details>
+          </div>)}
+          <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.objective}</span></div>
+        </article>
+        <div className="lesson-prep-actions">
+          <button className="course-primary-button" onClick={() => { setLessonPhase('practice'); setStep(0); resetExercise() }}>Entendi, começar prática <ArrowRight size={17}/></button>
+          <p>A escuta é uma etapa própria. Você pode repetir os exemplos antes de responder.</p>
+        </div>
+      </section>
+    )
+
+    if (lessonPhase === 'speak') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('practice')} aria-label="Rever exercícios"><RotateCcw size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '82%' }}/></div>
+          <span>ETAPA 4/5</span>
+        </div>
+        <div className="lesson-context">
+          <span className="course-eyebrow">PRODUÇÃO ORAL · SEM LER</span>
+          <h1>Agora use o inglês.</h1>
+          <p>Responda com suas próprias palavras usando a estrutura <strong>{currentLesson.pattern}</strong>. Não precisa repetir um modelo literalmente.</p>
+        </div>
+        <article className="lesson-exercise-card">
+          <div className="exercise-card-topline"><span>FALAR SEM LER</span><span>SHADOWING / RESPOSTA LIVRE</span></div>
+          <h2>Imagine uma situação real relacionada a: {currentLesson.objective}</h2>
+          <p className="lesson-speaking-prompt">Tente dizer duas frases curtas. Use uma expressão aprendida e acrescente um detalhe sobre sua rotina.</p>
+          <div className="repeat-practice-box">
+            <Mic size={20}/><div><strong>{voiceListening ? 'Ouvindo sua resposta…' : 'Grave sua resposta aqui'}</strong><small>O navegador transcreve sua fala. A transcrição ajuda a revisar as palavras, mas não mede sotaque ou qualidade fonética.</small></div>
+            <button disabled={voiceListening} onClick={startFreeSpeaking}>{voiceListening ? 'Ouvindo…' : 'Gravar resposta'}</button>
+          </div>
+          {freeSpeechTranscript && <div className="course-feedback correct"><strong>Resposta capturada</strong><p>{freeSpeechTranscript}</p></div>}
+          {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
+          <textarea className="course-answer-input course-speaking-textarea" value={freeSpeechTranscript} onChange={event => setFreeSpeechTranscript(event.target.value)} rows={3} placeholder="Ou digite a frase que você falou…"/>
+          <div className="lesson-action-row">
+            <button className="course-secondary-button" onClick={() => onAskTutor('Estou na etapa oral da aula "' + currentLesson.title + '". Minha estrutura-alvo é ' + currentLesson.pattern + '. Dê feedback breve sobre esta resposta: ' + freeSpeechTranscript)}>Perguntar à Lumi</button>
+            <button className="course-primary-button" onClick={() => setLessonPhase('review')}>Concluir fala e revisar <ArrowRight size={16}/></button>
+          </div>
+        </article>
+      </section>
+    )
+
+    if (lessonPhase === 'review') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('speak')} aria-label="Voltar para fala"><RotateCcw size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '100%' }}/></div>
+          <span>ETAPA 5/5</span>
+        </div>
+        <div className="lesson-context"><span className="course-eyebrow">RESUMO DA LIÇÃO</span><h1>O que você praticou.</h1><p>Revise a estrutura e conclua para salvar seu avanço.</p></div>
+        <article className="lesson-teaching-card">
+          <div className="teaching-card-heading"><span><CheckCircle2 size={17}/> Síntese</span><span className="lesson-step-chip">{Math.max(0, activeExercises.length - mistakes)}/{activeExercises.length} acertos sem ajuda</span></div>
+          <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.pattern}</span></div>
+          <div className="teaching-word-grid">{currentLesson.teach.slice(0, 4).map(item => <div className="teaching-word" key={item.term}><strong>{item.term}</strong><span>{item.meaning}</span><small>{item.example}</small></div>)}</div>
+          {retryQueue.length > 0 && <p className="lesson-tip-box"><strong>Revisões adaptativas:</strong> {retryQueue.length} variação(ões) de estruturas que precisaram de mais uma tentativa foram incluídas nesta aula.</p>}
+          {freeSpeechTranscript && <p className="course-feedback correct"><strong>Sua produção oral</strong><span>{freeSpeechTranscript}</span></p>}
+        </article>
+        <div className="lesson-prep-actions">
+          <button className="course-primary-button" onClick={finishLesson}>Salvar progresso e concluir aula <CheckCircle2 size={17}/></button>
+          <p>Seu avanço será sincronizado na conta quando estiver conectado; no modo visitante, fica salvo neste aparelho.</p>
         </div>
       </section>
     )
@@ -1311,10 +1506,10 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
           <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
-          <span>EXERCÍCIO {step + 1}/{currentLesson.exercises.length}</span>
+          <span>ETAPA 3/5 · EXERCÍCIO {step + 1}/{activeExercises.length}</span>
         </div>
         <div className="lesson-context">
-          <span className="course-eyebrow">AULA GUIADA · {currentLesson.subtitle.toUpperCase()}</span>
+          <span className="course-eyebrow">PRATIQUE · {currentLesson.subtitle.toUpperCase()}</span>
           <h1>{currentLesson.title}</h1>
           <p>{currentLesson.objective}</p>
           <button className="course-review-button" onClick={() => setLessonPhase('learn')}><BookOpen size={14}/> Rever explicação</button>
@@ -1345,7 +1540,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           </div>}
           <div className="lesson-action-row">
             <button className="course-secondary-button" onClick={() => onAskTutor('Estou na aula "' + currentLesson.title + '". Me explique de outra forma: ' + currentExercise.prompt + ' Minha dúvida é sobre: ' + currentExercise.answer)}><CircleHelp size={16}/> Tirar dúvida com a Lumi</button>
-            {checked === true ? <button className="course-primary-button" onClick={nextStep}>{step === currentLesson.exercises.length - 1 ? 'Concluir aula' : 'Continuar'} <ArrowRight size={16}/></button>
+            {checked === true ? <button className="course-primary-button" onClick={nextStep}>{step === activeExercises.length - 1 ? 'Ir para etapa oral' : 'Continuar'} <ArrowRight size={16}/></button>
               : checked === false ? <button className="course-primary-button" onClick={retry}><RotateCcw size={16}/> Tentar novamente</button>
                 : <button className="course-primary-button" disabled={!canCheck} onClick={verify}>Conferir resposta <Check size={16}/></button>}
           </div>
@@ -1397,7 +1592,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         </article>
       })}
       <div className="course-help-panel"><MessageCircle size={20}/><div><strong>A Lumi acompanha seu aprendizado.</strong><p>Quando uma explicação não ficar clara, peça outro exemplo. A tutora deve respeitar o nível desta trilha.</p></div><button className="course-secondary-button" onClick={() => onAskTutor('Estou começando inglês do zero. Explique os conceitos com palavras simples, tradução e exemplos curtos.')}>Perguntar à Lumi <ArrowRight size={15}/></button></div>
-      <p className="course-storage-note">Seu andamento fica salvo neste aparelho. Para levar o progresso a outro dispositivo, entre na sua conta; a sincronização deste novo curso ainda será adicionada.</p>
+      <p className="course-storage-note">Seu progresso é sincronizado com sua conta quando conectado. No modo visitante, fica salvo neste aparelho.</p>
     </section>
   )
 }
