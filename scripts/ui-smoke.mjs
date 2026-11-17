@@ -47,6 +47,8 @@ try {
   await page.locator('.brand-logo-light').waitFor({ state: 'visible' })
   const logoLoaded = await page.locator('.brand-logo-light').evaluate(img => img.complete && img.naturalWidth > 0)
   assert.ok(logoLoaded, 'The FALA wordmark SVG must load in the desktop shell.')
+  const heroTitleColor = await page.locator('.welcome-strip h1').evaluate(el => getComputedStyle(el).color)
+  assert.equal(heroTitleColor, 'rgb(247, 251, 255)', 'The light theme hero title must meet readable contrast on the dark banner.')
   await assertNoHorizontalOverflow(page, 'Desktop 1440px')
   mkdirSync('artifacts', { recursive: true })
   await page.screenshot({ path: 'artifacts/fala-desktop.png', fullPage: true })
@@ -69,10 +71,23 @@ try {
 
   await page.setViewportSize({ width: 834, height: 1112 })
   await assertNoHorizontalOverflow(page, 'Tablet 834px')
+  const tabletTitleBox = await page.locator('.topbar-title span').boundingBox()
+  assert.ok(tabletTitleBox && tabletTitleBox.height <= 24, 'Tablet page title must stay on a single line.')
   await page.screenshot({ path: 'artifacts/fala-tablet.png', fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
   await assertNoHorizontalOverflow(page, 'Mobile 390px')
+  const mobileProbe = await page.evaluate(() => {
+    const icon = document.querySelector('.topbar-brand-icon')
+    return {
+      innerWidth: window.innerWidth,
+      mediaMatches: window.matchMedia('(max-width: 700px)').matches,
+      iconDisplay: icon ? getComputedStyle(icon).display : 'missing',
+      iconBox: icon ? icon.getBoundingClientRect().toJSON() : null,
+    }
+  })
+  console.log('Mobile viewport probe:', JSON.stringify(mobileProbe))
+  assert.ok(mobileProbe.mediaMatches, 'Mobile viewport must activate the 700px responsive breakpoint.')
   await page.locator('.topbar-brand-icon').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Abrir menu' }).click()
   const mobileMenu = page.locator('.mobile-menu')
