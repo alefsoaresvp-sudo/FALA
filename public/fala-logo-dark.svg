@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 590 180" role="img" aria-labelledby="title desc">
+  <title id="title">FALA English</title>
+  <desc id="desc">Mascote robô com fones e livro aberto ao lado do nome FALA English.</desc>
+  <defs>
+    <linearGradient id="bubble" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#35e5d0"/><stop offset="1" stop-color="#19a9d7"/></linearGradient>
+    <linearGradient id="book" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f9fdff"/><stop offset="1" stop-color="#c8e8f8"/></linearGradient>
+    <linearGradient id="visor" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#163b66"/><stop offset="1" stop-color="#071d39"/></linearGradient>
+  </defs>
+  <g transform="translate(8 5)">
+    <path d="M81 9C39 9 7 39 7 79c0 26 13 48 34 61l-4 22 29-14c6 2 10 3 16 3 42 0 76-31 76-72S123 9 81 9Z" fill="url(#bubble)"/>
+    <path d="M80 18c-31 0-57 23-57 55 0 14 5 26 14 36" fill="none" stroke="#a8fff0" stroke-width="4" stroke-linecap="round" opacity=".65"/>
+    <path d="M81 17v-8m-7 0h14" stroke="#14385d" stroke-width="5" stroke-linecap="round"/>
+    <rect x="31" y="29" width="101" height="78" rx="29" fill="#f7fbff" stroke="#d9f0fa" stroke-width="3"/>
+    <rect x="41" y="42" width="81" height="54" rx="21" fill="url(#visor)"/>
+    <path d="M56 64c4-7 12-7 16 0m18 0c4-7 12-7 16 0" fill="none" stroke="#8ff8e4" stroke-width="5" stroke-linecap="round"/>
+    <path d="M72 80c7 7 15 7 22 0" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+    <rect x="20" y="52" width="15" height="37" rx="8" fill="#1bb5d0"/>
+    <rect x="128" y="52" width="15" height="37" rx="8" fill="#1bb5d0"/>
+    <path d="M36 110c12-8 27-8 44 2 17-10 31-10 45-2l-2 34c-15-8-29-7-43 3-15-10-29-11-43-3z" fill="url(#book)" stroke="#b5d9ec" stroke-width="2"/>
+    <path d="M80 112v35m-32-24 22 7m41-7-22 7" fill="none" stroke="#4ba6c7" stroke-width="3" stroke-linecap="round"/>
+    <path d="M42 145c13-7 25-6 38 3 14-9 28-10 42-3v8c-15-7-28-6-42 4-14-10-27-11-40-4z" fill="#0d3762"/>
+    <path d="M146 28l5-9m4 17 9-6m-2 17 10-1" stroke="#2bcdbb" stroke-width="5" stroke-linecap="round"/>
+  </g>
+  <g font-family="Manrope, Arial, sans-serif">
+    <text x="192" y="82" fill="#f2f7fb" font-size="69" font-weight="900" letter-spacing="-3">FALA</text>
+    <path d="M196 97c69 13 143 9 218-7" fill="none" stroke="url(#bubble)" stroke-width="7" stroke-linecap="round"/>
+    <text x="196" y="133" fill="#d4e4ee" font-size="29" font-weight="800" letter-spacing="7">ENGLISH</text>
+    <text x="198" y="159" fill="#a9bfce" font-size="12" font-weight="700" letter-spacing="1.6">APRENDA  •  PRATIQUE  •  CONVERSE</text>
+  </g>
+</svg>
