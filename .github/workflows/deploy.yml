@@ -35,6 +35,22 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: TypeScript and Vite production build
         run: npm run build
+      - name: Install Playwright for UI smoke tests
+        if: github.event_name == 'pull_request'
+        run: npm install --no-save --no-package-lock playwright
+      - name: Install Chromium for UI smoke tests
+        if: github.event_name == 'pull_request'
+        run: npx playwright install --with-deps chromium
+      - name: Run desktop, tablet and mobile smoke tests
+        if: github.event_name == 'pull_request'
+        run: node scripts/ui-smoke.mjs
+      - name: Upload responsive UI screenshots
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fala-responsive-ui-smoke
+          path: artifacts/fala-*.png
+          if-no-files-found: ignore
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
