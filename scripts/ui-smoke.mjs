@@ -44,8 +44,8 @@ try {
   await page.route('https://fonts.googleapis.com/**', route => route.abort())
   await page.route('https://fonts.gstatic.com/**', route => route.abort())
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
-  await page.locator('.brand-logo-light').waitFor({ state: 'visible' })
-  const logoLoaded = await page.locator('.brand-logo-light').evaluate(img => img.complete && img.naturalWidth > 0)
+  await page.locator('.sidebar .brand-logo-light').waitFor({ state: 'visible' })
+  const logoLoaded = await page.locator('.sidebar .brand-logo-light').evaluate(img => img.complete && img.naturalWidth > 0)
   assert.ok(logoLoaded, 'The FALA wordmark SVG must load in the desktop shell.')
   const heroTitleColor = await page.locator('.welcome-strip h1').evaluate(el => getComputedStyle(el).color)
   assert.equal(heroTitleColor, 'rgb(247, 251, 255)', 'The light theme hero title must meet readable contrast on the dark banner.')
@@ -54,8 +54,8 @@ try {
   await page.screenshot({ path: 'artifacts/fala-desktop.png', fullPage: true })
 
   await page.getByRole('button', { name: 'Ativar tema escuro' }).click()
-  await page.locator('.brand-logo-dark').waitFor({ state: 'visible' })
-  const darkLogoLoaded = await page.locator('.brand-logo-dark').evaluate(img => img.complete && img.naturalWidth > 0)
+  await page.locator('.sidebar .brand-logo-dark').waitFor({ state: 'visible' })
+  const darkLogoLoaded = await page.locator('.sidebar .brand-logo-dark').evaluate(img => img.complete && img.naturalWidth > 0)
   assert.ok(darkLogoLoaded, 'The dark theme wordmark SVG must load.')
   await page.getByRole('button', { name: 'Ativar tema claro' }).click()
 
