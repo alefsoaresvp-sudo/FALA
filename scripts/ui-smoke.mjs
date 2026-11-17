@@ -93,6 +93,8 @@ try {
   assert.match(await page.locator('.topbar-title').innerText(), /Curso guiado/)
   await page.locator('.course-intro-card').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Começar minha primeira aula' }).click()
+  await page.locator('.course-hero').waitFor({ state: 'visible' })
+  await page.locator('.course-lesson-row:not(.locked)').first().click()
   await page.locator('.lesson-teaching-card').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Começar exercícios' }).click()
   await page.locator('.course-choice-list').getByRole('button', { name: 'Hello', exact: true }).click()
