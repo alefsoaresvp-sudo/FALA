@@ -2662,3 +2662,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     object-position:left center;
   }
 }
+
+.mobile-brand-lockup .brand-logo-light { display:block; }
+.mobile-brand-lockup .brand-logo-dark { display:none; }
+:root[data-theme="dark"] .mobile-brand-lockup .brand-logo-light { display:none; }
+:root[data-theme="dark"] .mobile-brand-lockup .brand-logo-dark { display:block; }
