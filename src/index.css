@@ -2577,3 +2577,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     border-radius: 8px;
   }
 }
+
+.brand-logo-light { display:block; }
+.brand-logo-dark { display:none; }
+:root[data-theme="dark"] .brand-logo-light { display:none; }
+:root[data-theme="dark"] .brand-logo-dark { display:block; }
