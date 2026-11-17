@@ -2633,3 +2633,11 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
     flex:0 0 27px;
   }
 }
+
+.dialog-brand-icon {
+  display:block;
+  width:40px;
+  height:40px;
+  flex:0 0 40px;
+  border-radius:12px;
+}
