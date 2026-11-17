@@ -2641,3 +2641,24 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
   flex:0 0 40px;
   border-radius:12px;
 }
+
+
+/* Mobile identity: the compact header is intentionally replaced by the bottom dock */
+.topbar-brand-icon { display:none !important; }
+.mobile-brand-lockup { display:none; }
+@media (max-width:700px) {
+  .mobile-brand-lockup {
+    display:flex;
+    align-items:center;
+    min-height:48px;
+    margin:0 0 13px;
+  }
+  .mobile-brand-logo {
+    display:block;
+    width:178px;
+    max-width:100%;
+    max-height:54px;
+    object-fit:contain;
+    object-position:left center;
+  }
+}
