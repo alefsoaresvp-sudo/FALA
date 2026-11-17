@@ -1253,7 +1253,8 @@ export default function App() {
     <div className="fala-app">
       <aside className="sidebar">
         <div className="brand-lockup">
-          <img className="brand-logo" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English — Aprenda, pratique e converse" />
+          <img className="brand-logo brand-logo-light" src={`${import.meta.env.BASE_URL}fala-logo.svg`} alt="FALA English — Aprenda, pratique e converse" />
+          <img className="brand-logo brand-logo-dark" src={`${import.meta.env.BASE_URL}fala-logo-dark.svg`} alt="" aria-hidden="true" />
         </div>
         <div className="side-label">APRENDIZAGEM</div>
         <nav className="side-nav" aria-label="Navegação principal">
