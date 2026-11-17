@@ -2009,7 +2009,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .dashboard-quick-practice { margin-top:7px; }
 .dashboard-practice-grid {
   display:grid;
-  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-template-columns:repeat(5,minmax(0,1fr));
   gap:11px;
 }
 .dashboard-practice-card {
