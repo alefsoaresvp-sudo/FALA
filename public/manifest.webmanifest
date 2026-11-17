@@ -6,8 +6,8 @@
   "scope": "/FALA/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#f4f8fd",
-  "theme_color": "#173858",
+  "background_color": "#f2f7fc",
+  "theme_color": "#102d50",
   "lang": "pt-BR",
   "icons": [
     { "src": "/FALA/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
