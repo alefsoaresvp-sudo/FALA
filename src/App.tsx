@@ -1619,6 +1619,44 @@ export default function App() {
               </div>
               <p className="skills-progress-note">As barras mostram médias das tentativas registradas por habilidade. Uma área sem dados ainda não foi avaliada; isso não significa desempenho zero.</p>
             </section>
+            <section className="learning-rhythm-panel">
+              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 7 dias</h2></div><span className="muted-caption">Dias com sessões registradas</span></div>
+              <div className="learning-week-grid">
+                {Array.from({ length: 7 }, (_, index) => {
+                  const date = new Date()
+                  date.setHours(0, 0, 0, 0)
+                  date.setDate(date.getDate() - (6 - index))
+                  const active = sessions.some(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
+                  return <div className={active ? 'learning-day active' : 'learning-day'} key={date.toISOString()}>
+                    <small>{date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small>
+                    <strong>{date.getDate()}</strong>
+                    <i>{active ? <Check size={13}/> : null}</i>
+                  </div>
+                })}
+              </div>
+              <p className="learning-rhythm-note">O calendário usa sessões com data registrada. Um dia sem marcação significa que não há sessão registrada, não que você necessariamente deixou de estudar.</p>
+            </section>
+            <section className="achievement-center">
+              <div className="section-heading"><div><span className="eyebrow">CONQUISTAS</span><h2>Marcos da sua aprendizagem</h2></div><span className="muted-caption">Competências e consistência</span></div>
+              <div className="achievement-grid">
+                {[
+                  { icon: BookOpen, title: 'Primeiro passo', detail: 'Conclua sua primeira sessão', unlocked: completedSessions >= 1, current: Math.min(completedSessions, 1), target: 1 },
+                  { icon: Flame, title: 'Criando ritmo', detail: 'Registre 5 sessões de estudo', unlocked: completedSessions >= 5, current: Math.min(completedSessions, 5), target: 5 },
+                  { icon: Bookmark, title: 'Caderno vivo', detail: 'Salve 5 palavras ou expressões', unlocked: words.length >= 5, current: Math.min(words.length, 5), target: 5 },
+                  { icon: Trophy, title: 'Consistência', detail: 'Alcance média de 70% nas tentativas', unlocked: averageScore !== null && averageScore >= 70, current: averageScore ?? 0, target: 70 },
+                ].map(achievement => {
+                  const Icon = achievement.icon
+                  const progress = Math.min(100, Math.round(achievement.current / achievement.target * 100))
+                  return <article className={achievement.unlocked ? 'achievement-card unlocked' : 'achievement-card'} key={achievement.title}>
+                    <span className="achievement-icon"><Icon size={20}/></span>
+                    <div><strong>{achievement.title}</strong><p>{achievement.detail}</p></div>
+                    <span className="achievement-status">{achievement.unlocked ? 'Conquistado' : progress + '%'}</span>
+                    <div className="achievement-progress"><i style={{ width: progress + '%' }}/></div>
+                  </article>
+                })}
+              </div>
+              <p className="achievement-note">As conquistas usam somente sessões, palavras e notas registradas no aplicativo. Elas não equivalem a certificados de proficiência.</p>
+            </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
