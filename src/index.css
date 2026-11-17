@@ -2246,3 +2246,220 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
+
+
+/* FALA V10 — diagnostic, learning rhythm and achievement center */
+.diagnostic-layout,.progress-layout { display:grid; gap:17px; }
+.diagnostic-intro-card {
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  padding:18px 20px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:var(--paper);
+}
+.diagnostic-intro-icon {
+  display:grid;
+  width:42px;
+  height:42px;
+  place-items:center;
+  flex:0 0 auto;
+  border-radius:13px;
+  color:#2c7195;
+  background:#eaf3f8;
+}
+.diagnostic-intro-card strong { color:var(--ink); font-size:13px; }
+.diagnostic-intro-card p { margin:5px 0 0; color:var(--muted); font-size:12px; line-height:1.6; }
+.diagnostic-question-list { display:grid; gap:13px; }
+.diagnostic-question-card {
+  padding:20px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--paper);
+  box-shadow:0 7px 22px rgba(29,60,87,.035);
+}
+.diagnostic-question-top { display:flex; justify-content:space-between; gap:10px; color:#67849a; font-size:10px; font-weight:850; letter-spacing:.8px; }
+.diagnostic-question-top span:last-child { color:#8196a6; }
+.diagnostic-question-card h2 { margin:13px 0 15px; color:var(--ink); font:750 17px/1.45 Manrope,sans-serif; }
+.diagnostic-options { display:grid; gap:8px; }
+.diagnostic-options button {
+  display:flex;
+  min-height:49px;
+  align-items:center;
+  gap:11px;
+  padding:10px 13px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  color:var(--ink);
+  background:var(--canvas);
+  text-align:left;
+  font-size:13px;
+  transition:border-color .16s ease,background .16s ease;
+}
+.diagnostic-options button > span {
+  display:grid;
+  width:27px;
+  height:27px;
+  place-items:center;
+  flex:0 0 auto;
+  border-radius:9px;
+  color:#416d88;
+  background:#e7f0f5;
+  font-size:10px;
+  font-weight:850;
+}
+.diagnostic-options button.selected { border-color:#68a4c1; color:#1d5f82; background:#edf6fa; }
+.diagnostic-options button.selected > span { color:#fff; background:#347d9f; }
+.diagnostic-explanation {
+  margin:13px 0 0;
+  padding:11px 12px;
+  border-radius:11px;
+  color:#6c5360;
+  background:#fbf4f2;
+  font-size:11px;
+  line-height:1.6;
+}
+.diagnostic-explanation.correct { color:#356d57; background:#eff8f2; }
+.diagnostic-submit-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:15px 17px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--paper);
+}
+.diagnostic-submit-row > span { color:var(--muted); font-size:12px; font-weight:700; }
+.diagnostic-result-card {
+  display:grid;
+  gap:10px;
+  padding:23px;
+  border:1px solid #cbdfea;
+  border-radius:19px;
+  background:linear-gradient(130deg,#eef6fa,#f8fbfd);
+}
+.diagnostic-result-card > strong { color:#1c5675; font:800 28px Manrope,sans-serif; }
+.diagnostic-result-card > p { max-width:760px; margin:0; color:#587489; font-size:12px; line-height:1.65; }
+.diagnostic-result-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:4px; }
+.diagnostic-result-actions .button.ghost { color:#315f7a; border:1px solid #d0e0e9; background:#fff; }
+.learning-rhythm-panel,.achievement-center {
+  padding:20px;
+  margin:18px 0;
+  border:1px solid var(--line);
+  border-radius:19px;
+  background:var(--paper);
+  box-shadow:0 8px 25px rgba(29,60,87,.035);
+}
+.learning-rhythm-panel .section-heading,.achievement-center .section-heading { margin:0 0 17px; }
+.learning-week-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:9px; }
+.learning-day {
+  display:grid;
+  justify-items:center;
+  gap:8px;
+  padding:12px 5px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--canvas);
+}
+.learning-day small { color:var(--muted); font-size:10px; text-transform:capitalize; }
+.learning-day strong { color:var(--ink); font:800 16px Manrope,sans-serif; }
+.learning-day i {
+  display:grid;
+  width:25px;
+  height:25px;
+  place-items:center;
+  border-radius:50%;
+  color:transparent;
+  background:#e8eef3;
+  font-style:normal;
+}
+.learning-day.active { border-color:#c4dfd1; background:#f2f8f4; }
+.learning-day.active i { color:#fff; background:#4d9877; }
+.learning-rhythm-note,.achievement-note { margin:13px 0 0; color:var(--muted); font-size:11px; line-height:1.55; }
+.achievement-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
+.achievement-card {
+  display:grid;
+  grid-template-columns:40px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:var(--canvas);
+}
+.achievement-card.unlocked { border-color:#c8e1d2; background:#f5faf6; }
+.achievement-icon {
+  display:grid;
+  width:39px;
+  height:39px;
+  place-items:center;
+  border-radius:12px;
+  color:#66849a;
+  background:#e7eef3;
+}
+.achievement-card.unlocked .achievement-icon { color:#fff; background:#4e9777; }
+.achievement-card > div:nth-child(2) { min-width:0; }
+.achievement-card strong { color:var(--ink); font-size:12px; }
+.achievement-card p { margin:4px 0 0; color:var(--muted); font-size:10px; line-height:1.45; }
+.achievement-status { color:#768da0; font-size:10px; font-weight:800; white-space:nowrap; }
+.achievement-card.unlocked .achievement-status { color:#428365; }
+.achievement-progress {
+  grid-column:1/-1;
+  height:5px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e6edf2;
+}
+.achievement-progress i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#6ab18e,#398363); }
+.dashboard-practice-icon.diagnosis { color:#3b759a; background:#e9f2f8; }
+:root[data-theme="dark"] .diagnostic-intro-card,
+:root[data-theme="dark"] .diagnostic-question-card,
+:root[data-theme="dark"] .diagnostic-submit-row,
+:root[data-theme="dark"] .learning-rhythm-panel,
+:root[data-theme="dark"] .achievement-center { background:#1b2935; border-color:var(--line); }
+:root[data-theme="dark"] .diagnostic-intro-card strong,
+:root[data-theme="dark"] .diagnostic-question-card h2,
+:root[data-theme="dark"] .diagnostic-result-card > strong,
+:root[data-theme="dark"] .achievement-card strong { color:var(--ink); }
+:root[data-theme="dark"] .diagnostic-intro-card p,
+:root[data-theme="dark"] .diagnostic-submit-row > span,
+:root[data-theme="dark"] .learning-day small,
+:root[data-theme="dark"] .learning-rhythm-note,
+:root[data-theme="dark"] .achievement-note,
+:root[data-theme="dark"] .achievement-card p { color:var(--muted); }
+:root[data-theme="dark"] .diagnostic-intro-icon { color:#afd9ee; background:#254254; }
+:root[data-theme="dark"] .diagnostic-options button { color:var(--ink); background:#17232d; border-color:var(--line); }
+:root[data-theme="dark"] .diagnostic-options button.selected { border-color:#6daac8; color:#d5eef9; background:#244357; }
+:root[data-theme="dark"] .diagnostic-result-card { background:linear-gradient(130deg,#20394a,#1b2b39); border-color:#38586e; }
+:root[data-theme="dark"] .diagnostic-result-card > p { color:#bad0dd; }
+:root[data-theme="dark"] .learning-day { background:#17232d; border-color:var(--line); }
+:root[data-theme="dark"] .learning-day strong { color:var(--ink); }
+:root[data-theme="dark"] .learning-day.active { background:#203a34; border-color:#3c6c5a; }
+:root[data-theme="dark"] .learning-day.active i { background:#4a9776; }
+:root[data-theme="dark"] .achievement-card { background:#17232d; border-color:var(--line); }
+:root[data-theme="dark"] .achievement-card.unlocked { background:#1e3932; border-color:#386957; }
+:root[data-theme="dark"] .achievement-icon { color:#b6cbd8; background:#263a49; }
+:root[data-theme="dark"] .achievement-card.unlocked .achievement-icon { color:#fff; background:#3d8767; }
+:root[data-theme="dark"] .achievement-progress { background:#2a3c49; }
+:root[data-theme="dark"] .diagnostic-explanation { color:#e0c3bd; background:#3e3033; }
+:root[data-theme="dark"] .diagnostic-explanation.correct { color:#b5dfc6; background:#1e3b33; }
+
+@media (max-width:700px) {
+  .diagnostic-intro-card { padding:15px; }
+  .diagnostic-question-card { padding:15px; }
+  .diagnostic-question-card h2 { font-size:15px; }
+  .diagnostic-options button { min-height:48px; font-size:12px; }
+  .diagnostic-submit-row { align-items:stretch; flex-direction:column; }
+  .diagnostic-submit-row .button { width:100%; }
+  .diagnostic-result-card { padding:18px; }
+  .learning-rhythm-panel,.achievement-center { padding:14px; }
+  .learning-week-grid { gap:5px; }
+  .learning-day { gap:6px; padding:10px 2px; }
+  .learning-day small { font-size:8px; }
+  .learning-day strong { font-size:14px; }
+  .learning-day i { width:22px; height:22px; }
+  .achievement-grid { grid-template-columns:1fr; }
+  .achievement-card { padding:12px; }
+}
