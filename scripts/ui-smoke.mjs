@@ -41,6 +41,23 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, locale: 'pt-BR' })
   const pageErrors = []
   page.on('pageerror', error => pageErrors.push(error.message))
+  await page.addInitScript(() => {
+    class FakeSpeechRecognition {
+      lang = 'en-US'
+      interimResults = false
+      maxAlternatives = 1
+      onresult = null
+      onerror = null
+      onend = null
+      start() {
+        this.onresult?.({ results: [[{ transcript: 'I am learning English because I want to travel and communicate at work.' }]] })
+        this.onend?.()
+      }
+      stop() { this.onend?.() }
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { value: FakeSpeechRecognition })
+    Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeSpeechRecognition })
+  })
   await page.route('https://fonts.googleapis.com/**', route => route.abort())
   await page.route('https://fonts.gstatic.com/**', route => route.abort())
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
@@ -143,7 +160,10 @@ try {
   for (let question = 0; question < answers.length; question += 1) {
     await options.nth(question * 3 + answers[question]).click()
   }
-  await page.getByRole('button', { name: /Ver meu resultado/ }).click()
+  await page.locator('.diagnostic-evidence-card textarea').first().fill('I want to improve my English because I need to communicate with customers. I practice every day and I want to speak with confidence.')
+  await page.getByRole('button', { name: 'Capturar amostra oral' }).click()
+  await page.getByText('Amostra capturada').waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: /Validar evidências e ver sugestão/ }).click()
   await page.locator('.diagnostic-result-card').waitFor({ state: 'visible' })
   assert.match(await page.locator('.diagnostic-result-card').innerText(), /5 de 5 questões/)
   assert.equal(pageErrors.length, 0, 'No unhandled browser errors should occur during desktop/tablet/mobile smoke tests.')
