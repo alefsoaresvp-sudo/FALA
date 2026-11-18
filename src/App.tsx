@@ -621,6 +621,178 @@ export default function App() {
     if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current].slice(0, 20))
   }
 
+  const handleCourseProgressChange = useCallback((next: SavedProgress) => {
+    if (!courseProgressLoaded) return
+    setCourseProgress(next)
+    try { window.localStorage.setItem('fala-course-progress-v1', JSON.stringify(next)) } catch { /* local snapshot is a fallback */ }
+    if (!supabase || !user) return
+    void supabase.from('course_progress').upsert({
+      user_id: user.id,
+      course_id: 'core-english',
+      completed_lesson_ids: next.completedLessonIds,
+      xp: next.xp,
+      intro_done: next.introDone,
+      active_lesson_id: next.activeLessonId,
+      streak_days: next.streakDays ?? 0,
+      last_study_date: next.lastStudyDate || null,
+    }, { onConflict: 'user_id,course_id' }).then(({ error }) => {
+      if (error) setToast('O progresso do curso ficou salvo neste aparelho, mas não sincronizou: ' + error.message)
+    })
+  }, [courseProgressLoaded, user?.id])
+
+  const handleCourseExerciseAttempt = useCallback(async (attempt: {
+    activityType: string
+    skill: 'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'
+    prompt: string
+    answer: string
+    expected: string
+    explanation: string
+    correct: boolean
+  }) => {
+    const correction = { expected: attempt.expected, explanation: attempt.explanation, correct: attempt.correct, source: 'guided-course-v10' }
+    const attemptPayload = {
+      activity_type: attempt.activityType,
+      skill: attempt.skill,
+      interest_context: profile.customInterest || profile.interests[0] || null,
+      prompt: attempt.prompt,
+      learner_answer: attempt.answer || null,
+      correction,
+      score: attempt.correct ? 100 : 0,
+    }
+    let sourceAttemptId: string | null = null
+    if (supabase && user) {
+      const savedAttempt = await supabase.from('activity_attempts').insert({ user_id: user.id, ...attemptPayload })
+        .select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').single()
+      if (savedAttempt.error) {
+        console.error('Guided course attempt sync failed', savedAttempt.error)
+        setToast('A tentativa foi registrada apenas localmente: ' + savedAttempt.error.message)
+      } else if (savedAttempt.data) {
+        sourceAttemptId = savedAttempt.data.id
+        setRecentAttempts(current => [savedAttempt.data as ActivityAttempt, ...current].slice(0, 40))
+      }
+    } else {
+      setRecentAttempts(current => [{
+        ...attemptPayload,
+        id: 'local-' + Date.now(),
+        attempted_at: new Date().toISOString(),
+      } as ActivityAttempt, ...current].slice(0, 40))
+    }
+
+    if (attempt.correct) return
+    const itemType: LearningReviewItem['item_type'] = attempt.skill === 'grammar' ? 'grammar'
+      : attempt.skill === 'speaking' || attempt.skill === 'writing' ? 'phrase' : 'error'
+    const reviewPayload = {
+      user_id: user?.id,
+      item_type: itemType,
+      prompt: attempt.prompt.slice(0, 500),
+      expected_answer: attempt.expected.slice(0, 1000),
+      explanation: attempt.explanation.slice(0, 1200),
+      context: 'Curso guiado · estrutura que precisa de reforço',
+      skill: attempt.skill,
+      source_attempt_id: sourceAttemptId,
+      interval_days: 1,
+      repetition_count: 0,
+      lapse_count: 0,
+      next_review_at: new Date().toISOString(),
+      status: 'active' as const,
+      metadata: { learner_answer: attempt.answer, source: 'guided-course-v10' },
+    }
+    let item: LearningReviewItem = {
+      ...reviewPayload,
+      id: 'local-' + Date.now(),
+    } as LearningReviewItem
+    if (supabase && user) {
+      const savedItem = await supabase.from('learning_review_items').insert(reviewPayload)
+        .select('*').single()
+      if (savedItem.error) {
+        console.error('Review item sync failed', savedItem.error)
+        setToast('O erro entrou na revisão local, mas não sincronizou: ' + savedItem.error.message)
+      } else if (savedItem.data) {
+        item = savedItem.data as LearningReviewItem
+      }
+    }
+    setLearningReviewItems(current => {
+      const updated = [item, ...current.filter(existing => existing.id !== item.id)]
+      try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+      return updated
+    })
+  }, [user?.id, profile.customInterest, profile.interests])
+
+  const gradeLearningReviewItem = async (grade: 'again' | 'good' | 'easy') => {
+    if (!activeReviewItem) return
+    const intervals = [1, 3, 7, 15, 30]
+    const currentIndex = Math.max(0, intervals.indexOf(activeReviewItem.interval_days))
+    const nextIndex = grade === 'again' ? 0 : Math.min(intervals.length - 1, currentIndex + (grade === 'easy' ? 2 : 1))
+    const nextInterval = intervals[nextIndex]
+    const nextDate = new Date()
+    nextDate.setDate(nextDate.getDate() + nextInterval)
+    const nextReviewAt = nextDate.toISOString()
+    const nextRepetitionCount = grade === 'again' ? 0 : activeReviewItem.repetition_count + 1
+    const nextLapseCount = activeReviewItem.lapse_count + (grade === 'again' ? 1 : 0)
+    const mastered = nextRepetitionCount >= 5 && grade === 'easy'
+    const updatedFields = {
+      interval_days: nextInterval,
+      repetition_count: nextRepetitionCount,
+      lapse_count: nextLapseCount,
+      last_reviewed_at: new Date().toISOString(),
+      next_review_at: nextReviewAt,
+      status: mastered ? 'mastered' : 'active',
+    }
+    setLearningReviewItems(current => {
+      const updated = current.map(item => item.id === activeReviewItem.id ? { ...item, ...updatedFields } as LearningReviewItem : item)
+      try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+      return updated
+    })
+    if (supabase && user && !activeReviewItem.id.startsWith('local-')) {
+      const { error } = await supabase.from('learning_review_items').update(updatedFields).eq('id', activeReviewItem.id).eq('user_id', user.id)
+      if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
+    }
+    await recordSession('vocabulary', studyTimer.finish(), grade === 'again' ? 0 : grade === 'good' ? 85 : 100, {
+      source: 'shared-srs', item_type: activeReviewItem.item_type, interval_days: nextInterval, grade,
+    })
+    setReviewRevealed(false)
+    setReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
+    setToast(mastered ? 'Estrutura marcada como dominada após cinco revisões.' : grade === 'again' ? 'Esse item volta amanhã.' : 'Próxima revisão em ' + nextInterval + ' dias.')
+  }
+
+  const saveExpressionFromChat = async (term: string, explanation = '') => {
+    const cleanTerm = term.replace(/^["“”' ]+|["“”' ]+$/g, '').trim().slice(0, 120)
+    if (!cleanTerm) return
+    const nextReviewAt = new Date().toISOString()
+    const detail = { meaning: explanation.slice(0, 300), example: '' }
+    setWords(current => current.some(word => word.toLowerCase() === cleanTerm.toLowerCase()) ? current : [cleanTerm, ...current].slice(0, 100))
+    setWordDetails(current => ({ ...current, [cleanTerm]: detail }))
+    if (supabase && user) {
+      const vocab = await supabase.from('vocabulary_items').upsert({
+        user_id: user.id, term: cleanTerm, meaning: detail.meaning, example_sentence: null,
+        next_review_at: nextReviewAt, review_interval_days: 1,
+      }, { onConflict: 'user_id,term' })
+      if (vocab.error) setToast('A expressão ficou local, mas não sincronizou com o vocabulário.')
+      const item = await supabase.from('learning_review_items').insert({
+        user_id: user.id, item_type: 'phrase', prompt: 'Use a expressão: ' + cleanTerm,
+        expected_answer: cleanTerm, explanation: detail.meaning,
+        context: 'Expressão salva da conversa com a Lumi', skill: 'vocabulary',
+        interval_days: 1, next_review_at: nextReviewAt, metadata: { source: 'lumi-chat-save' },
+      }).select('*').single()
+      if (!item.error && item.data) setLearningReviewItems(current => [item.data as LearningReviewItem, ...current])
+    }
+    setToast('Expressão salva no vocabulário e na fila de revisão.')
+  }
+
+  useEffect(() => {
+    const activityType: Record<string, string> = {
+      learn: 'lesson', practice: 'vocabulary', lumi: 'conversation', speak: 'speaking',
+      write: 'writing', tracks: 'lesson', music: 'listening', vocabulary: 'vocabulary',
+    }
+    const pageAtStart = page
+    const type = activityType[pageAtStart]
+    if (!type) return
+    return () => {
+      const seconds = studyTimer.finish()
+      if (seconds >= 5) void recordSession(type, seconds, null, { source: 'active-study-timer', page: pageAtStart })
+    }
+  }, [page, user?.id])
+
   const appendVoiceLine = (role: 'user' | 'assistant', rawText: string) => {
     const text = rawText.trim()
     if (!text) return
