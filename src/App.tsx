@@ -1811,6 +1811,46 @@ export default function App() {
             <section className="music-how-it-works"><div><span>01</span><strong>Encontre</strong><small>Busca por faixa e artista.</small></div><div><span>02</span><strong>Escute</strong><small>Prévia do catálogo ou plataforma oficial.</small></div><div><span>03</span><strong>Estude</strong><small>Trecho curto, tradução e expressões.</small></div><div><span>04</span><strong>Pratique</strong><small>Repita, revise e salve vocabulário.</small></div></section>
           </section>}
 
+          {page === 'practice' && <section className="practice-hub-layout">
+            <div className="page-heading"><span className="eyebrow">REVISÕES · DRILLS · RECUPERAÇÃO ATIVA</span><h1>Pratique o que <em>precisa ficar.</em></h1><p>Revisões de vocabulário, estruturas gramaticais, frases e erros recorrentes. Os intervalos avançam por 1, 3, 7, 15 e 30 dias.</p></div>
+            <div className="practice-hub-summary">
+              <article><span>ITENS DEVIDOS</span><strong>{dueReviewItems.length + dueWords.length}</strong><small>Fila de revisão</small></article>
+              <article><span>ESTRUTURAS</span><strong>{learningReviewItems.filter(item => item.item_type === 'grammar' || item.item_type === 'error').length}</strong><small>Gramática e erros</small></article>
+              <article><span>VOCABULÁRIO</span><strong>{words.length}</strong><small>Expressões salvas</small></article>
+            </div>
+            {activeReviewItem ? <article className="practice-review-card">
+              <div className="practice-review-meta">
+                <span className="eyebrow">{activeReviewItem.item_type === 'grammar' ? 'GRAMÁTICA' : activeReviewItem.item_type === 'error' ? 'ERRO RECORRENTE' : activeReviewItem.item_type === 'phrase' ? 'FRASE' : 'VOCABULÁRIO'}</span>
+                <span>{activeReviewItem.interval_days} dia(s) · {activeReviewItem.repetition_count} revisões</span>
+              </div>
+              <h2>{activeReviewItem.prompt}</h2>
+              <p className="practice-review-context">{activeReviewItem.context || 'Responda sem consultar as anotações.'}</p>
+              {!reviewRevealed ? <button className="button primary" onClick={() => setReviewRevealed(true)}>Revelar resposta <Eye size={15}/></button> : <>
+                <div className="practice-review-answer"><span>RESPOSTA / MODELO</span><strong>{activeReviewItem.expected_answer}</strong>{activeReviewItem.explanation && <p>{activeReviewItem.explanation}</p>}</div>
+                <div className="practice-review-ratings">
+                  <button onClick={() => void gradeLearningReviewItem('again')}>Não lembrei<small>Volta em 1 dia</small></button>
+                  <button onClick={() => void gradeLearningReviewItem('good')}>Lembrei<small>Próximo intervalo</small></button>
+                  <button onClick={() => void gradeLearningReviewItem('easy')}>Muito fácil<small>Pular um intervalo</small></button>
+                </div>
+              </>}
+            </article> : dueWords.length ? <article className="practice-review-card">
+              <div className="practice-review-meta"><span className="eyebrow">VOCABULÁRIO LEGADO</span><span>{dueWords.length} expressões pendentes</span></div>
+              <h2>Há expressões salvas no caderno antigo para revisar.</h2>
+              <p className="practice-review-context">Estas expressões serão integradas à fila unificada conforme você as revisar.</p>
+              <strong className="practice-legacy-term">{dueWords[reviewIndex % dueWords.length]}</strong>
+              <button className="button primary" onClick={() => startVocabularyReview()}>Abrir cartões de vocabulário <ArrowRight size={16}/></button>
+            </article> : <div className="practice-empty-state">
+              <div><CheckCircle2 size={30}/></div><strong>Sua fila está em dia.</strong><p>Quando você salvar uma expressão ou errar uma estrutura no curso, ela aparecerá aqui para revisão.</p>
+              <button className="button primary" onClick={() => setPage('learn')}>Continuar aprendendo <ArrowRight size={16}/></button>
+            </div>}
+            <div className="section-heading"><div><span className="eyebrow">DRILLS RÁPIDOS</span><h2>Treine uma habilidade.</h2></div></div>
+            <div className="dashboard-practice-grid">
+              <ActivityCard title="Escuta ativa" benefit="Identifique palavras e estruturas sem olhar a tradução." progress="Listening · 5 min" cta="Treinar escuta" icon={<Headphones size={19}/>} onClick={() => setPage('learn')} />
+              <ActivityCard title="Resposta oral" benefit="Produza frases sem ler um modelo pronto." progress="Speaking · 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
+              <ActivityCard title="Transformar frases" benefit="Reescreva uma ideia usando outra estrutura." progress="Grammar · 5 min" cta="Praticar gramática" icon={<BookOpen size={19}/>} onClick={() => setPage('learn')} />
+            </div>
+          </section>}
+
           {page === 'lumi' && <section className="lumi-layout">
             <div className="page-heading"><span className="eyebrow">TUTORA DE INGLÊS · LUMI</span><h1>Converse para evoluir.</h1><p>Use o inglês no seu nível. A Lumi prioriza comunicação e corrige um ponto importante por vez.</p></div>
             <section className="voice-session-card">
