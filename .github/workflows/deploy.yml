@@ -15,7 +15,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  # Keep PR validation isolated from other workflows that also use Pages.
+  group: pages-${{ github.workflow }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
