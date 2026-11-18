@@ -91,11 +91,13 @@ const units: Unit[] = [
           { term: 'I am...', meaning: 'Eu sou / estou...', example: 'I am Pedro.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como se diz “Olá” em inglês?', options: ['Goodbye', 'Hello', 'Please'], answer: 'Hello', explanation: 'Hello significa “olá”. Hi também significa “oi” e é mais informal.' },
+          { kind: 'type', prompt: 'Como se diz “Olá” em inglês?', options: ['Goodbye', 'Hello', 'Please'], answer: 'Hello', explanation: 'Hello significa “olá”. Hi também significa “oi” e é mais informal.' },
           { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'is', 'My', 'name'], answer: 'My name is Ana.', explanation: 'A ordem é My + name + is + nome. Em inglês, não dizemos “My is name”.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu sou Pedro.”', answer: 'I am Pedro.', explanation: 'I significa “eu” e am é a forma do verbo be usada com I.' },
           { kind: 'listen', prompt: 'Ouça e escreva exatamente o que escutar.', answer: 'Good morning.', explanation: 'Good morning significa “bom dia”. Ouça o som das duas palavras juntas.' },
           { kind: 'repeat', prompt: 'Ouça e repita em voz alta: “Nice to meet you.”', answer: 'Nice to meet you.', explanation: 'A expressão significa “prazer em conhecer você”. Repita em voz alta; este exercício não mede fonética automaticamente.' },
+          { kind: 'build', prompt: 'Organize o diálogo para que a conversa faça sentido.', tokens: ['B: Hi, Ana!', 'A: I am fine, thanks.', 'B: How are you?', 'A: Hello!'], answer: 'A: Hello! B: Hi, Ana! B: How are you? A: I am fine, thanks.', explanation: 'Uma conversa natural começa com o cumprimento, segue com a pergunta e termina com a resposta.' },
+          { kind: 'type', prompt: 'Traduza ativamente: “Prazer em conhecer você.”', answer: 'Nice to meet you.', explanation: 'Nice to meet you é a expressão natural para conhecer alguém pela primeira vez.' },
         ],
       },
       {
@@ -111,11 +113,12 @@ const units: Unit[] = [
           { term: 'black / white / orange / pink / purple', meaning: 'preto / branco / laranja / rosa / roxo', example: 'A black phone = Um telefone preto' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual palavra significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
-          { kind: 'choice', prompt: 'O que significa “blue”?', options: ['Azul', 'Verde', 'Vermelho'], answer: 'Azul', explanation: 'Blue = azul. Green = verde e red = vermelho.' },
+          { kind: 'type', prompt: 'Qual palavra significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
+          { kind: 'type', prompt: 'O que significa “blue”?', options: ['Azul', 'Verde', 'Vermelho'], answer: 'Azul', explanation: 'Blue = azul. Green = verde e red = vermelho.' },
           { kind: 'build', prompt: 'Monte: “Um livro azul.”', tokens: ['book.', 'A', 'blue'], answer: 'A blue book.', explanation: 'Em inglês, a cor vem antes do objeto: blue book.' },
           { kind: 'type', prompt: 'Escreva em inglês: “dois telefones”.', answer: 'Two phones.', explanation: 'Two significa dois. Para a maioria dos substantivos contáveis, acrescentamos -s no plural: phone → phones.' },
           { kind: 'listen', prompt: 'Ouça e escreva o número que escutar por extenso.', answer: 'Eight.', explanation: 'Eight significa oito. Não confunda eight /eɪt/ com ate /eɪt/, que é uma palavra diferente pelo contexto.' },
+          { kind: 'type', prompt: 'Traduza a ideia: “Eu tenho um livro azul.”', answer: 'I have a blue book.', explanation: 'A frase usa sujeito + have + artigo + cor + objeto. Em inglês, a cor vem antes do substantivo.' },
         ],
       },
       {
@@ -131,7 +134,7 @@ const units: Unit[] = [
           { term: 'am / are / is', meaning: 'formas do verbo ser / estar', example: 'I am, you are, he is.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “I ___ Brazilian.”', options: ['is', 'are', 'am'], answer: 'am', explanation: 'Com I, usamos am: I am Brazilian.' },
+          { kind: 'type', prompt: 'Complete: “I ___ Brazilian.”', options: ['is', 'are', 'am'], answer: 'am', explanation: 'Com I, usamos am: I am Brazilian.' },
           { kind: 'choice', prompt: 'Qual pronome significa “ela”?', options: ['He', 'She', 'You'], answer: 'She', explanation: 'She = ela. He = ele. You = você ou vocês.' },
           { kind: 'build', prompt: 'Monte: “Ele está feliz.”', tokens: ['happy.', 'He', 'is'], answer: 'He is happy.', explanation: 'He pede is. A estrutura básica é pessoa + be + característica.' },
           { kind: 'type', prompt: 'Escreva: “Você é estudante.”', answer: 'You are a student.', explanation: 'You are = você é. Usamos a antes de student, porque é um substantivo contável no singular.' },
@@ -152,8 +155,8 @@ const units: Unit[] = [
           { term: 'How do you spell...?', meaning: 'Como se soletra...?', example: 'How do you spell Ana? A-N-A.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como se chama a letra A em inglês?', options: ['Ah', 'Ei', 'Ai'], answer: 'Ei', explanation: 'O nome da letra A em inglês é “ei”, como o som inicial de “ей”.' },
-          { kind: 'choice', prompt: 'Qual letra tem o nome “ai”?', options: ['E', 'I', 'A'], answer: 'I', explanation: 'I se chama “ai”. E se chama “i” e A se chama “ei”.' },
+          { kind: 'type', prompt: 'Como se chama a letra A em inglês?', options: ['Ah', 'Ei', 'Ai'], answer: 'Ei', explanation: 'O nome da letra A em inglês é “ei”, como o som inicial de “ей”.' },
+          { kind: 'type', prompt: 'Qual letra tem o nome “ai”?', options: ['E', 'I', 'A'], answer: 'I', explanation: 'I se chama “ai”. E se chama “i” e A se chama “ei”.' },
           { kind: 'build', prompt: 'Monte a pergunta “Como se soletra?”', tokens: ['spell?', 'you', 'do', 'How'], answer: 'How do you spell?', explanation: 'How do you spell...? é a pergunta usada para pedir a soletração.' },
           { kind: 'type', prompt: 'Complete a soletração do nome Ana: A-N-___', answer: 'A', explanation: 'Ana é soletrado A-N-A. Diga o nome das letras em inglês: ei – en – ei.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “How do you spell your name?”', answer: 'How do you spell your name?', explanation: 'A frase significa “Como você soletra seu nome?”. Ouça, repita e depois tente soletrar seu próprio nome.' },
@@ -173,8 +176,8 @@ const units: Unit[] = [
           { term: 'this / these', meaning: 'este / estes', example: 'This is a pen. These are pens.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “___ apple” (uma maçã).', options: ['A', 'An', 'The'], answer: 'An', explanation: 'Apple começa com som de vogal; por isso usamos an: an apple.' },
-          { kind: 'choice', prompt: 'Qual é o plural de “book”?', options: ['bookes', 'books', 'book'], answer: 'books', explanation: 'Na maioria dos substantivos, acrescentamos -s: book → books.' },
+          { kind: 'type', prompt: 'Complete: “___ apple” (uma maçã).', options: ['A', 'An', 'The'], answer: 'An', explanation: 'Apple começa com som de vogal; por isso usamos an: an apple.' },
+          { kind: 'type', prompt: 'Qual é o plural de “book”?', options: ['bookes', 'books', 'book'], answer: 'books', explanation: 'Na maioria dos substantivos, acrescentamos -s: book → books.' },
           { kind: 'build', prompt: 'Monte: “Eu tenho um telefone.”', tokens: ['phone.', 'a', 'have', 'I'], answer: 'I have a phone.', explanation: 'I (eu) + have (tenho) + a (um) + phone (telefone).' },
           { kind: 'type', prompt: 'Escreva “duas maçãs” em inglês.', answer: 'Two apples.', explanation: 'Two = duas. Apple recebe -s no plural: apples.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have an apple and two books.”', answer: 'I have an apple and two books.', explanation: 'An apple está no singular; two books está no plural.' },
@@ -196,7 +199,7 @@ const units: Unit[] = [
         isReview: true,
         exercises: [
           { kind: 'choice', prompt: 'Qual frase significa “Eu sou estudante”?', options: ['I student.', 'I am a student.', 'I have student.'], answer: 'I am a student.', explanation: 'I am = eu sou/estou. A frase precisa do artigo a antes de student.' },
-          { kind: 'choice', prompt: 'Qual cor é “green”?', options: ['Verde', 'Vermelho', 'Roxo'], answer: 'Verde', explanation: 'Green = verde; red = vermelho; purple = roxo.' },
+          { kind: 'type', prompt: 'Qual cor é “green”?', options: ['Verde', 'Vermelho', 'Roxo'], answer: 'Verde', explanation: 'Green = verde; red = vermelho; purple = roxo.' },
           { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'name', 'is', 'My'], answer: 'My name is Ana.', explanation: 'My name is... é a estrutura para dizer seu nome.' },
           { kind: 'type', prompt: 'Escreva o número “doze”.', answer: 'Twelve.', explanation: 'Twelve = doze. Eleven = onze e thirteen = treze.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a blue book.”', answer: 'I have a blue book.', explanation: 'I have = eu tenho; a blue book = um livro azul.' },
@@ -217,11 +220,11 @@ const units: Unit[] = [
         ],
         isCheckpoint: true,
         exercises: [
-          { kind: 'choice', prompt: 'Como se diz “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
-          { kind: 'choice', prompt: 'Qual é a tradução de “five”?', options: ['Quatro', 'Cinco', 'Seis'], answer: 'Cinco', explanation: 'Five = cinco.' },
-          { kind: 'choice', prompt: 'O que significa “purple”?', options: ['Laranja', 'Roxo', 'Preto'], answer: 'Roxo', explanation: 'Purple = roxo.' },
+          { kind: 'type', prompt: 'Como se diz “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
+          { kind: 'type', prompt: 'Qual é a tradução de “five”?', options: ['Quatro', 'Cinco', 'Seis'], answer: 'Cinco', explanation: 'Five = cinco.' },
+          { kind: 'type', prompt: 'O que significa “purple”?', options: ['Laranja', 'Roxo', 'Preto'], answer: 'Roxo', explanation: 'Purple = roxo.' },
           { kind: 'choice', prompt: 'Complete: “She ___ happy.”', options: ['am', 'are', 'is'], answer: 'is', explanation: 'Com she (ela), usamos is: She is happy.' },
-          { kind: 'choice', prompt: 'Complete: “___ orange”.', options: ['A', 'An', 'These'], answer: 'An', explanation: 'Orange começa com som de vogal; usamos an.' },
+          { kind: 'type', prompt: 'Complete: “___ orange”.', options: ['A', 'An', 'These'], answer: 'An', explanation: 'Orange começa com som de vogal; usamos an.' },
           { kind: 'build', prompt: 'Monte: “Eu quero água.”', tokens: ['water.', 'I', 'want'], answer: 'I want water.', explanation: 'I = eu; want = quero; water = água.' },
           { kind: 'type', prompt: 'Escreva “três livros”.', answer: 'Three books.', explanation: 'Three = três; book no plural recebe -s.' },
           { kind: 'listen', prompt: 'Ouça e escreva: “Hello, my name is Ana.”', answer: 'Hello, my name is Ana.', explanation: 'Hello = olá; my name is = meu nome é.' },
@@ -248,7 +251,7 @@ const units: Unit[] = [
           { term: 'please', meaning: 'por favor', example: 'Water, please. = Água, por favor.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “I want”?', options: ['Eu tenho', 'Eu quero', 'Eu gosto'], answer: 'Eu quero', explanation: 'I = eu; want = quero. Juntas: I want = eu quero.' },
+          { kind: 'type', prompt: 'O que significa “I want”?', options: ['Eu tenho', 'Eu quero', 'Eu gosto'], answer: 'Eu quero', explanation: 'I = eu; want = quero. Juntas: I want = eu quero.' },
           { kind: 'build', prompt: 'Monte: “Eu quero suco.”', tokens: ['juice.', 'want', 'I'], answer: 'I want juice.', explanation: 'A estrutura é I + want + o que você quer. Troque juice por water, coffee ou food.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu quero água.”', answer: 'I want water.', explanation: 'I want water = Eu quero água. Water normalmente não recebe plural quando falamos da bebida.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I want coffee.', explanation: 'I want coffee = Eu quero café. Perceba que want vem antes da coisa desejada.' },
@@ -268,10 +271,10 @@ const units: Unit[] = [
           { term: 'also', meaning: 'também', example: 'I also like coffee. = Eu também gosto de café.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como dizer “Eu tenho um carro”?', options: ['I am a car.', 'I have a car.', 'I like a car.'], answer: 'I have a car.', explanation: 'Have significa ter. I have a car = Eu tenho um carro.' },
+          { kind: 'type', prompt: 'Como dizer “Eu tenho um carro”?', options: ['I am a car.', 'I have a car.', 'I like a car.'], answer: 'I have a car.', explanation: 'Have significa ter. I have a car = Eu tenho um carro.' },
           { kind: 'build', prompt: 'Monte: “Eu gosto de música.”', tokens: ['music.', 'I', 'like'], answer: 'I like music.', explanation: 'Depois de I like, colocamos aquilo de que gostamos.' },
           { kind: 'type', prompt: 'Escreva: “Eu tenho uma maçã.”', answer: 'I have an apple.', explanation: 'Usamos an antes de apple porque começa com som de vogal.' },
-          { kind: 'choice', prompt: 'Complete: “I ___ coffee.” (Eu gosto de café.)', options: ['like', 'am', 'are'], answer: 'like', explanation: 'I like coffee = Eu gosto de café. Não usamos am antes do verbo like.' },
+          { kind: 'type', prompt: 'Complete: “I ___ coffee.” (Eu gosto de café.)', options: ['like', 'am', 'are'], answer: 'like', explanation: 'I like coffee = Eu gosto de café. Não usamos am antes do verbo like.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a phone and I like music.”', answer: 'I have a phone and I like music.', explanation: 'A frase combina duas ideias com and = e.' },
         ],
       },
@@ -290,7 +293,7 @@ const units: Unit[] = [
         exercises: [
           { kind: 'choice', prompt: 'Qual pergunta significa “Você gosta de café?”', options: ['You like coffee?', 'Do you like coffee?', 'Are you like coffee?'], answer: 'Do you like coffee?', explanation: 'No presente simples, usamos Do + you + verbo na pergunta.' },
           { kind: 'build', prompt: 'Monte a pergunta: “Você trabalha?”', tokens: ['work?', 'Do', 'you'], answer: 'Do you work?', explanation: 'Do inicia a pergunta; you é o sujeito; work é o verbo na forma base.' },
-          { kind: 'choice', prompt: 'Qual resposta curta é correta para “Yes”?', options: ['Yes, I do.', 'Yes, I am.', 'Yes, I have.'], answer: 'Yes, I do.', explanation: 'A pergunta começou com Do, então a resposta curta usa do.' },
+          { kind: 'type', prompt: 'Qual resposta curta é correta para “Yes”?', options: ['Yes, I do.', 'Yes, I am.', 'Yes, I have.'], answer: 'Yes, I do.', explanation: 'A pergunta começou com Do, então a resposta curta usa do.' },
           { kind: 'type', prompt: 'Escreva: “Você gosta de música?”', answer: 'Do you like music?', explanation: 'Do you like + assunto? é uma estrutura muito útil para iniciar conversas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Do you speak English?”', answer: 'Do you speak English?', explanation: 'A frase significa “Você fala inglês?”. Speak = falar.' },
         ],
@@ -316,7 +319,7 @@ const units: Unit[] = [
           { term: 'every day', meaning: 'todos os dias', example: 'I study every day.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “I study English”?', options: ['Eu ensino inglês.', 'Eu estudo inglês.', 'Eu trabalho em inglês.'], answer: 'Eu estudo inglês.', explanation: 'Study significa estudar. I study English = Eu estudo inglês.' },
+          { kind: 'type', prompt: 'O que significa “I study English”?', options: ['Eu ensino inglês.', 'Eu estudo inglês.', 'Eu trabalho em inglês.'], answer: 'Eu estudo inglês.', explanation: 'Study significa estudar. I study English = Eu estudo inglês.' },
           { kind: 'build', prompt: 'Monte: “Eu moro no Brasil.”', tokens: ['Brazil.', 'in', 'I', 'live'], answer: 'I live in Brazil.', explanation: 'Live in + lugar significa morar em determinado lugar.' },
           { kind: 'type', prompt: 'Escreva: “Eu trabalho todos os dias.”', answer: 'I work every day.', explanation: 'Every day são duas palavras e significa “todos os dias”.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I study at night.', explanation: 'At night = à noite. I study at night = Eu estudo à noite.' },
@@ -336,7 +339,7 @@ const units: Unit[] = [
           { term: 'the bill', meaning: 'a conta', example: 'Could we have the bill? = Poderia trazer a conta?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase é mais educada para pedir um café?', options: ['Coffee now!', 'I would like a coffee, please.', 'Give coffee.'], answer: 'I would like a coffee, please.', explanation: 'I would like... é uma forma educada de pedir algo.' },
+          { kind: 'type', prompt: 'Qual frase é mais educada para pedir um café?', options: ['Coffee now!', 'I would like a coffee, please.', 'Give coffee.'], answer: 'I would like a coffee, please.', explanation: 'I would like... é uma forma educada de pedir algo.' },
           { kind: 'build', prompt: 'Monte: “Eu gostaria de água, por favor.”', tokens: ['please.', 'water,', 'I', 'would', 'like'], answer: 'I would like water, please.', explanation: 'I would like + item + please. A vírgula é apenas pontuação; a ordem das palavras importa.' },
           { kind: 'type', prompt: 'Escreva: “Poderia me trazer o cardápio?”', answer: 'Could I have the menu?', explanation: 'Could I have...? é um pedido educado. The menu = o cardápio.' },
           { kind: 'listen', prompt: 'Ouça e escreva o pedido.', answer: 'Could I have the bill, please?', explanation: 'Bill é a conta do restaurante. Não confunda com a palavra menu.' },
@@ -364,7 +367,7 @@ const units: Unit[] = [
           { term: 'next to', meaning: 'ao lado de', example: 'It is next to the hotel.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como perguntar “Onde fica o banheiro?”', options: ['Where is the bathroom?', 'Bathroom where?', 'What bathroom is?'], answer: 'Where is the bathroom?', explanation: 'Use Where is + the + lugar para perguntar onde algo fica.' },
+          { kind: 'type', prompt: 'Como perguntar “Onde fica o banheiro?”', options: ['Where is the bathroom?', 'Bathroom where?', 'What bathroom is?'], answer: 'Where is the bathroom?', explanation: 'Use Where is + the + lugar para perguntar onde algo fica.' },
           { kind: 'build', prompt: 'Monte: “Onde fica a estação?”', tokens: ['station?', 'the', 'Where', 'is'], answer: 'Where is the station?', explanation: 'Where vem primeiro, depois is, the e o nome do lugar.' },
           { kind: 'type', prompt: 'Escreva: “O hotel fica perto.”', answer: 'The hotel is near.', explanation: 'The hotel = o hotel; is near = fica perto.' },
           { kind: 'listen', prompt: 'Ouça e escreva a pergunta.', answer: 'Where is the airport?', explanation: 'Airport = aeroporto. A pergunta pode ser reutilizada trocando apenas o lugar.' },
@@ -413,10 +416,10 @@ const units: Unit[] = [
           { term: 'his / her', meaning: 'dele / dela', example: 'Her phone = o telefone dela.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como dizer “minha irmã”?', options: ['I sister', 'My sister', 'Her sister'], answer: 'My sister', explanation: 'My indica posse ligada a quem fala: my sister = minha irmã.' },
+          { kind: 'type', prompt: 'Como dizer “minha irmã”?', options: ['I sister', 'My sister', 'Her sister'], answer: 'My sister', explanation: 'My indica posse ligada a quem fala: my sister = minha irmã.' },
           { kind: 'build', prompt: 'Monte: “O nome dela é Ana.”', tokens: ['Ana.', 'is', 'name', 'Her'], answer: 'Her name is Ana.', explanation: 'Her = dela; name = nome; is = é. A ordem é Her + name + is + nome.' },
           { kind: 'type', prompt: 'Escreva: “Meu pai é professor.”', answer: 'My father is a teacher.', explanation: 'My father = meu pai. Teacher = professor(a). Usamos a antes da profissão no singular.' },
-          { kind: 'choice', prompt: 'Complete: “Pedro loves ___ dog.” (o cachorro dele)', options: ['her', 'his', 'your'], answer: 'his', explanation: 'His indica algo pertencente a ele. Her seria dela.' },
+          { kind: 'type', prompt: 'Complete: “Pedro loves ___ dog.” (o cachorro dele)', options: ['her', 'his', 'your'], answer: 'his', explanation: 'His indica algo pertencente a ele. Her seria dela.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “My family lives in Brazil.”', answer: 'My family lives in Brazil.', explanation: 'My family = minha família. Lives recebe -s porque family é terceira pessoa do singular.' },
         ],
       },
@@ -433,8 +436,8 @@ const units: Unit[] = [
           { term: 'next to', meaning: 'ao lado de', example: 'The sofa is next to the door.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “There ___ a bathroom.”', options: ['are', 'is', 'am'], answer: 'is', explanation: 'Bathroom está no singular. Use There is para uma coisa.' },
-          { kind: 'choice', prompt: 'Complete: “There ___ three windows.”', options: ['is', 'are', 'am'], answer: 'are', explanation: 'Windows está no plural. Use There are para duas ou mais coisas.' },
+          { kind: 'type', prompt: 'Complete: “There ___ a bathroom.”', options: ['are', 'is', 'am'], answer: 'is', explanation: 'Bathroom está no singular. Use There is para uma coisa.' },
+          { kind: 'type', prompt: 'Complete: “There ___ three windows.”', options: ['is', 'are', 'am'], answer: 'are', explanation: 'Windows está no plural. Use There are para duas ou mais coisas.' },
           { kind: 'build', prompt: 'Monte: “Há dois quartos.”', tokens: ['bedrooms.', 'two', 'are', 'There'], answer: 'There are two bedrooms.', explanation: 'There are + quantidade + substantivo no plural.' },
           { kind: 'type', prompt: 'Escreva: “Há uma mesa na cozinha.”', answer: 'There is a table in the kitchen.', explanation: 'There is para uma mesa. In the kitchen = na cozinha.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'There are two chairs.', explanation: 'There are indica plural. Two chairs = duas cadeiras.' },
@@ -456,7 +459,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Como dizer “Eu sei nadar”?', options: ['I can swim.', 'I am swim.', 'I do swim can.'], answer: 'I can swim.', explanation: 'Can vem antes do verbo na forma base: can swim. Não usamos to depois de can.' },
           { kind: 'build', prompt: 'Monte: “Eu não posso dirigir.”', tokens: ['drive.', 'can’t', 'I'], answer: 'I can’t drive.', explanation: 'I + can’t + verbo base. Can’t é a forma curta de cannot.' },
           { kind: 'type', prompt: 'Escreva: “Você pode me ajudar?”', answer: 'Can you help me?', explanation: 'Can you + verbo + complemento? é uma pergunta comum para pedir ajuda.' },
-          { kind: 'choice', prompt: 'Qual frase pede permissão?', options: ['I can speak.', 'Can I sit here?', 'You can help.'], answer: 'Can I sit here?', explanation: 'Can I...? significa “Posso...?” e pode ser usado para pedir permissão.' },
+          { kind: 'type', prompt: 'Qual frase pede permissão?', options: ['I can speak.', 'Can I sit here?', 'You can help.'], answer: 'Can I sit here?', explanation: 'Can I...? significa “Posso...?” e pode ser usado para pedir permissão.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I can understand a little English.”', answer: 'I can understand a little English.', explanation: 'A little = um pouco. Understand = entender.' },
         ],
       },
@@ -473,10 +476,10 @@ const units: Unit[] = [
           { term: 'can / can’t', meaning: 'consegue / não consegue', example: 'I can cook.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “___ mother is a doctor.” (a mãe dela)', options: ['His', 'Her', 'My'], answer: 'Her', explanation: 'Her mother = a mãe dela. O possessivo concorda com a pessoa que possui.' },
+          { kind: 'type', prompt: 'Complete: “___ mother is a doctor.” (a mãe dela)', options: ['His', 'Her', 'My'], answer: 'Her', explanation: 'Her mother = a mãe dela. O possessivo concorda com a pessoa que possui.' },
           { kind: 'type', prompt: 'Escreva: “Há três livros na mesa.”', answer: 'There are three books on the table.', explanation: 'There are porque books está no plural. On the table = sobre a mesa.' },
           { kind: 'build', prompt: 'Monte: “Ela consegue falar inglês.”', tokens: ['English.', 'speak', 'can', 'She'], answer: 'She can speak English.', explanation: 'She + can + verbo base. O verbo speak não recebe -s depois de can.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['There is two cars.', 'There are two cars.', 'There am two cars.'], answer: 'There are two cars.', explanation: 'Two cars é plural, portanto usamos there are.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['There is two cars.', 'There are two cars.', 'There am two cars.'], answer: 'There are two cars.', explanation: 'Two cars é plural, portanto usamos there are.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Can you show me your house?”', answer: 'Can you show me your house?', explanation: 'Show me = me mostrar. Your house = sua casa.' },
         ],
       },
@@ -492,13 +495,13 @@ const units: Unit[] = [
           { term: 'Aprovação', meaning: '70% de acerto', example: 'Se precisar, revise as aulas e tente novamente.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase significa “O nome dele é Lucas”?', options: ['Her name is Lucas.', 'His name is Lucas.', 'He name is Lucas.'], answer: 'His name is Lucas.', explanation: 'His = dele. His name is Lucas = O nome dele é Lucas.' },
+          { kind: 'type', prompt: 'Qual frase significa “O nome dele é Lucas”?', options: ['Her name is Lucas.', 'His name is Lucas.', 'He name is Lucas.'], answer: 'His name is Lucas.', explanation: 'His = dele. His name is Lucas = O nome dele é Lucas.' },
           { kind: 'build', prompt: 'Monte: “Há uma sala na casa.”', tokens: ['house.', 'the', 'in', 'room', 'a', 'is', 'There'], answer: 'There is a room in the house.', explanation: 'There is + a room + in the house. Room está no singular.' },
           { kind: 'type', prompt: 'Escreva: “Eu consigo cozinhar.”', answer: 'I can cook.', explanation: 'Can é seguido pelo verbo base cook.' },
           { kind: 'choice', prompt: 'Complete: “My friends ___ speak Spanish.”', options: ['can', 'cans', 'are can'], answer: 'can', explanation: 'Can não muda com he, she, we ou they.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'There is a park near my house.', explanation: 'There is a park = há um parque. Near my house = perto da minha casa.' },
           { kind: 'type', prompt: 'Escreva: “A irmã dela mora aqui.”', answer: 'Her sister lives here.', explanation: 'Her sister = a irmã dela. Lives recebe -s com she/her sister.' },
-          { kind: 'choice', prompt: 'Qual pergunta pede permissão?', options: ['Can I open the window?', 'I can open the window.', 'You can open the window.'], answer: 'Can I open the window?', explanation: 'Can I...? é uma forma de pedir permissão.' },
+          { kind: 'type', prompt: 'Qual pergunta pede permissão?', options: ['Can I open the window?', 'I can open the window.', 'You can open the window.'], answer: 'Can I open the window?', explanation: 'Can I...? é uma forma de pedir permissão.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “There are four people in my family.”', answer: 'There are four people in my family.', explanation: 'There are indica plural. People significa pessoas.' },
         ],
       },
@@ -523,10 +526,10 @@ const units: Unit[] = [
           { term: 'did / didn’t', meaning: 'auxiliar do passado', example: 'Did you work? = Você trabalhou?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual é o passado de “go”?', options: ['goed', 'went', 'gone'], answer: 'went', explanation: 'Went é o passado simples de go. Gone é o particípio usado em outros tempos.' },
+          { kind: 'type', prompt: 'Qual é o passado de “go”?', options: ['goed', 'went', 'gone'], answer: 'went', explanation: 'Went é o passado simples de go. Gone é o particípio usado em outros tempos.' },
           { kind: 'build', prompt: 'Monte: “Eu estudei ontem.”', tokens: ['yesterday.', 'studied', 'I'], answer: 'I studied yesterday.', explanation: 'Em verbos regulares, normalmente acrescentamos -ed. Study muda para studied.' },
           { kind: 'type', prompt: 'Escreva: “Ela foi ao mercado.”', answer: 'She went to the market.', explanation: 'Went é o passado de go. The market = o mercado.' },
-          { kind: 'choice', prompt: 'Complete: “Did you ___ yesterday?”', options: ['worked', 'work', 'working'], answer: 'work', explanation: 'Depois de did, usamos o verbo na forma base, sem -ed.' },
+          { kind: 'type', prompt: 'Complete: “Did you ___ yesterday?”', options: ['worked', 'work', 'working'], answer: 'work', explanation: 'Depois de did, usamos o verbo na forma base, sem -ed.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I went to the beach last weekend.”', answer: 'I went to the beach last weekend.', explanation: 'Last weekend = no fim de semana passado. Went é o passado de go.' },
         ],
       },
@@ -543,7 +546,7 @@ const units: Unit[] = [
           { term: 'plan', meaning: 'plano / planejar', example: 'My plan is to learn English.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase significa “Vou viajar amanhã”?', options: ['I going travel tomorrow.', 'I am going to travel tomorrow.', 'I went travel tomorrow.'], answer: 'I am going to travel tomorrow.', explanation: 'Use sujeito + am/is/are + going to + verbo base.' },
+          { kind: 'type', prompt: 'Qual frase significa “Vou viajar amanhã”?', options: ['I going travel tomorrow.', 'I am going to travel tomorrow.', 'I went travel tomorrow.'], answer: 'I am going to travel tomorrow.', explanation: 'Use sujeito + am/is/are + going to + verbo base.' },
           { kind: 'build', prompt: 'Monte: “Nós vamos estudar hoje à noite.”', tokens: ['tonight.', 'study', 'to', 'going', 'are', 'We'], answer: 'We are going to study tonight.', explanation: 'We are + going to + study + tonight.' },
           { kind: 'type', prompt: 'Escreva: “Ela vai comprar um carro.”', answer: 'She is going to buy a car.', explanation: 'She is going to + verbo base buy.' },
           { kind: 'choice', prompt: 'Complete: “Are you going to ___?”', options: ['travel', 'travels', 'traveling'], answer: 'travel', explanation: 'Depois de going to usamos o verbo base.' },
@@ -563,10 +566,10 @@ const units: Unit[] = [
           { term: 'better / worse', meaning: 'melhor / pior', example: 'This option is better.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “A car is ___ than a bike.” (mais rápido)', options: ['faster', 'fast', 'more fast'], answer: 'faster', explanation: 'Fast é um adjetivo curto; seu comparativo é faster.' },
+          { kind: 'type', prompt: 'Complete: “A car is ___ than a bike.” (mais rápido)', options: ['faster', 'fast', 'more fast'], answer: 'faster', explanation: 'Fast é um adjetivo curto; seu comparativo é faster.' },
           { kind: 'build', prompt: 'Monte: “Este hotel é mais barato.”', tokens: ['cheaper.', 'is', 'hotel', 'This'], answer: 'This hotel is cheaper.', explanation: 'This hotel + is + cheaper. O comparativo vem depois do verbo be.' },
           { kind: 'type', prompt: 'Escreva: “O trem é mais rápido que o ônibus.”', answer: 'The train is faster than the bus.', explanation: 'Faster than = mais rápido que.' },
-          { kind: 'choice', prompt: 'Qual é o comparativo correto de “good”?', options: ['gooder', 'better', 'more good'], answer: 'better', explanation: 'Good é irregular: better = melhor.' },
+          { kind: 'type', prompt: 'Qual é o comparativo correto de “good”?', options: ['gooder', 'better', 'more good'], answer: 'better', explanation: 'Good é irregular: better = melhor.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The train is more comfortable than the bus.”', answer: 'The train is more comfortable than the bus.', explanation: 'More comfortable than = mais confortável que.' },
         ],
       },
@@ -583,10 +586,10 @@ const units: Unit[] = [
           { term: 'Comparative', meaning: 'comparação', example: 'This is cheaper.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “Last night, I ___ a movie.”', options: ['watch', 'watched', 'watching'], answer: 'watched', explanation: 'Last night indica passado; watched é o passado de watch.' },
+          { kind: 'type', prompt: 'Complete: “Last night, I ___ a movie.”', options: ['watch', 'watched', 'watching'], answer: 'watched', explanation: 'Last night indica passado; watched é o passado de watch.' },
           { kind: 'type', prompt: 'Escreva: “Nós vamos visitar Londres.”', answer: 'We are going to visit London.', explanation: 'We are going to + verbo base visit.' },
           { kind: 'build', prompt: 'Monte: “Este celular é melhor.”', tokens: ['better.', 'is', 'phone', 'This'], answer: 'This phone is better.', explanation: 'Better é o comparativo irregular de good.' },
-          { kind: 'choice', prompt: 'Depois de did, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -ing'], answer: 'verbo base', explanation: 'Did já marca o passado; o verbo principal fica na forma base.' },
+          { kind: 'type', prompt: 'Depois de did, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -ing'], answer: 'verbo base', explanation: 'Did já marca o passado; o verbo principal fica na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I went there last year, and I am going again next year.”', answer: 'I went there last year, and I am going again next year.', explanation: 'Went descreve passado; am going descreve plano futuro.' },
         ],
       },
@@ -606,10 +609,10 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual é o passado de “buy”?', options: ['buyed', 'bought', 'buys'], answer: 'bought', explanation: 'Bought é o passado irregular de buy.' },
           { kind: 'build', prompt: 'Monte: “Eu comprei um livro ontem.”', tokens: ['yesterday.', 'book', 'a', 'bought', 'I'], answer: 'I bought a book yesterday.', explanation: 'I + bought + a book + yesterday.' },
           { kind: 'type', prompt: 'Escreva: “Eles vão viajar no próximo mês.”', answer: 'They are going to travel next month.', explanation: 'They are going to + travel.' },
-          { kind: 'choice', prompt: 'Complete: “This bag is ___ than that one.” (mais caro)', options: ['expensiver', 'more expensive', 'most expensive'], answer: 'more expensive', explanation: 'Adjetivos mais longos geralmente usam more antes do adjetivo.' },
+          { kind: 'type', prompt: 'Complete: “This bag is ___ than that one.” (mais caro)', options: ['expensiver', 'more expensive', 'most expensive'], answer: 'more expensive', explanation: 'Adjetivos mais longos geralmente usam more antes do adjetivo.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'We visited our friends last weekend.', explanation: 'Visited é passado regular; last weekend indica o fim de semana passado.' },
           { kind: 'type', prompt: 'Escreva: “Você foi ao trabalho ontem?”', answer: 'Did you go to work yesterday?', explanation: 'Did + you + go (forma base) + complemento.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['She is going to studies.', 'She going to study.', 'She is going to study.'], answer: 'She is going to study.', explanation: 'Depois de going to, use o verbo base: study.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['She is going to studies.', 'She going to study.', 'She is going to study.'], answer: 'She is going to study.', explanation: 'Depois de going to, use o verbo base: study.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The new apartment is bigger but more expensive.”', answer: 'The new apartment is bigger but more expensive.', explanation: 'Bigger = maior; more expensive = mais caro.' },
         ],
       },
@@ -634,10 +637,10 @@ const units: Unit[] = [
           { term: 'already / yet', meaning: 'já / ainda', example: 'I have already eaten. / I haven’t eaten yet.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “She ___ visited Canada.”', options: ['have', 'has', 'is'], answer: 'has', explanation: 'Com he/she/it usamos has + particípio.' },
+          { kind: 'type', prompt: 'Complete: “She ___ visited Canada.”', options: ['have', 'has', 'is'], answer: 'has', explanation: 'Com he/she/it usamos has + particípio.' },
           { kind: 'build', prompt: 'Monte: “Você já visitou Londres?”', tokens: ['London?', 'visited', 'ever', 'you', 'Have'], answer: 'Have you ever visited London?', explanation: 'Have + sujeito + ever + particípio visited + lugar.' },
           { kind: 'type', prompt: 'Escreva: “Eu nunca comi sushi.”', answer: 'I have never eaten sushi.', explanation: 'Eaten é o particípio irregular de eat.' },
-          { kind: 'choice', prompt: 'Qual expressão significa “ainda não”?', options: ['already', 'yet', 'ever'], answer: 'yet', explanation: 'Yet aparece frequentemente no fim de frases negativas e perguntas.' },
+          { kind: 'type', prompt: 'Qual expressão significa “ainda não”?', options: ['already', 'yet', 'ever'], answer: 'yet', explanation: 'Yet aparece frequentemente no fim de frases negativas e perguntas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have already finished my work.”', answer: 'I have already finished my work.', explanation: 'Already indica que algo já aconteceu.' },
         ],
       },
@@ -657,7 +660,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual palavra introduz uma razão?', options: ['because', 'however', 'although'], answer: 'because', explanation: 'Because apresenta o motivo: I study because I need it.' },
           { kind: 'build', prompt: 'Monte: “Eu acho que inglês é útil.”', tokens: ['useful.', 'is', 'English', 'think', 'I'], answer: 'I think English is useful.', explanation: 'I think + oração. Dentro dela, English is useful mantém a ordem sujeito + verbo.' },
           { kind: 'type', prompt: 'Escreva: “Estou cansado, mas vou estudar.”', answer: 'I am tired, but I am going to study.', explanation: 'But = mas. Conecta duas ideias em contraste.' },
-          { kind: 'choice', prompt: '“Although it is raining, we will go.” significa:', options: ['Porque está chovendo, iremos.', 'Embora esteja chovendo, iremos.', 'Depois que chover, iremos.'], answer: 'Embora esteja chovendo, iremos.', explanation: 'Although introduz uma concessão: algo acontece apesar de outra condição.' },
+          { kind: 'type', prompt: '“Although it is raining, we will go.” significa:', options: ['Porque está chovendo, iremos.', 'Embora esteja chovendo, iremos.', 'Depois que chover, iremos.'], answer: 'Embora esteja chovendo, iremos.', explanation: 'Although introduz uma concessão: algo acontece apesar de outra condição.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I believe practice is important because it builds confidence.”', answer: 'I believe practice is important because it builds confidence.', explanation: 'Believe = acreditar; builds confidence = desenvolve confiança.' },
         ],
       },
@@ -674,10 +677,10 @@ const units: Unit[] = [
           { term: 'shouldn’t', meaning: 'não deveria', example: 'You shouldn’t worry too much.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase dá um conselho?', options: ['You should rest.', 'You rested.', 'You are rest.'], answer: 'You should rest.', explanation: 'Should + verbo base é usado para recomendar algo.' },
+          { kind: 'type', prompt: 'Qual frase dá um conselho?', options: ['You should rest.', 'You rested.', 'You are rest.'], answer: 'You should rest.', explanation: 'Should + verbo base é usado para recomendar algo.' },
           { kind: 'build', prompt: 'Monte: “Você deveria praticar mais.”', tokens: ['more.', 'practice', 'should', 'You'], answer: 'You should practice more.', explanation: 'Sujeito + should + verbo base + complemento.' },
           { kind: 'type', prompt: 'Escreva: “Eu tenho que acordar cedo.”', answer: 'I have to wake up early.', explanation: 'Have to expressa necessidade ou obrigação. Wake up = acordar.' },
-          { kind: 'choice', prompt: 'Complete: “You must ___ your passport.”', options: ['bring', 'brings', 'bringing'], answer: 'bring', explanation: 'Depois de must, o verbo fica na forma base.' },
+          { kind: 'type', prompt: 'Complete: “You must ___ your passport.”', options: ['bring', 'brings', 'bringing'], answer: 'bring', explanation: 'Depois de must, o verbo fica na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “You should ask questions when you do not understand.”', answer: 'You should ask questions when you do not understand.', explanation: 'Ask questions = fazer perguntas. When = quando.' },
         ],
       },
@@ -694,7 +697,7 @@ const units: Unit[] = [
           { term: 'should', meaning: 'deveria', example: 'You should try again.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “I have never ___ abroad.”', options: ['be', 'been', 'was'], answer: 'been', explanation: 'Been é o particípio de be, usado com have.' },
+          { kind: 'type', prompt: 'Complete: “I have never ___ abroad.”', options: ['be', 'been', 'was'], answer: 'been', explanation: 'Been é o particípio de be, usado com have.' },
           { kind: 'type', prompt: 'Escreva: “Você já trabalhou aqui?”', answer: 'Have you ever worked here?', explanation: 'Have + you + ever + particípio worked.' },
           { kind: 'build', prompt: 'Monte: “Você deveria falar com ela.”', tokens: ['her.', 'to', 'talk', 'should', 'You'], answer: 'You should talk to her.', explanation: 'Should + verbo base talk. Talk to her = falar com ela.' },
           { kind: 'choice', prompt: 'Qual palavra significa “no entanto”?', options: ['because', 'however', 'although'], answer: 'however', explanation: 'However introduz contraste entre ideias.' },
@@ -714,13 +717,13 @@ const units: Unit[] = [
           { term: 'Conselho', meaning: 'Should / shouldn’t', example: 'You should practice.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “They ___ already finished.”', options: ['has', 'have', 'are'], answer: 'have', explanation: 'Com they usamos have + particípio.' },
+          { kind: 'type', prompt: 'Complete: “They ___ already finished.”', options: ['has', 'have', 'are'], answer: 'have', explanation: 'Com they usamos have + particípio.' },
           { kind: 'build', prompt: 'Monte: “Eu nunca estive em Nova York.”', tokens: ['York.', 'New', 'in', 'been', 'never', 'have', 'I'], answer: 'I have never been to New York.', explanation: 'I + have + never + been + in New York. Em muitos contextos, também se diz been to New York.' },
           { kind: 'type', prompt: 'Escreva: “Você deveria descansar porque está cansado.”', answer: 'You should rest because you are tired.', explanation: 'Should + verbo base; because introduz a razão.' },
-          { kind: 'choice', prompt: 'Qual frase expressa contraste?', options: ['I stayed because it rained.', 'Although it rained, I went out.', 'I went out to buy food.'], answer: 'Although it rained, I went out.', explanation: 'Although indica que a segunda ação ocorreu apesar da primeira condição.' },
+          { kind: 'type', prompt: 'Qual frase expressa contraste?', options: ['I stayed because it rained.', 'Although it rained, I went out.', 'I went out to buy food.'], answer: 'Although it rained, I went out.', explanation: 'Although indica que a segunda ação ocorreu apesar da primeira condição.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'Have you ever worked with an international team?', explanation: 'Have you ever + particípio forma uma pergunta sobre experiência.' },
           { kind: 'type', prompt: 'Escreva: “Eu já terminei o relatório.”', answer: 'I have already finished the report.', explanation: 'Already indica que a tarefa já foi concluída.' },
-          { kind: 'choice', prompt: 'Complete: “You must ___ the instructions.”', options: ['follow', 'follows', 'following'], answer: 'follow', explanation: 'Must é seguido do verbo na forma base.' },
+          { kind: 'type', prompt: 'Complete: “You must ___ the instructions.”', options: ['follow', 'follows', 'following'], answer: 'follow', explanation: 'Must é seguido do verbo na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I think learning a language takes time, but it is worth it.”', answer: 'I think learning a language takes time, but it is worth it.', explanation: 'Worth it = vale a pena. But conecta ideias em contraste.' },
         ],
       },
@@ -745,7 +748,7 @@ const units: Unit[] = [
           { term: 'as soon as', meaning: 'assim que', example: 'I will call as soon as I arrive.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If I study, I ___ pass.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: If + presente, will + verbo base.' },
+          { kind: 'type', prompt: 'Complete: “If I study, I ___ pass.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: If + presente, will + verbo base.' },
           { kind: 'build', prompt: 'Monte: “Se chover, ficarei em casa.”', tokens: ['home.', 'stay', 'will', 'I', 'rains,', 'it', 'If'], answer: 'If it rains, I will stay home.', explanation: 'Na condição usamos presente (rains); na consequência, will + stay.' },
           { kind: 'type', prompt: 'Escreva: “Eu te ligo assim que chegar.”', answer: 'I will call you as soon as I arrive.', explanation: 'Depois de as soon as, para falar do futuro, usamos presente simples: I arrive.' },
           { kind: 'choice', prompt: 'O que significa “unless”?', options: ['porque', 'a menos que', 'embora'], answer: 'a menos que', explanation: 'Unless equivale a if not em muitos contextos.' },
@@ -765,10 +768,10 @@ const units: Unit[] = [
           { term: 'turn on / off', meaning: 'ligar / desligar', example: 'Please turn off the light.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “look for”?', options: ['olhar para', 'procurar', 'desligar'], answer: 'procurar', explanation: 'Look for significa procurar algo ou alguém.' },
+          { kind: 'type', prompt: 'O que significa “look for”?', options: ['olhar para', 'procurar', 'desligar'], answer: 'procurar', explanation: 'Look for significa procurar algo ou alguém.' },
           { kind: 'build', prompt: 'Monte: “Eu acordo às seis.”', tokens: ['six.', 'at', 'up', 'get', 'I'], answer: 'I get up at six.', explanation: 'Get up = levantar-se. At six = às seis.' },
           { kind: 'type', prompt: 'Escreva: “Estou procurando meu telefone.”', answer: 'I am looking for my phone.', explanation: 'Look for no presente contínuo vira am looking for.' },
-          { kind: 'choice', prompt: 'Complete: “Please turn ___ the TV.” (desligue)', options: ['on', 'off', 'up'], answer: 'off', explanation: 'Turn off = desligar. Turn on = ligar.' },
+          { kind: 'type', prompt: 'Complete: “Please turn ___ the TV.” (desligue)', options: ['on', 'off', 'up'], answer: 'off', explanation: 'Turn off = desligar. Turn on = ligar.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I need to find out what time the store closes.”', answer: 'I need to find out what time the store closes.', explanation: 'Find out = descobrir. Closes recebe -s porque store é terceira pessoa do singular.' },
         ],
       },
@@ -785,10 +788,10 @@ const units: Unit[] = [
           { term: 'by Friday', meaning: 'até sexta-feira', example: 'I will finish it by Friday.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual pedido é mais educado?', options: ['Send me the file now.', 'Could you send me the file, please?', 'You send file.'], answer: 'Could you send me the file, please?', explanation: 'Could you...? é uma forma educada de fazer pedidos.' },
+          { kind: 'type', prompt: 'Qual pedido é mais educado?', options: ['Send me the file now.', 'Could you send me the file, please?', 'You send file.'], answer: 'Could you send me the file, please?', explanation: 'Could you...? é uma forma educada de fazer pedidos.' },
           { kind: 'build', prompt: 'Monte: “Estou trabalhando no relatório.”', tokens: ['report.', 'the', 'on', 'working', 'am', 'I'], answer: 'I am working on the report.', explanation: 'Present continuous: I am + working. Work on = trabalhar em.' },
           { kind: 'type', prompt: 'Escreva: “Vou enviar até sexta-feira.”', answer: 'I will send it by Friday.', explanation: 'Will + verbo base. By Friday indica prazo limite: até sexta.' },
-          { kind: 'choice', prompt: 'O que significa “deadline”?', options: ['reunião', 'prazo final', 'arquivo'], answer: 'prazo final', explanation: 'Deadline é a data ou hora limite para concluir algo.' },
+          { kind: 'type', prompt: 'O que significa “deadline”?', options: ['reunião', 'prazo final', 'arquivo'], answer: 'prazo final', explanation: 'Deadline é a data ou hora limite para concluir algo.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I’m finishing the task and I’ll send an update this afternoon.”', answer: 'I’m finishing the task and I’ll send an update this afternoon.', explanation: 'Update = atualização. This afternoon = hoje à tarde.' },
         ],
       },
@@ -808,7 +811,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Complete: “If she calls, I ___ answer.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: condição no presente e resultado com will.' },
           { kind: 'type', prompt: 'Escreva: “Preciso procurar minhas chaves.”', answer: 'I need to look for my keys.', explanation: 'Need to = precisar. Look for = procurar.' },
           { kind: 'build', prompt: 'Monte: “Você poderia verificar o arquivo?”', tokens: ['file?', 'the', 'check', 'you', 'Could'], answer: 'Could you check the file?', explanation: 'Could + sujeito + verbo base + complemento.' },
-          { kind: 'choice', prompt: 'Qual expressão indica prazo limite?', options: ['by Monday', 'on Monday morning only', 'from Monday'], answer: 'by Monday', explanation: 'By Monday significa até segunda-feira, como prazo final.' },
+          { kind: 'type', prompt: 'Qual expressão indica prazo limite?', options: ['by Monday', 'on Monday morning only', 'from Monday'], answer: 'by Monday', explanation: 'By Monday significa até segunda-feira, como prazo final.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “If I finish early, I will send you the update.”', answer: 'If I finish early, I will send you the update.', explanation: 'Finish early = terminar cedo. Send you = enviar para você.' },
         ],
       },
@@ -825,13 +828,13 @@ const units: Unit[] = [
           { term: 'Trabalho', meaning: 'Pedidos e prazos', example: 'Could you send it by Friday?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If they arrive late, we ___ start without them.”', options: ['will', 'would', 'are'], answer: 'will', explanation: 'First conditional usa will para o resultado provável.' },
+          { kind: 'type', prompt: 'Complete: “If they arrive late, we ___ start without them.”', options: ['will', 'would', 'are'], answer: 'will', explanation: 'First conditional usa will para o resultado provável.' },
           { kind: 'build', prompt: 'Monte: “Vou descobrir a resposta.”', tokens: ['answer.', 'the', 'out', 'find', 'will', 'I'], answer: 'I will find out the answer.', explanation: 'Will + find out + the answer.' },
           { kind: 'type', prompt: 'Escreva: “Você poderia me enviar o relatório até amanhã?”', answer: 'Could you send me the report by tomorrow?', explanation: 'Could you + verbo base. By tomorrow indica o prazo.' },
-          { kind: 'choice', prompt: '“Turn on the computer” significa:', options: ['Desligue o computador.', 'Ligue o computador.', 'Procure o computador.'], answer: 'Ligue o computador.', explanation: 'Turn on = ligar; turn off = desligar.' },
+          { kind: 'type', prompt: '“Turn on the computer” significa:', options: ['Desligue o computador.', 'Ligue o computador.', 'Procure o computador.'], answer: 'Ligue o computador.', explanation: 'Turn on = ligar; turn off = desligar.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'If we leave now, we will get there on time.', explanation: 'On time = no horário. If + presente, will + verbo base.' },
           { kind: 'type', prompt: 'Escreva: “Estou trabalhando em uma nova ideia.”', answer: 'I am working on a new idea.', explanation: 'Am working on = estou trabalhando em.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['If it will rain, I stay home.', 'If it rains, I will stay home.', 'If it raining, I will stay home.'], answer: 'If it rains, I will stay home.', explanation: 'Na oração com if do first conditional, usamos presente simples, não will.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['If it will rain, I stay home.', 'If it rains, I will stay home.', 'If it raining, I will stay home.'], answer: 'If it rains, I will stay home.', explanation: 'Na oração com if do first conditional, usamos presente simples, não will.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Could you let me know if the meeting time changes?”', answer: 'Could you let me know if the meeting time changes?', explanation: 'Let me know = me avise. Meeting time = horário da reunião.' },
         ],
       },
@@ -860,7 +863,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Complete: “The emails ___ every morning.”', options: ['are sent', 'send', 'is sending'], answer: 'are sent', explanation: 'Emails está no plural. A voz passiva usa be + particípio: are sent.' },
           { kind: 'build', prompt: 'Monte: “O prédio foi construído em 2005.”', tokens: ['2005.', 'in', 'built', 'was', 'building', 'The'], answer: 'The building was built in 2005.', explanation: 'Was built é a voz passiva no passado. Building aqui é o substantivo “prédio”.' },
           { kind: 'type', prompt: 'Escreva: “Este aplicativo é usado por milhões de pessoas.”', answer: 'This app is used by millions of people.', explanation: 'Is used = é usado; by millions of people = por milhões de pessoas.' },
-          { kind: 'choice', prompt: 'Qual frase está na voz passiva?', options: ['The team finished the project.', 'The project was finished.', 'The team is finishing.'], answer: 'The project was finished.', explanation: 'O sujeito recebe a ação: the project was finished.' },
+          { kind: 'type', prompt: 'Qual frase está na voz passiva?', options: ['The team finished the project.', 'The project was finished.', 'The team is finishing.'], answer: 'The project was finished.', explanation: 'O sujeito recebe a ação: the project was finished.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The final decision was made by the manager.”', answer: 'The final decision was made by the manager.', explanation: 'Was made é o passado passivo de make. By the manager identifica quem tomou a decisão.' },
         ],
       },
@@ -877,10 +880,10 @@ const units: Unit[] = [
           { term: 'would', meaning: 'iria (recuo de will)', example: '“I will call.” → He said he would call.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: '“I am tired.” → She said she ___ tired.', options: ['is', 'was', 'will be'], answer: 'was', explanation: 'Ao relatar uma fala no passado, am geralmente recua para was.' },
+          { kind: 'type', prompt: '“I am tired.” → She said she ___ tired.', options: ['is', 'was', 'will be'], answer: 'was', explanation: 'Ao relatar uma fala no passado, am geralmente recua para was.' },
           { kind: 'build', prompt: 'Transforme: “I will call you.” → He said he...', tokens: ['call.', 'would', 'you'], answer: 'would call you.', explanation: 'Will normalmente muda para would no discurso indireto com verbo introdutor no passado.' },
           { kind: 'type', prompt: 'Relate: “I like this city.” → He said he...', answer: 'He said he liked that city.', explanation: 'Like pode recuar para liked; this pode mudar para that conforme o contexto.' },
-          { kind: 'choice', prompt: 'Qual construção está correta?', options: ['She told that she was busy.', 'She told me that she was busy.', 'She said me she was busy.'], answer: 'She told me that she was busy.', explanation: 'Tell normalmente pede objeto: told me. Say não usa objeto direto dessa forma.' },
+          { kind: 'type', prompt: 'Qual construção está correta?', options: ['She told that she was busy.', 'She told me that she was busy.', 'She said me she was busy.'], answer: 'She told me that she was busy.', explanation: 'Tell normalmente pede objeto: told me. Say não usa objeto direto dessa forma.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “They told us that the meeting had been canceled.”', answer: 'They told us that the meeting had been canceled.', explanation: 'Told us = nos disseram. Had been canceled = tinha sido cancelada.' },
         ],
       },
@@ -897,7 +900,7 @@ const units: Unit[] = [
           { term: 'could', meaning: 'poderia', example: 'If I had a car, I could drive there.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If I ___ rich, I would travel more.”', options: ['am', 'were', 'will be'], answer: 'were', explanation: 'No second conditional, usamos passado simples na condição. Were é comum com I em hipóteses.' },
+          { kind: 'type', prompt: 'Complete: “If I ___ rich, I would travel more.”', options: ['am', 'were', 'will be'], answer: 'were', explanation: 'No second conditional, usamos passado simples na condição. Were é comum com I em hipóteses.' },
           { kind: 'build', prompt: 'Monte: “Se eu tivesse tempo, aprenderia francês.”', tokens: ['French.', 'learn', 'would', 'I', 'time,', 'had', 'If'], answer: 'If I had time, I would learn French.', explanation: 'If + passado (had), would + verbo base (learn).' },
           { kind: 'type', prompt: 'Escreva: “Se eu fosse você, aceitaria o trabalho.”', answer: 'If I were you, I would accept the job.', explanation: 'If I were you é uma expressão fixa muito comum para dar conselho.' },
           { kind: 'choice', prompt: 'Depois de would, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -s'], answer: 'verbo base', explanation: 'Would é modal e vem seguido do verbo na forma base: would go, would do.' },
@@ -917,10 +920,10 @@ const units: Unit[] = [
           { term: 'Second conditional', meaning: 'Hipótese', example: 'If I had time, I would help.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “The documents ___ yesterday.”', options: ['were signed', 'signed', 'are sign'], answer: 'were signed', explanation: 'Documentos recebem a ação; no passado plural usamos were + particípio.' },
+          { kind: 'type', prompt: 'Complete: “The documents ___ yesterday.”', options: ['were signed', 'signed', 'are sign'], answer: 'were signed', explanation: 'Documentos recebem a ação; no passado plural usamos were + particípio.' },
           { kind: 'type', prompt: 'Relate: “I can help.” → She said she...', answer: 'She said she could help.', explanation: 'Can geralmente muda para could no discurso indireto.' },
           { kind: 'build', prompt: 'Monte: “Se eu morasse aqui, iria a pé.”', tokens: ['walk.', 'would', 'I', 'here,', 'lived', 'If'], answer: 'If I lived here, I would walk.', explanation: 'If + lived; resultado com would + walk.' },
-          { kind: 'choice', prompt: 'Qual frase é uma hipótese?', options: ['If it rains, I will stay.', 'If I had wings, I would fly.', 'I have lived here for years.'], answer: 'If I had wings, I would fly.', explanation: 'A situação é imaginária: não tenho asas.' },
+          { kind: 'type', prompt: 'Qual frase é uma hipótese?', options: ['If it rains, I will stay.', 'If I had wings, I would fly.', 'I have lived here for years.'], answer: 'If I had wings, I would fly.', explanation: 'A situação é imaginária: não tenho asas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The new policy was announced after the manager said it would improve safety.”', answer: 'The new policy was announced after the manager said it would improve safety.', explanation: 'Was announced é passiva; said it would improve é discurso indireto.' },
         ],
       },
@@ -937,10 +940,10 @@ const units: Unit[] = [
           { term: 'Hipótese', meaning: 'If + past, would', example: 'If I knew, I would tell you.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “The office ___ every evening.”', options: ['is cleaned', 'cleans', 'is clean'], answer: 'is cleaned', explanation: 'Voz passiva no presente: is + particípio cleaned.' },
+          { kind: 'type', prompt: 'Complete: “The office ___ every evening.”', options: ['is cleaned', 'cleans', 'is clean'], answer: 'is cleaned', explanation: 'Voz passiva no presente: is + particípio cleaned.' },
           { kind: 'build', prompt: 'Monte: “O relatório foi enviado ontem.”', tokens: ['yesterday.', 'sent', 'was', 'report', 'The'], answer: 'The report was sent yesterday.', explanation: 'Was sent é a forma passiva no passado de send.' },
           { kind: 'type', prompt: 'Relate: “I will be late.” → He said he...', answer: 'He said he would be late.', explanation: 'Will muda para would no discurso indireto.' },
-          { kind: 'choice', prompt: 'Complete: “If she ___ more confident, she would apply.”', options: ['is', 'were', 'will be'], answer: 'were', explanation: 'Second conditional usa passado simples na oração com if.' },
+          { kind: 'type', prompt: 'Complete: “If she ___ more confident, she would apply.”', options: ['is', 'were', 'will be'], answer: 'were', explanation: 'Second conditional usa passado simples na oração com if.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The project was completed before the deadline.', explanation: 'Was completed = foi concluído. Before the deadline = antes do prazo.' },
           { kind: 'type', prompt: 'Escreva: “Se eu soubesse a resposta, contaria a você.”', answer: 'If I knew the answer, I would tell you.', explanation: 'If I knew + would tell: hipótese no presente.' },
           { kind: 'choice', prompt: 'Qual frase relata corretamente “I am working”?', options: ['She said she is working.', 'She said she was working.', 'She said she working.'], answer: 'She said she was working.', explanation: 'Am working normalmente recua para was working.' },
@@ -968,10 +971,10 @@ const units: Unit[] = [
           { term: 'highly likely', meaning: 'muito provável', example: 'It is highly likely to happen.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual expressão comunica possibilidade sem afirmar certeza?', options: ['It definitely proves...', 'It might indicate...', 'It is impossible that...'], answer: 'It might indicate...', explanation: 'Might indica possibilidade. É útil quando a evidência não permite uma afirmação definitiva.' },
+          { kind: 'type', prompt: 'Qual expressão comunica possibilidade sem afirmar certeza?', options: ['It definitely proves...', 'It might indicate...', 'It is impossible that...'], answer: 'It might indicate...', explanation: 'Might indica possibilidade. É útil quando a evidência não permite uma afirmação definitiva.' },
           { kind: 'build', prompt: 'Monte: “A tendência parece estar mudando.”', tokens: ['changing.', 'be', 'to', 'appears', 'trend', 'The'], answer: 'The trend appears to be changing.', explanation: 'Appears to be + -ing comunica uma observação com cautela.' },
           { kind: 'type', prompt: 'Escreva: “É provável que os custos aumentem.”', answer: 'Costs are likely to increase.', explanation: 'Be likely to + verbo base expressa probabilidade.' },
-          { kind: 'choice', prompt: '“Tends to increase” significa:', options: ['sempre aumenta', 'tende a aumentar', 'parou de aumentar'], answer: 'tende a aumentar', explanation: 'Tends to descreve uma tendência, não uma regra sem exceções.' },
+          { kind: 'type', prompt: '“Tends to increase” significa:', options: ['sempre aumenta', 'tende a aumentar', 'parou de aumentar'], answer: 'tende a aumentar', explanation: 'Tends to descreve uma tendência, não uma regra sem exceções.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The available evidence seems to support a more cautious approach.”', answer: 'The available evidence seems to support a more cautious approach.', explanation: 'Seems to support = parece apoiar. Cautious approach = abordagem cautelosa.' },
         ],
       },
@@ -988,10 +991,10 @@ const units: Unit[] = [
           { term: 'despite', meaning: 'apesar de', example: 'Despite the delay, we finished.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual palavra introduz uma consequência lógica?', options: ['therefore', 'whereas', 'despite'], answer: 'therefore', explanation: 'Therefore significa portanto e introduz uma conclusão ou consequência.' },
+          { kind: 'type', prompt: 'Qual palavra introduz uma consequência lógica?', options: ['therefore', 'whereas', 'despite'], answer: 'therefore', explanation: 'Therefore significa portanto e introduz uma conclusão ou consequência.' },
           { kind: 'build', prompt: 'Monte: “Apesar do atraso, terminamos.”', tokens: ['finished.', 'we', 'delay,', 'the', 'Despite'], answer: 'Despite the delay, we finished.', explanation: 'Despite é seguido por substantivo ou forma -ing, não por uma oração completa diretamente.' },
           { kind: 'type', prompt: 'Escreva: “As vendas aumentaram, enquanto os custos diminuíram.”', answer: 'Sales increased, whereas costs decreased.', explanation: 'Whereas contrasta duas informações.' },
-          { kind: 'choice', prompt: 'Complete: “The plan was risky. ___, it worked.”', options: ['Therefore', 'Nevertheless', 'Because'], answer: 'Nevertheless', explanation: 'Nevertheless apresenta contraste: apesar do risco, funcionou.' },
+          { kind: 'type', prompt: 'Complete: “The plan was risky. ___, it worked.”', options: ['Therefore', 'Nevertheless', 'Because'], answer: 'Nevertheless', explanation: 'Nevertheless apresenta contraste: apesar do risco, funcionou.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Despite facing several challenges, the team delivered the project on time.”', answer: 'Despite facing several challenges, the team delivered the project on time.', explanation: 'Despite facing = apesar de enfrentar. Delivered on time = entregou no prazo.' },
         ],
       },
@@ -1011,7 +1014,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual combinação é natural em inglês?', options: ['do a decision', 'make a decision', 'create a decision'], answer: 'make a decision', explanation: 'A collocation padrão é make a decision, não do a decision.' },
           { kind: 'build', prompt: 'Monte: “Precisamos cumprir o prazo.”', tokens: ['deadline.', 'the', 'meet', 'to', 'need', 'We'], answer: 'We need to meet the deadline.', explanation: 'Meet a deadline = cumprir um prazo.' },
           { kind: 'type', prompt: 'Escreva: “Ela assumiu a responsabilidade.”', answer: 'She took responsibility.', explanation: 'Take responsibility é a combinação natural; no passado, took responsibility.' },
-          { kind: 'choice', prompt: 'Complete: “The campaign aims to ___ awareness.”', options: ['raise', 'lift', 'grow'], answer: 'raise', explanation: 'Raise awareness é uma collocation comum para aumentar a conscientização.' },
+          { kind: 'type', prompt: 'Complete: “The campaign aims to ___ awareness.”', options: ['raise', 'lift', 'grow'], answer: 'raise', explanation: 'Raise awareness é uma collocation comum para aumentar a conscientização.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “We need to weigh the options before making a final decision.”', answer: 'We need to weigh the options before making a final decision.', explanation: 'Weigh the options = ponderar as opções. Final decision = decisão final.' },
         ],
       },
@@ -1028,10 +1031,10 @@ const units: Unit[] = [
           { term: 'Collocations', meaning: 'Combinações naturais', example: 'Make a decision.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase evita afirmar algo sem evidência suficiente?', options: ['This proves everything.', 'This may indicate a pattern.', 'This is always true.'], answer: 'This may indicate a pattern.', explanation: 'May indica possibilidade e evita transformar uma hipótese em certeza.' },
+          { kind: 'type', prompt: 'Qual frase evita afirmar algo sem evidência suficiente?', options: ['This proves everything.', 'This may indicate a pattern.', 'This is always true.'], answer: 'This may indicate a pattern.', explanation: 'May indica possibilidade e evita transformar uma hipótese em certeza.' },
           { kind: 'type', prompt: 'Escreva: “Apesar das dificuldades, cumprimos o prazo.”', answer: 'Despite the difficulties, we met the deadline.', explanation: 'Despite + substantivo; meet the deadline é a collocation correta.' },
           { kind: 'build', prompt: 'Monte: “Portanto, precisamos tomar uma decisão.”', tokens: ['decision.', 'a', 'make', 'to', 'need', 'we', 'Therefore,'], answer: 'Therefore, we need to make a decision.', explanation: 'Therefore introduz a conclusão; make a decision é a combinação natural.' },
-          { kind: 'choice', prompt: 'Complete: “The data ___ to show a gradual increase.”', options: ['appears', 'appearing', 'appear to'], answer: 'appears', explanation: 'The data appears to show... apresenta uma interpretação cautelosa.' },
+          { kind: 'type', prompt: 'Complete: “The data ___ to show a gradual increase.”', options: ['appears', 'appearing', 'appear to'], answer: 'appears', explanation: 'The data appears to show... apresenta uma interpretação cautelosa.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The findings are likely to have significant implications for future research.”', answer: 'The findings are likely to have significant implications for future research.', explanation: 'Likely to = provável que. Implications = implicações.' },
         ],
       },
@@ -1048,13 +1051,13 @@ const units: Unit[] = [
           { term: 'Naturalidade', meaning: 'Usar combinações idiomáticas', example: 'Meet a deadline.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual expressão é mais cautelosa?', options: ['This unquestionably proves...', 'This appears to suggest...', 'This can never be questioned.'], answer: 'This appears to suggest...', explanation: 'Appears to suggest comunica interpretação sem afirmar prova definitiva.' },
+          { kind: 'type', prompt: 'Qual expressão é mais cautelosa?', options: ['This unquestionably proves...', 'This appears to suggest...', 'This can never be questioned.'], answer: 'This appears to suggest...', explanation: 'Appears to suggest comunica interpretação sem afirmar prova definitiva.' },
           { kind: 'build', prompt: 'Monte: “Ainda assim, precisamos considerar os riscos.”', tokens: ['risks.', 'the', 'consider', 'to', 'need', 'we', 'Nevertheless,'], answer: 'Nevertheless, we need to consider the risks.', explanation: 'Nevertheless introduz contraste; consider the risks = considerar os riscos.' },
           { kind: 'type', prompt: 'Escreva: “A equipe cumpriu o prazo apesar dos obstáculos.”', answer: 'The team met the deadline despite the obstacles.', explanation: 'Met the deadline é o passado de meet the deadline.' },
           { kind: 'choice', prompt: 'Qual collocation significa “assumir responsabilidade”?', options: ['make responsibility', 'take responsibility', 'do responsibility'], answer: 'take responsibility', explanation: 'Take responsibility é a combinação idiomática natural.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The evidence is limited; therefore, the conclusion should be cautious.', explanation: 'Therefore introduz consequência; cautious = cautelosa.' },
           { kind: 'type', prompt: 'Escreva: “É provável que a demanda aumente gradualmente.”', answer: 'Demand is likely to increase gradually.', explanation: 'Is likely to increase = é provável que aumente. Gradually = gradualmente.' },
-          { kind: 'choice', prompt: 'Complete: “___ the high cost, the project was successful.”', options: ['Despite', 'Whereas', 'Therefore'], answer: 'Despite', explanation: 'Despite + substantivo: despite the high cost.' },
+          { kind: 'type', prompt: 'Complete: “___ the high cost, the project was successful.”', options: ['Despite', 'Whereas', 'Therefore'], answer: 'Despite', explanation: 'Despite + substantivo: despite the high cost.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Although the proposal has limitations, it may provide a useful basis for further discussion.”', answer: 'Although the proposal has limitations, it may provide a useful basis for further discussion.', explanation: 'Although introduz concessão; may indica possibilidade; further discussion = discussão adicional.' },
         ],
       },
@@ -1444,6 +1447,31 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     if (checked !== null) return
     setBuiltWords(current => current.filter((_, wordIndex) => wordIndex !== index))
   }
+
+  useEffect(() => {
+    const handleCourseShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if (currentExercise && lessonPhase === 'practice' && (event.key.toLowerCase() === 'r' || event.code === 'Space')
+        && (currentExercise.kind === 'listen' || currentExercise.kind === 'repeat')) {
+        event.preventDefault()
+        playModel(currentExercise.answer)
+        return
+      }
+      if (event.key === 'Enter' && currentExercise && lessonPhase === 'practice' && checked === null) {
+        const canConfirm = currentExercise.kind === 'choice' ? !!selectedChoice
+          : currentExercise.kind === 'build' ? builtWords.length > 0
+            : currentExercise.kind === 'repeat' ? checked === true
+              : !!typedAnswer.trim()
+        if (canConfirm) {
+          event.preventDefault()
+          verify()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleCourseShortcut)
+    return () => window.removeEventListener('keydown', handleCourseShortcut)
+  }, [currentExercise, lessonPhase, checked, selectedChoice, builtWords, typedAnswer])
 
   if (introShown) return (
     <section className="guided-course">
