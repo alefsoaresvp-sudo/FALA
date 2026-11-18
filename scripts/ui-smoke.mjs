@@ -116,7 +116,7 @@ try {
   await page.getByRole('button', { name: /Avançar para escuta/ }).click()
   await page.locator('.understand-audio-row').first().waitFor({ state: 'visible' })
   await page.getByRole('button', { name: /Entendi, começar prática/ }).click()
-  await page.locator('.course-choice-list').getByRole('button', { name: 'Hello', exact: true }).click()
+  await page.locator('.course-answer-input').fill('Hello')
   await page.getByRole('button', { name: /Conferir resposta/ }).click()
   await page.locator('.course-feedback.correct').waitFor({ state: 'visible' })
   await page.getByRole('button', { name: 'Continuar' }).click()
