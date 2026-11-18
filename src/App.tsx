@@ -494,6 +494,7 @@ export default function App() {
             activeLessonId: row.active_lesson_id || null,
             streakDays: Number(row.streak_days) || 0,
             lastStudyDate: row.last_study_date || null,
+            lessonScores: row.lesson_scores && typeof row.lesson_scores === 'object' && !Array.isArray(row.lesson_scores) ? row.lesson_scores as Record<string, number> : {},
           }
           setCourseProgress(restoredCourse)
           try { window.localStorage.setItem('fala-course-progress-v1', JSON.stringify(restoredCourse)) } catch { /* cloud remains source of truth */ }
@@ -693,6 +694,7 @@ export default function App() {
       active_lesson_id: next.activeLessonId,
       streak_days: next.streakDays ?? 0,
       last_study_date: next.lastStudyDate || null,
+      lesson_scores: next.lessonScores ?? {},
     }, { onConflict: 'user_id,course_id' }).then(({ error }) => {
       if (error) setToast('O progresso do curso ficou salvo neste aparelho, mas não sincronizou: ' + error.message)
     })
@@ -832,7 +834,7 @@ export default function App() {
     let speakingScore = estimateSampleStructure(speechText, 30, 3)
     let writingEvaluation: TrackEvaluation | undefined
     let speakingEvaluation: TrackEvaluation | undefined
-    let method: 'ai' | 'heuristic' = 'heuristic'
+    let method: 'ai' | 'heuristic' | 'mixed' = 'heuristic'
     setDiagnosticBusy(true)
     setDiagnosticNotice('Calculando os indicadores de conhecimento, escrita e fala…')
     try {

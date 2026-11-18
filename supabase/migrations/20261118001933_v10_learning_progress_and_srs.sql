@@ -10,6 +10,7 @@ create table if not exists public.course_progress (
   active_lesson_id text,
   streak_days integer not null default 0 check (streak_days >= 0),
   last_study_date date,
+  lesson_scores jsonb not null default '{}'::jsonb check (jsonb_typeof(lesson_scores) = 'object'),
   adaptive_retry_count integer not null default 0 check (adaptive_retry_count >= 0),
   updated_at timestamptz not null default now(),
   primary key (user_id, course_id)
