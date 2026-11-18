@@ -582,6 +582,19 @@ export default function App() {
   }, [voiceActivity, voiceStatus])
 
   useEffect(() => {
+    if (page === 'lumi' || !lumiRecorderRef.current) return
+    if (lumiRecorderRef.current.state === 'recording') {
+      lumiRecorderRef.current.onstop = null
+      lumiRecorderRef.current.stop()
+    }
+    lumiRecorderRef.current = null
+    lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+    lumiStreamRef.current = null
+    lumiChunksRef.current = []
+    setLumiRecording(false)
+  }, [page])
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [chat, chatBusy])
 
@@ -1326,7 +1339,7 @@ export default function App() {
           const recognized = await transcribeCourseAudio(blob)
           setLumiRecordingNotice('Você disse: ' + recognized)
           const sent = await sendChatMessage(recognized, true)
-          if (sent) setLumiRecordingNotice('Mensagem enviada. A resposta da Lumi será reproduzida pela voz do navegador.')
+          if (sent) setLumiRecordingNotice('Mensagem enviada. A resposta da Lumi foi encaminhada para reprodução no navegador.')
         } catch (error) {
           setLumiRecordingNotice('Não foi possível transcrever o áudio: ' + await functionErrorDetail(error))
           setVoiceActivity('idle')
