@@ -488,6 +488,12 @@ export default function App() {
   }, [vocabSchedule])
 
   useEffect(() => {
+    if (voiceActivity !== 'speaking') return
+    const timer = window.setTimeout(() => setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle'), 1_500)
+    return () => window.clearTimeout(timer)
+  }, [voiceActivity, voiceStatus])
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [chat, chatBusy])
 
@@ -877,20 +883,25 @@ export default function App() {
         overrides: { tts: { voiceId: lumiVoiceId } },
         onConnect: () => {
           setVoiceStatus('connected')
+          setVoiceActivity('listening')
           setVoiceMessage('Lumi está ouvindo. Fale naturalmente em inglês ou peça uma explicação em português.')
         },
         onDisconnect: () => {
           voiceConversationRef.current = null
           setVoiceStatus('idle')
+          setVoiceActivity('idle')
         },
         onMessage: (event: { message?: string }) => {
+          setVoiceActivity('speaking')
           appendVoiceLine('assistant', typeof event?.message === 'string' ? event.message : '')
         },
         onUserTranscript: (event: { message?: string }) => {
+          setVoiceActivity('thinking')
           appendVoiceLine('user', typeof event?.message === 'string' ? event.message : '')
         },
         onError: (error: unknown) => {
           setVoiceStatus('error')
+          setVoiceActivity('idle')
           setVoiceMessage('A conversa por voz encontrou um erro: ' + friendlyError(error))
         },
       })
@@ -924,6 +935,12 @@ export default function App() {
     event.preventDefault()
     const message = chatInput.trim()
     if (!message || chatBusy) return
+    const modeInstruction = lumiMode === 'guided'
+      ? 'Modo correção guiada: corrija um padrão relevante por vez, explique brevemente em português e peça uma nova tentativa. '
+      : lumiMode === 'roleplay'
+        ? 'Modo roleplay: conduza uma situação real em inglês (trabalho, viagem ou cotidiano), faça uma pergunta por vez e permaneça no personagem. '
+        : ''
+    const tutorMessage = modeInstruction + message
     const history = chat.slice(-8)
     setChat(current => [...current, { role: 'user', text: message }])
     setChatInput('')
@@ -933,7 +950,7 @@ export default function App() {
       if (supabase && user) {
         const { data, error } = await supabase.functions.invoke('tutor', {
           body: {
-            mode: 'conversation', message, history, profile,
+            mode: 'conversation', message: tutorMessage, history, profile,
             learningEvidence,
           },
         })
@@ -1879,7 +1896,7 @@ export default function App() {
 
           {page === 'lumi' && <section className="lumi-layout">
             <div className="page-heading"><span className="eyebrow">TUTORA DE INGLÊS · LUMI</span><h1>Converse para evoluir.</h1><p>Use o inglês no seu nível. A Lumi prioriza comunicação e corrige um ponto importante por vez.</p></div>
-            <section className="voice-session-card">
+            <section className="voice-session-card lumi-integrated-tutor">
               <div className={'voice-lumi-orb ' + voiceStatus}><LumiPortrait/><i/></div>
               <div className="voice-session-copy">
                 <span className="eyebrow">PERSONAGEM DE VOZ · ELEVENLABS</span>
@@ -1903,6 +1920,19 @@ export default function App() {
                 <small>{user ? 'Acesso autenticado · sem gravação de áudio' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
               </div>
             </section>
+            <div className="lumi-mode-selector" role="group" aria-label="Modo de tutoria">
+              <label>Modo de prática
+                <select value={lumiMode} onChange={event => setLumiMode(event.target.value as typeof lumiMode)}>
+                  <option value="conversation">Conversa livre</option>
+                  <option value="guided">Correção guiada</option>
+                  <option value="roleplay">Roleplay de situação real</option>
+                </select>
+              </label>
+              <div className={'lumi-live-state ' + voiceActivity}>
+                <span className="lumi-wave"><i/><i/><i/><i/></span>
+                {voiceActivity === 'listening' ? 'Ouvindo…' : voiceActivity === 'thinking' ? 'Pensando…' : voiceActivity === 'speaking' ? 'Falando…' : voiceStatus === 'connected' ? 'Conectada' : 'Pronta'}
+              </div>
+            </div>
             {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
             <div className="lumi-quick-start">
               <div><span className="eyebrow">COMECE POR AQUI</span><strong>Escolha como a Lumi pode ajudar</strong></div>
@@ -1915,9 +1945,15 @@ export default function App() {
             <div className="chat-panel">
               <div className="chat-header"><div className="lumi-avatar"><LumiPortrait/><span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
-                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? <LumiPortrait/> : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <small className="correction-note">{item.note}</small>}</div></div>)}
+                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? <LumiPortrait/> : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <div className="lumi-inline-correction"><span>Correção sugerida</span><p>{item.note}</p><button type="button" onClick={() => void saveExpressionFromChat(item.text.slice(0, 120), item.note)}>Salvar expressão <Bookmark size={13}/></button></div>}</div></div>)}
                 {chatBusy && <div className="chat-row assistant"><div className="chat-avatar">L</div><div className="chat-bubble typing"><i/><i/><i/></div></div>}
                 <div ref={chatEndRef}/>
+              </div>
+              <div className="lumi-action-chips">
+                <button type="button" onClick={() => setChatInput('Explain the grammar rule behind this sentence in simple Portuguese: ')}>Explicar regra</button>
+                <button type="button" onClick={() => setChatInput('Please simplify your last explanation and give me one short example.')}>Simplificar</button>
+                <button type="button" onClick={() => setChatInput('Give me another example using the same structure in a different real-life situation.')}>Dar outro exemplo</button>
+                <button type="button" onClick={() => setChatInput('Help me practice pronunciation. Give me a short phrase, syllable groups and a repeat prompt.')}>Praticar pronúncia</button>
               </div>
               <form className="chat-compose" onSubmit={sendChat}><input value={chatInput} onChange={event => setChatInput(event.target.value)} placeholder="Escreva em inglês ou peça ajuda em português…" aria-label="Mensagem para a Lumi"/><button type="submit" disabled={!chatInput.trim() || chatBusy} aria-label="Enviar mensagem"><Send size={18}/></button></form>
               {chatNotice && <p className="inline-notice">{chatNotice}</p>}
