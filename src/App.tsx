@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
-import GuidedCourse, { getNextLessonRecommendation, type SavedProgress } from './GuidedCourse'
+import GuidedCourse, { getNextLessonRecommendation, searchGuidedLessons, type SavedProgress } from './GuidedCourse'
 import ActivityCard from './components/ActivityCard'
 import Skeleton from './components/Skeleton'
 import { useActiveStudyTimer } from './hooks/useActiveStudyTimer'
@@ -40,6 +40,7 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
+type DiagnosticResult = { score: number; level: Level; quizScore: number; writingScore: number; speakingScore: number; writingEvaluation?: TrackEvaluation; speakingEvaluation?: TrackEvaluation; method: 'ai' | 'heuristic' }
 type DiagnosticSpeechRecognition = {
   lang: string
   interimResults: boolean
@@ -105,6 +106,24 @@ function readLocal<T>(key: string, fallback: T): T {
 function greeting(name: string) {
   return name.trim().split(/\s+/)[0] || 'estudante'
 }
+function estimateSampleStructure(text: string, targetWords: number, targetSentences: number) {
+  const words = text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? []
+  const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().split(/\s+/).filter(Boolean).length >= 2)
+  const diversity = words.length ? new Set(words).size / words.length : 0
+  const connectors = /\b(because|but|and|so|however|although|when|if|after|before|while|also|first|then)\b/i.test(text)
+  const wordScore = Math.min(55, words.length / targetWords * 55)
+  const sentenceScore = Math.min(25, sentences.length / targetSentences * 25)
+  const diversityScore = Math.min(10, diversity / 0.7 * 10)
+  const connectorScore = connectors ? 10 : words.length >= 8 ? 5 : 0
+  return Math.round(Math.min(100, wordScore + sentenceScore + diversityScore + connectorScore))
+}
+const appTourSteps = [
+  { title: 'Seu próximo passo', description: 'O Início organiza a próxima aula, a meta diária, as revisões pendentes e uma prioridade de estudo. Comece pelo cartão principal.' },
+  { title: 'Aprenda em sequência', description: 'O curso apresenta, faz você escutar, praticar, falar, corrigir, revisar e aplicar o conteúdo em uma situação nova.' },
+  { title: 'Pratique de formas diferentes', description: 'Use escuta, fala, escrita, vocabulário, trilhas e Music Lab. A busca encontra ferramentas, aulas e expressões.' },
+  { title: 'Converse com a Lumi', description: 'A Lumi pode explicar, simplificar, corrigir e conduzir simulações. A voz exige microfone, navegador compatível e conta conectada.' },
+  { title: 'Acompanhe evidências', description: 'O Progresso reúne sessões, competências, revisões, consistência e conquistas. Indicadores de aprendizagem não são certificados oficiais.' },
+]
 function friendlyError(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Não foi possível concluir esta ação. Tente novamente.'
@@ -172,7 +191,8 @@ function LumiPortrait() {
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
-  const [diagnosticResult, setDiagnosticResult] = useState<{ score: number; level: Level } | null>(null)
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null)
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false)
   const [diagnosticWritingSample, setDiagnosticWritingSample] = useState('')
   const [diagnosticSpeechSample, setDiagnosticSpeechSample] = useState('')
   const [diagnosticRecording, setDiagnosticRecording] = useState(false)
@@ -275,6 +295,7 @@ export default function App() {
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [globalSearch, setGlobalSearch] = useState('')
+  const [appTourStep, setAppTourStep] = useState<number | null>(() => readLocal('fala-app-tour-complete-v1', false) ? null : 0)
   const [showDemoHint, setShowDemoHint] = useState(true)
   const [toast, setToast] = useState('')
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -793,6 +814,93 @@ export default function App() {
     setReviewRevealed(false)
     setLearningReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
     setToast(mastered ? 'Estrutura marcada como dominada após cinco revisões.' : grade === 'again' ? 'Esse item volta amanhã.' : 'Próxima revisão em ' + nextInterval + ' dias.')
+  }
+
+  const submitDiagnostic = async () => {
+    if (diagnosticBusy) return
+    const answerCount = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
+    const quizScore = Math.round(answerCount / diagnosticQuestions.length * 100)
+    const writingText = diagnosticWritingSample.trim().slice(0, 1400)
+    const speechText = diagnosticSpeechSample.trim().slice(0, 1400)
+    let writingScore = estimateSampleStructure(writingText, 50, 4)
+    let speakingScore = estimateSampleStructure(speechText, 30, 3)
+    let writingEvaluation: TrackEvaluation | undefined
+    let speakingEvaluation: TrackEvaluation | undefined
+    let method: 'ai' | 'heuristic' = 'heuristic'
+    setDiagnosticBusy(true)
+    setDiagnosticNotice('Calculando os indicadores de conhecimento, escrita e fala…')
+    try {
+      if (supabase && user) {
+        const [writingResult, speakingResult] = await Promise.all([
+          supabase.functions.invoke('tutor', {
+            body: {
+              mode: 'evaluate', message: writingText, profile,
+              activity: {
+                activity_type: 'diagnostic_writing',
+                title: 'Diagnóstico inicial · produção escrita',
+                question: 'Write at least three connected sentences about a personal goal, why it matters and how you will practice.',
+                expected_answer: 'A coherent, relevant three-sentence response with understandable grammar, useful vocabulary and connected ideas.',
+                target_phrase: 'I want to improve… because… I plan to…',
+                context: 'Initial independent writing sample. Evaluate language production, task completion and suitability for the learner level.',
+              },
+            },
+          }),
+          supabase.functions.invoke('tutor', {
+            body: {
+              mode: 'evaluate', message: speechText, profile,
+              activity: {
+                activity_type: 'diagnostic_speaking_transcript',
+                title: 'Diagnóstico inicial · fala transcrita',
+                question: 'Introduce yourself, explain why you are learning English and describe one real situation in which you want to use it.',
+                expected_answer: 'A relevant spontaneous response with connected ideas, understandable grammar and vocabulary suitable for the learner level.',
+                target_phrase: 'I am learning English because…',
+                context: 'Speech recognition transcript only. Evaluate the language in the transcript, never pronunciation, accent, fluency or acoustic quality.',
+              },
+            },
+          }),
+        ])
+        const writing = writingResult.data?.structured as TrackEvaluation | undefined
+        const speaking = speakingResult.data?.structured as TrackEvaluation | undefined
+        if (!writingResult.error && writing && typeof writing.score === 'number') {
+          writingEvaluation = writing
+          writingScore = Math.max(0, Math.min(100, Math.round(writing.score)))
+        }
+        if (!speakingResult.error && speaking && typeof speaking.score === 'number') {
+          speakingEvaluation = speaking
+          speakingScore = Math.max(0, Math.min(100, Math.round(speaking.score)))
+        }
+        if (writingEvaluation && speakingEvaluation) method = 'ai'
+        setDiagnosticNotice(method === 'ai'
+          ? 'A Lumi avaliou as duas amostras. A fala foi analisada somente a partir da transcrição.'
+          : 'A avaliação por IA não ficou totalmente disponível; as amostras sem avaliação receberam apenas indicadores estruturais provisórios.')
+      } else {
+        setDiagnosticNotice('Sem conta conectada: a avaliação das amostras é estrutural e provisória, sem correção semântica ou gramatical por IA.')
+      }
+      const score = Math.round(quizScore * 0.4 + writingScore * 0.3 + speakingScore * 0.3)
+      const level: Level = score < 40 ? 'beginner' : score < 55 ? 'basic' : score < 75 ? 'intermediate' : 'advanced'
+      const result: DiagnosticResult = { score, level, quizScore, writingScore, speakingScore, writingEvaluation, speakingEvaluation, method }
+      setDiagnosticResult(result)
+      setProfile(current => {
+        const updated = { ...current, level }
+        try { window.localStorage.setItem(PROFILE_KEY, JSON.stringify(updated)) } catch { /* local profile remains in memory */ }
+        return updated
+      })
+      if (supabase && user) {
+        const { error } = await supabase.from('profiles').update({ estimated_level: level }).eq('user_id', user.id)
+        if (error) setToast('O diagnóstico foi calculado, mas o nível não sincronizou: ' + error.message)
+      }
+      void recordSession('lesson', studyTimer.finish(), score, {
+        source: 'multidimensional-diagnostic',
+        quiz_score: quizScore,
+        writing_score: writingScore,
+        speaking_transcript_score: speakingScore,
+        method,
+      })
+    } catch (error) {
+      setDiagnosticNotice('Não foi possível concluir a avaliação: ' + friendlyError(error))
+    } finally {
+      setDiagnosticBusy(false)
+    }
   }
 
   const startDiagnosticSpeechCapture = () => {
@@ -1674,8 +1782,12 @@ export default function App() {
               const query = globalSearch.trim().toLocaleLowerCase('pt-BR')
               const navMatch = navItems.find(item => item.label.toLocaleLowerCase('pt-BR').includes(query))
               const trackMatch = learningTracks.find(track => track.title.toLocaleLowerCase('pt-BR').includes(query))
+              const lessonMatch = searchGuidedLessons(query)[0]
+              const wordMatch = words.find(word => word.toLocaleLowerCase('pt-BR').includes(query))
               if (navMatch) setPage(navMatch.id)
               else if (trackMatch) { openTrack(trackMatch.id); setPage('tracks') }
+              else if (lessonMatch) { setNextLessonStartId(lessonMatch.id); setPage('learn') }
+              else if (wordMatch) { setVocabSearch(wordMatch); setPage('vocabulary') }
               setGlobalSearch('')
             }}/>
             {globalSearch.trim() && <div className="global-search-results">
@@ -1684,7 +1796,9 @@ export default function App() {
                 return <button key={item.id} onClick={() => { setPage(item.id); setGlobalSearch('') }}><Icon size={16}/><span>{item.label}</span><ChevronRight size={14}/></button>
               })}
               {learningTracks.filter(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(track => <button key={track.id} onClick={() => { openTrack(track.id); setPage('tracks'); setGlobalSearch('') }}><Map size={16}/><span>{track.title}</span><ChevronRight size={14}/></button>)}
-              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhuma ferramenta ou trilha encontrada.</p>}
+              {searchGuidedLessons(globalSearch).map(lesson => <button key={lesson.id} onClick={() => { setNextLessonStartId(lesson.id); setPage('learn'); setGlobalSearch('') }}><BookOpen size={16}/><span>{lesson.title}<small>{lesson.unitTitle} · {lesson.objective}</small></span><ChevronRight size={14}/></button>)}
+              {words.filter(word => word.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(word => <button key={word} onClick={() => { setVocabSearch(word); setPage('vocabulary'); setGlobalSearch('') }}><Bookmark size={16}/><span>{word}<small>Expressão salva no vocabulário</small></span><ChevronRight size={14}/></button>)}
+              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !searchGuidedLessons(globalSearch).length && !words.some(word => word.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhum conteúdo encontrado. Pesquise por ferramenta, aula, expressão ou trilha.</p>}
             </div>}
           </div>
           <div className="topbar-actions">
@@ -2093,17 +2207,24 @@ export default function App() {
             </section>
             <div className="diagnostic-submit-row">
               <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões · {diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length >= 20 ? 'escrita pronta' : 'escrita pendente'} · {diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length >= 5 ? 'fala capturada' : 'fala pendente'}</span>
-              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length || diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length < 20 || diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => {
-                const score = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
-                const level: Level = score <= 1 ? 'beginner' : score === 2 ? 'basic' : score === 3 ? 'intermediate' : 'advanced'
-                setDiagnosticResult({ score, level })
-                setProfile(current => ({ ...current, level }))
-              }}>Validar evidências e ver sugestão <ArrowRight size={16}/></button>
+              <button className="button primary" disabled={diagnosticBusy || Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length || diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length < 20 || diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => void submitDiagnostic()}>
+                {diagnosticBusy ? 'Avaliando escrita e fala…' : 'Avaliar as três evidências'} <ArrowRight size={16}/>
+              </button>
             </div>
+            {diagnosticNotice && <p className="inline-notice diagnostic-analysis-notice">{diagnosticNotice}</p>}
             {diagnosticResult && <article className="diagnostic-result-card">
-              <span className="eyebrow">ESTIMATIVA DE PONTO DE PARTIDA · NÃO É CERTIFICADO</span>
+              <span className="eyebrow">ESTIMATIVA MULTICRITÉRIO · NÃO É CERTIFICADO</span>
               <strong>{diagnosticResult.level === 'beginner' ? 'A0–A1 · Iniciante' : diagnosticResult.level === 'basic' ? 'A2 · Básico' : diagnosticResult.level === 'intermediate' ? 'B1–B2 · Intermediário' : 'C1 · Avançado'}</strong>
-              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões e forneceu amostras de escrita e fala ({diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length} palavras escritas; {diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length} transcritas). A sugestão foi registrada no perfil. A passagem definitiva entre níveis precisa ser confirmada com avaliação de qualidade das respostas e uso consistente em atividades reais; esta etapa não emite certificado CEFR.</p>
+              <p>Resultado composto: <b>{diagnosticResult.score}/100</b>. Você acertou {Math.round(diagnosticResult.quizScore / 100 * diagnosticQuestions.length)} de {diagnosticQuestions.length} questões. A escrita e a transcrição oral participam do cálculo com pesos próprios; a etapa oral avalia o texto reconhecido, não pronúncia, sotaque ou fonética.</p>
+              <div className="diagnostic-score-grid">
+                <article><span>Conhecimento objetivo · 40%</span><strong>{diagnosticResult.quizScore}%</strong><div><i style={{width: diagnosticResult.quizScore + '%'}}/></div></article>
+                <article><span>Escrita · 30%</span><strong>{diagnosticResult.writingScore}%</strong><div><i style={{width: diagnosticResult.writingScore + '%'}}/></div></article>
+                <article><span>Fala transcrita · 30%</span><strong>{diagnosticResult.speakingScore}%</strong><div><i style={{width: diagnosticResult.speakingScore + '%'}}/></div></article>
+              </div>
+              {diagnosticResult.writingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback de escrita</strong><p>{diagnosticResult.writingEvaluation.correction}</p><small>Versão sugerida: {diagnosticResult.writingEvaluation.improved_answer}</small></div>}
+              {diagnosticResult.speakingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback da fala transcrita</strong><p>{diagnosticResult.speakingEvaluation.correction}</p><small>{diagnosticResult.speakingEvaluation.next_step}</small></div>}
+              {diagnosticResult.method === 'heuristic' && <p className="diagnostic-method-note">Modo sem IA: escrita e fala receberam uma pontuação estrutural provisória baseada em extensão, organização das frases e variedade de palavras. Entre na conta para a Lumi avaliar conteúdo, gramática e adequação ao nível.</p>}
+              <p>A sugestão foi registrada no perfil. Use este resultado como ponto de partida, não como certificação CEFR; a progressão definitiva depende de desempenho consistente em tarefas novas.</p>
               <div className="diagnostic-result-actions"><button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Ir para a próxima aula <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice('') }}>Refazer diagnóstico</button></div>
             </article>}
           </section>}
@@ -2114,7 +2235,7 @@ export default function App() {
             <article className="profile-settings-card"><div><span className="eyebrow">APARÊNCIA</span><h3>Escolha seu tema</h3><p>O tema fica salvo neste aparelho.</p></div><div className="theme-choice-buttons"><button className={theme==='light'?'active':''} onClick={() => setTheme('light')}><Sun size={17}/> Claro</button><button className={theme==='dark'?'active':''} onClick={() => setTheme('dark')}><Moon size={17}/> Escuro</button></div></article>
           </section>}
           {page === 'progress' && <section className="progress-layout">
-            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}>Fazer diagnóstico prático <Target size={15}/></button></div>
+            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice(''); setPage('diagnostic') }}>Fazer diagnóstico prático <Target size={15}/></button></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
             <section className="skills-progress-panel">
               <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
@@ -2157,6 +2278,10 @@ export default function App() {
                   { icon: Flame, title: 'Criando ritmo', detail: 'Registre 5 sessões de estudo', unlocked: completedSessions >= 5, current: Math.min(completedSessions, 5), target: 5 },
                   { icon: Bookmark, title: 'Caderno vivo', detail: 'Salve 5 palavras ou expressões', unlocked: words.length >= 5, current: Math.min(words.length, 5), target: 5 },
                   { icon: Trophy, title: 'Consistência', detail: 'Alcance média de 70% nas tentativas', unlocked: averageScore !== null && averageScore >= 70, current: averageScore ?? 0, target: 70 },
+                  { icon: Headphones, title: 'Ouvido atento', detail: 'Conclua 10 sessões de escuta', unlocked: sessions.filter(item => item.activity_type === 'listening').length >= 10, current: sessions.filter(item => item.activity_type === 'listening').length, target: 10 },
+                  { icon: Mic, title: 'Voz ativa', detail: 'Registre 10 práticas de fala', unlocked: sessions.filter(item => item.activity_type === 'speaking').length >= 10, current: sessions.filter(item => item.activity_type === 'speaking').length, target: 10 },
+                  { icon: RotateCcw, title: 'Memória em dia', detail: 'Conclua 10 revisões espaçadas', unlocked: sessions.filter(item => item.activity_type === 'vocabulary').length >= 10, current: sessions.filter(item => item.activity_type === 'vocabulary').length, target: 10 },
+                  { icon: Target, title: 'Aplicação real', detail: 'Crie 5 respostas originais nas aulas', unlocked: recentAttempts.filter(item => item.activity_type === 'real_life_application').length >= 5, current: recentAttempts.filter(item => item.activity_type === 'real_life_application').length, target: 5 },
                 ].map(achievement => {
                   const Icon = achievement.icon
                   const progress = Math.min(100, Math.round(achievement.current / achievement.target * 100))
@@ -2170,13 +2295,33 @@ export default function App() {
               </div>
               <p className="achievement-note">As conquistas usam somente sessões, palavras e notas registradas no aplicativo. Elas não equivalem a certificados de proficiência.</p>
             </section>
+            <section className="weekly-challenge-panel">
+              <div><span className="eyebrow">DESAFIO DA SEMANA</span><h2>Escute, responda e aplique.</h2><p>Complete uma atividade de escuta, uma resposta falada e uma aplicação escrita. O objetivo é transferir o conteúdo para uma situação real.</p></div>
+              <div className="weekly-challenge-progress"><span>{Math.min(3, (sessions.some(item => item.activity_type === 'listening') ? 1 : 0) + (sessions.some(item => item.activity_type === 'speaking') ? 1 : 0) + (recentAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0))}/3 etapas concluídas</span><div><i style={{width: (Math.min(3, (sessions.some(item => item.activity_type === 'listening') ? 1 : 0) + (sessions.some(item => item.activity_type === 'speaking') ? 1 : 0) + (recentAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0)) / 3 * 100) + '%'}}/></div></div>
+              <button className="button primary" onClick={() => setPage('learn')}>Continuar desafio <ArrowRight size={15}/></button>
+            </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
 
-        <footer className="app-footer"><span>FALA ENGLISH</span><span>Prática com intenção. Progresso com evidência.</span></footer>
+        <footer className="app-footer"><span>FALA ENGLISH</span><span>Prática com intenção. Progresso com evidência.</span><button className="tour-replay-button" onClick={() => setAppTourStep(0)}>Conhecer o FALA</button></footer>
       </div>
 
+      {appTourStep !== null && <div className="app-tour-backdrop">
+        <section className="app-tour-dialog" role="dialog" aria-modal="true" aria-labelledby="app-tour-title">
+          <div className="app-tour-progress"><span>CONHEÇA O FALA · {appTourStep + 1}/{appTourSteps.length}</span><div>{appTourSteps.map((step,index) => <i key={step.title} className={index <= appTourStep ? 'active' : ''}/>)}</div></div>
+          <span className="eyebrow">GUIA RÁPIDO</span><h2 id="app-tour-title">{appTourSteps[appTourStep].title}</h2><p>{appTourSteps[appTourStep].description}</p>
+          <div className="app-tour-actions">
+            <button className="button ghost" onClick={() => { setAppTourStep(null); try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ } }}>Pular tour</button>
+            <button className="button primary" onClick={() => {
+              if (appTourStep >= appTourSteps.length - 1) {
+                setAppTourStep(null)
+                try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ }
+              } else setAppTourStep(step => (step ?? 0) + 1)
+            }}>{appTourStep >= appTourSteps.length - 1 ? 'Concluir tour' : 'Próximo'} <ArrowRight size={15}/></button>
+          </div>
+        </section>
+      </div>}
       <nav className="mobile-dock" aria-label="Navegação principal no celular">
         {primaryNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}
         <button className={mobileMore ? 'active' : ''} aria-expanded={mobileMore} onClick={() => setMobileMore(value => !value)}><MoreHorizontal size={19}/><span>Mais</span></button>

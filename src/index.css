@@ -3082,3 +3082,112 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     width:min(100%, 160px);
   }
 }
+
+
+/* V10 completion: unified surfaces, transitions and accessibility */
+:root {
+  --fala-card-radius: 18px;
+  --fala-card-border: #dfe8ef;
+  --fala-card-shadow: 0 8px 24px rgba(16, 42, 64, .055);
+  --fala-focus: #075fa8;
+  --muted: #536b7d;
+}
+:root[data-theme="dark"] {
+  --fala-card-border: #304454;
+  --fala-card-shadow: 0 8px 26px rgba(0, 0, 0, .2);
+  --fala-focus: #7cc4ff;
+  --muted: #b4c3ce;
+}
+.activity-card, .metric-card, .progress-stat, .skill-progress-card,
+.learning-rhythm-panel, .skills-progress-panel, .achievement-card,
+.weekly-challenge-panel, .diagnostic-evidence-card, .diagnostic-result-card,
+.track-card, .track-detail-card, .music-panel, .music-quiz,
+.writing-photo-card, .learning-plan-card, .voice-session-card,
+.history-card, .course-unit-card, .lesson-exercise-card,
+.lesson-application-card, .lesson-correction-list article {
+  border-radius: var(--fala-card-radius);
+  border-color: var(--fala-card-border);
+  box-shadow: var(--fala-card-shadow);
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.activity-card:hover, .track-card:hover, .achievement-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(16, 42, 64, .09);
+}
+.eyebrow, .side-label { color: #526a7d; }
+:root[data-theme="dark"] .eyebrow, :root[data-theme="dark"] .side-label { color: #9eb1c0; }
+button, input, textarea, select { accent-color: var(--green); }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible,
+[role="button"]:focus-visible, a:focus-visible {
+  outline: 3px solid var(--fala-focus);
+  outline-offset: 3px;
+}
+.app-tour-backdrop {
+  position: fixed; inset: 0; z-index: 120; display: grid; place-items: center;
+  padding: 20px; background: rgba(5, 17, 28, .62); backdrop-filter: blur(5px);
+}
+.app-tour-dialog {
+  width: min(100%, 520px); padding: 28px; border: 1px solid var(--fala-card-border);
+  border-radius: 22px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 24px 80px rgba(0,0,0,.28);
+}
+.app-tour-progress { display: grid; gap: 10px; margin-bottom: 24px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 1px; }
+.app-tour-progress > div { display: flex; gap: 6px; }
+.app-tour-progress i { flex: 1; height: 4px; border-radius: 99px; background: var(--line); }
+.app-tour-progress i.active { background: var(--green); }
+.app-tour-dialog h2 { margin: 8px 0; font: 800 27px Manrope, sans-serif; }
+.app-tour-dialog p { color: var(--muted); font-size: 14px; line-height: 1.7; }
+.app-tour-actions { display:flex; justify-content:space-between; gap:12px; margin-top:24px; }
+.tour-replay-button { border:0; background:transparent; color:var(--green); font-size:11px; font-weight:750; text-decoration:underline; }
+.diagnostic-score-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:18px 0; }
+.diagnostic-score-grid article { display:grid; gap:7px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--paper); }
+.diagnostic-score-grid span { color:var(--muted); font-size:11px; line-height:1.4; }
+.diagnostic-score-grid strong { color:var(--ink); font:800 22px Manrope,sans-serif; }
+.diagnostic-score-grid article > div, .weekly-challenge-progress > div { height:7px; overflow:hidden; border-radius:99px; background:var(--line); }
+.diagnostic-score-grid i, .weekly-challenge-progress i { display:block; height:100%; border-radius:inherit; background:var(--green); }
+.diagnostic-ai-feedback, .diagnostic-method-note { margin-top:12px; padding:13px; border-radius:13px; background:var(--mint); color:var(--ink); }
+.diagnostic-ai-feedback p, .diagnostic-method-note { font-size:12px; line-height:1.6; }
+.diagnostic-ai-feedback small { display:block; margin-top:7px; color:var(--muted); line-height:1.5; }
+.weekly-challenge-panel { display:grid; grid-template-columns:minmax(0,1fr) minmax(130px,220px) auto; gap:18px; align-items:center; padding:20px; margin:18px 0; border:1px solid var(--fala-card-border); background:var(--paper); }
+.weekly-challenge-panel h2 { margin:5px 0; color:var(--ink); font:800 18px Manrope,sans-serif; }
+.weekly-challenge-panel p { margin:0; color:var(--muted); font-size:11px; line-height:1.55; }
+.weekly-challenge-progress { display:grid; gap:8px; color:var(--muted); font-size:10px; font-weight:700; }
+.lesson-stage-screen { display:grid; gap:18px; max-width:760px; margin:0 auto; padding:24px; border-radius:22px; background:var(--paper); color:var(--ink); }
+.lesson-stage-heading h1 { margin:7px 0; font:800 clamp(25px,4vw,34px) Manrope,sans-serif; }
+.lesson-stage-heading p { color:var(--muted); line-height:1.6; }
+.lesson-correction-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.lesson-correction-metric { display:grid; gap:5px; padding:14px; border:1px solid var(--line); border-radius:14px; background:var(--canvas); }
+.lesson-correction-metric strong { color:var(--green); font:850 24px Manrope,sans-serif; }
+.lesson-correction-metric span { color:var(--muted); font-size:11px; line-height:1.5; }
+.lesson-correction-list { display:grid; gap:10px; }
+.lesson-correction-list article { padding:15px; border:1px solid var(--line); background:var(--paper); }
+.lesson-correction-list article > span { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:1px; }
+.lesson-correction-list article strong { display:block; margin:6px 0; }
+.lesson-correction-list article p, .lesson-correction-list article small { color:var(--muted); line-height:1.55; }
+.lesson-correction-empty { display:grid; justify-items:center; gap:8px; padding:28px; border-radius:14px; background:var(--mint); text-align:center; }
+.lesson-correction-empty p { margin:0; color:var(--muted); }
+.lesson-application-card { display:grid; gap:10px; padding:20px; border:1px solid var(--line); }
+.lesson-application-card h2 { margin:0; font:750 19px Manrope,sans-serif; }
+.lesson-application-card p, .lesson-application-card small { color:var(--muted); font-size:12px; line-height:1.6; }
+.lesson-application-card label { font-size:12px; font-weight:800; }
+.lesson-application-card textarea { width:100%; min-height:130px; padding:13px; border:1px solid var(--line); border-radius:12px; background:var(--canvas); color:var(--ink); }
+.lesson-stage-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
+.global-search-results button { min-height:48px; }
+.global-search-results button small { display:block; color:var(--muted); font-size:10px; }
+@media (max-width: 720px) {
+  .diagnostic-score-grid { grid-template-columns:1fr; }
+  .weekly-challenge-panel { grid-template-columns:1fr; }
+  .lesson-correction-summary { grid-template-columns:1fr; }
+  .app-tour-dialog { padding:21px; }
+  .app-tour-dialog h2 { font-size:23px; }
+  .app-tour-actions { flex-wrap:wrap; }
+  .lesson-stage-screen { padding:15px; }
+  .lesson-stage-actions { flex-direction:column-reverse; }
+  .lesson-stage-actions button { width:100%; min-height:46px; }
+  .fala-app button { min-height:44px; }
+  .mobile-dock button { min-height:50px; }
+  .mobile-more-sheet button { min-height:44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
+}

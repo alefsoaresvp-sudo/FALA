@@ -46,7 +46,7 @@ type Lesson = {
   isCheckpoint?: boolean
 }
 type Unit = { id: string; title: string; subtitle: string; level: string; lessons: Lesson[] }
-export type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null }
+export type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null; lessonScores?: Record<string, number> }
 type CourseAttemptPayload = {
   activityType: string
   skill: 'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'
@@ -69,7 +69,7 @@ type Props = {
 }
 
 const STORAGE_KEY = 'fala-course-progress-v1'
-const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null, streakDays: 0, lastStudyDate: null }
+const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null, streakDays: 0, lastStudyDate: null, lessonScores: {} }
 
 const units: Unit[] = [
   {
@@ -1069,6 +1069,7 @@ const units: Unit[] = [
 
 export type NextLessonRecommendation = {
   id: string
+  reviewRecommended?: boolean
   title: string
   unitTitle: string
   subtitle: string
@@ -1082,7 +1083,8 @@ export type NextLessonRecommendation = {
 export function getNextLessonRecommendation(progress: SavedProgress | null): NextLessonRecommendation | null {
   const completed = new Set(progress?.completedLessonIds ?? [])
   const allLessons = units.flatMap(unit => unit.lessons.map(lesson => ({ lesson, unit })))
-  const next = allLessons.find(({ lesson }, index) =>
+  const review = allLessons.find(({ lesson }) => completed.has(lesson.id) && typeof progress?.lessonScores?.[lesson.id] === 'number' && (progress.lessonScores?.[lesson.id] ?? 100) < 75 && !lesson.isCheckpoint)
+  const next = review ?? allLessons.find(({ lesson }, index) =>
     !completed.has(lesson.id) &&
     (index === 0 || completed.has(allLessons[index - 1].lesson.id))
   )
@@ -1097,7 +1099,8 @@ export function getNextLessonRecommendation(progress: SavedProgress | null): Nex
   ]
   return {
     id: lesson.id,
-    title: lesson.title,
+    reviewRecommended: !!review,
+    title: review ? `Revisar: ${lesson.title}` : lesson.title,
     unitTitle: unit.title,
     subtitle: lesson.subtitle,
     objective: lesson.objective,
@@ -1106,6 +1109,21 @@ export function getNextLessonRecommendation(progress: SavedProgress | null): Nex
     estimatedMinutes: Math.max(5, Math.min(12, Math.ceil(lesson.exercises.length * 1.1) + 2)),
     skills: skills.length ? skills : ['Vocabulário', 'Compreensão'],
   }
+}
+
+export function searchGuidedLessons(query: string) {
+  const normalized = query.trim().toLocaleLowerCase('pt-BR')
+  if (!normalized) return []
+  return units.flatMap(unit => unit.lessons.map(lesson => ({
+    id: lesson.id,
+    title: lesson.title,
+    subtitle: lesson.subtitle,
+    unitTitle: unit.title,
+    objective: lesson.objective,
+    searchable: [lesson.title, lesson.subtitle, lesson.objective, lesson.pattern, ...lesson.teach.flatMap(item => [item.term, item.meaning, item.example])].join(' ').toLocaleLowerCase('pt-BR'),
+  }))).filter(lesson => lesson.searchable.includes(normalized))
+    .slice(0, 6)
+    .map(({ searchable: _searchable, ...lesson }) => lesson)
 }
 
 function loadProgress(): SavedProgress {
@@ -1198,7 +1216,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
-  const [lessonPhase, setLessonPhase] = useState<'learn' | 'understand' | 'practice' | 'speak' | 'review'>('learn')
+  const [lessonPhase, setLessonPhase] = useState<'learn' | 'understand' | 'practice' | 'speak' | 'correct' | 'review' | 'apply'>('learn')
   const [showHint, setShowHint] = useState(false)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [builtWords, setBuiltWords] = useState<string[]>([])
@@ -1210,6 +1228,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [audioNotice, setAudioNotice] = useState('')
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [freeSpeechTranscript, setFreeSpeechTranscript] = useState('')
+  const [applicationDraft, setApplicationDraft] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
   const recognitionRef = useRef<CourseSpeechInstance | null>(null)
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
@@ -1218,7 +1237,22 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
 
   const allLessons = useMemo(() => units.flatMap(unit => unit.lessons), [])
   const currentLesson = allLessons.find(lesson => lesson.id === activeLessonId) ?? null
-  const activeExercises = currentLesson ? [...currentLesson.exercises, ...retryQueue] : []
+  const listeningModel = currentLesson?.teach
+    .map(item => item.example.split('=')[0].trim().replace(/^[“"]|[”"]$/g, ''))
+    .find(example => {
+      const wordCount = example.split(/\s+/).filter(Boolean).length
+      return wordCount >= 2 && wordCount <= 12 && /[a-z]/i.test(example)
+    }) || currentLesson?.teach[0]?.term || ''
+  const extraListeningExercise: Exercise | null = currentLesson ? {
+    kind: 'listen',
+    prompt: 'Escuta ativa: ouça o modelo sem olhar a explicação e escreva exatamente o que entendeu.',
+    answer: listeningModel,
+    explanation: 'A compreensão auditiva exige reconhecer a sequência sonora e recuperar as palavras. Compare sua resposta com o modelo e repita a escuta em velocidade reduzida.',
+    hint: 'Ouça uma vez para captar a ideia geral. Na segunda vez, preste atenção aos sons finais e às palavras pequenas.',
+  } : null
+  const activeExercises = currentLesson
+    ? [...currentLesson.exercises, ...(extraListeningExercise ? [extraListeningExercise] : []), ...retryQueue]
+    : []
   const currentExercise = activeExercises[step] ?? null
   const completedCount = progress.completedLessonIds.length
   const percentage = Math.round(completedCount / allLessons.length * 100)
@@ -1284,6 +1318,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const beginLesson = (lessonId: string) => {
     setRetryQueue([])
     setFreeSpeechTranscript('')
+    setApplicationDraft('')
     setActiveLessonId(lessonId)
     setStep(0)
     setLessonPhase('learn')
@@ -1307,6 +1342,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setMistakes(0)
     setRetryQueue([])
     setFreeSpeechTranscript('')
+    setApplicationDraft('')
     setActiveLessonId(autoStartLessonId)
     setProgress(current => ({ ...current, introDone: true, activeLessonId: autoStartLessonId }))
     resetExercise()
@@ -1395,6 +1431,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         ? current.completedLessonIds
         : [...current.completedLessonIds, currentLesson.id],
       xp: current.xp + (current.completedLessonIds.includes(currentLesson.id) ? 0 : currentLesson.isCheckpoint ? 30 : currentLesson.isReview ? 15 : 10),
+      lessonScores: { ...(current.lessonScores ?? {}), [currentLesson.id]: score },
       streakDays: current.lastStudyDate === localDateKey() ? (current.streakDays ?? 0) : current.lastStudyDate === previousLocalDateKey() ? (current.streakDays ?? 0) + 1 : 1,
       lastStudyDate: localDateKey(),
       activeLessonId: null,
@@ -1644,12 +1681,44 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <textarea className="course-answer-input course-speaking-textarea" value={freeSpeechTranscript} onChange={event => setFreeSpeechTranscript(event.target.value)} rows={3} placeholder="Ou digite a frase que você falou…"/>
           <div className="lesson-action-row">
             <button className="course-secondary-button" onClick={() => onAskTutor('Estou na etapa oral da aula "' + currentLesson.title + '". Minha estrutura-alvo é ' + currentLesson.pattern + '. Dê feedback breve sobre esta resposta: ' + freeSpeechTranscript)}>Perguntar à Lumi</button>
-            <button className="course-primary-button" onClick={() => setLessonPhase('review')}>Concluir fala e revisar <ArrowRight size={16}/></button>
+            <button className="course-primary-button" onClick={() => { if (freeSpeechTranscript.trim()) onExerciseAttempt?.({ activityType: 'speaking_free_response', skill: 'speaking', prompt: 'Responda sem ler: apresente uma ideia em inglês e explique um detalhe.', answer: freeSpeechTranscript, expected: 'Resposta espontânea que comunica uma ideia com ao menos um detalhe.', explanation: 'A etapa registra o conteúdo transcrito. Ela não mede pronúncia ou qualidade fonética.', correct: null }); setLessonPhase('correct') }}>Ver correções <ArrowRight size={16}/></button>
           </div>
         </article>
       </section>
     )
 
+    if (lessonPhase === 'correct') return (
+      <section className="guided-course lesson-stage-screen">
+        <div className="lesson-stage-heading"><span className="course-eyebrow">05 · CORRIGIR</span><h1>Entenda o que precisa <em>melhorar.</em></h1><p>Reveja os pontos que exigiram uma nova tentativa antes de avançar.</p></div>
+        <div className="lesson-correction-summary">
+          <div className="lesson-correction-metric"><strong>{mistakes}</strong><span>respostas que precisaram de correção</span></div>
+          <div className="lesson-correction-metric"><strong>{retryQueue.length}</strong><span>itens adicionados à repetição adaptativa</span></div>
+          <div className="lesson-correction-metric"><strong>{freeSpeechTranscript.trim() ? 'Sim' : 'Pendente'}</strong><span>produção oral registrada nesta aula</span></div>
+        </div>
+        {retryQueue.length > 0 ? <div className="lesson-correction-list">{retryQueue.map((item,index) => <article key={index}><span>REVISÃO {index+1}</span><strong>{item.prompt.replace(/^Revisão adaptativa: /,'')}</strong><p>{item.explanation}</p><small>Resposta de referência: {item.answer}</small></article>)}</div> : <div className="lesson-correction-empty"><CheckCircle2 size={22}/><strong>Nenhum erro recorrente nesta rodada.</strong><p>Continue tentando recuperar as estruturas sem consultar o modelo.</p></div>}
+        <div className="lesson-stage-actions"><button className="course-primary-button" onClick={() => setLessonPhase('review')}>Revisar o que aprendi <ArrowRight size={16}/></button></div>
+      </section>
+    )
+    if (lessonPhase === 'apply') return (
+      <section className="guided-course lesson-stage-screen">
+        <div className="lesson-stage-heading"><span className="course-eyebrow">07 · APLICAR</span><h1>Use o inglês fora do <em>exercício.</em></h1><p>Crie uma resposta própria usando o padrão desta aula. Não copie a frase-modelo.</p></div>
+        <article className="lesson-application-card">
+          <span className="course-eyebrow">SITUAÇÃO REAL</span>
+          <h2>{currentLesson.objective}</h2>
+          <p className="lesson-application-pattern">Estrutura trabalhada: {currentLesson.pattern}</p>
+          <label htmlFor="lesson-application-answer">Sua resposta em inglês</label>
+          <textarea id="lesson-application-answer" value={applicationDraft} onChange={event => setApplicationDraft(event.target.value)} rows={5} placeholder="Write your own sentence or short response…"/>
+          <small>{applicationDraft.trim().split(/\s+/).filter(Boolean).length} palavras · escreva pelo menos 5 palavras para registrar sua aplicação</small>
+        </article>
+        <div className="lesson-stage-actions">
+          <button className="course-secondary-button" onClick={() => setLessonPhase('review')}>Voltar à revisão</button>
+          <button className="course-primary-button" disabled={applicationDraft.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => {
+            onExerciseAttempt?.({ activityType: 'real_life_application', skill: 'writing', prompt: 'Aplique em contexto real: ' + currentLesson.objective, answer: applicationDraft.trim(), expected: 'Resposta original usando a estrutura: ' + currentLesson.pattern, explanation: 'Aplicação livre registrada para acompanhar a capacidade de transferir a estrutura a um novo contexto.', correct: null })
+            finishLesson()
+          }}>Registrar aplicação e concluir <CheckCircle2 size={17}/></button>
+        </div>
+      </section>
+    )
     if (lessonPhase === 'review') return (
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
@@ -1666,7 +1735,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           {freeSpeechTranscript && <p className="course-feedback correct"><strong>Sua produção oral</strong><span>{freeSpeechTranscript}</span></p>}
         </article>
         <div className="lesson-prep-actions">
-          <button className="course-primary-button" onClick={finishLesson}>Salvar progresso e concluir aula <CheckCircle2 size={17}/></button>
+          <button className="course-primary-button" onClick={() => setLessonPhase('apply')}>Aplicar em contexto real <ArrowRight size={17}/></button>
           <p>Seu avanço será sincronizado na conta quando estiver conectado; no modo visitante, fica salvo neste aparelho.</p>
         </div>
       </section>
