@@ -1541,16 +1541,16 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     }
   }
   const startFreeSpeaking = async () => {
-    const browserWindow = window as BrowserSpeechWindow
-    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
-    if (!Recognition) {
-      setAudioNotice('O reconhecimento de fala não está disponível neste navegador. Você ainda pode escrever uma resposta e avançar.')
-      return
-    }
     setAudioNotice('')
     setFreeSpeechTranscript('')
     setVoiceTranscript('')
     if (await startMediaRecording('free')) return
+    const browserWindow = window as BrowserSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setAudioNotice('A gravação por áudio não está disponível neste navegador. Digite sua resposta ou abra o FALA em um navegador atualizado.')
+      return
+    }
     try {
       const recognition = new Recognition()
       recognition.lang = accent === 'uk' ? 'en-GB' : 'en-US'
@@ -1777,7 +1777,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <h2>Imagine uma situação real relacionada a: {currentLesson.objective}</h2>
           <p className="lesson-speaking-prompt">Tente dizer duas frases curtas. Use uma expressão aprendida e acrescente um detalhe sobre sua rotina.</p>
           <div className="repeat-practice-box">
-            <Mic size={20}/><div><strong>{voiceListening ? 'Ouvindo sua resposta…' : 'Grave sua resposta aqui'}</strong><small>O navegador transcreve sua fala. A transcrição ajuda a revisar as palavras, mas não mede sotaque ou qualidade fonética.</small></div>
+            <Mic size={20}/><div><strong>{voiceListening ? 'Gravando sua resposta…' : 'Grave sua resposta aqui'}</strong><small>O áudio é enviado para transcrição quando a conta e o serviço estão disponíveis. A transcrição registra palavras, não mede sotaque ou qualidade fonética.</small></div>
             <button onClick={() => voiceListening ? stopCourseRecording() : void startFreeSpeaking()}>{voiceListening ? 'Parar gravação' : 'Gravar resposta'}</button>
           </div>
           {freeSpeechTranscript && <div className="course-feedback correct"><strong>Resposta capturada</strong><p>{freeSpeechTranscript}</p></div>}
