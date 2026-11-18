@@ -139,11 +139,11 @@ async function functionErrorDetail(error: unknown) {
 }
 
 type AuthenticatedFunctionOptions = {
-  body?: object | FormData | Blob | ArrayBuffer | string | null
+  body?: object | FormData | Blob | ArrayBuffer | string
   headers?: Record<string, string>
 }
 
-async function invokeAuthenticatedFunction<T = Record<string, unknown>>(
+async function invokeAuthenticatedFunction<T = any>(
   functionName: string,
   options: AuthenticatedFunctionOptions = {},
 ) {
