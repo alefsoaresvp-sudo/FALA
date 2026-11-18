@@ -151,7 +151,14 @@ async function invokeAuthenticatedFunction<T = Record<string, unknown>>(
   if (!client) throw new Error('O serviço de aprendizagem não está configurado neste dispositivo.')
   const { data, error } = await client.auth.getSession()
   if (error) throw error
-  const accessToken = data.session?.access_token
+  let session = data.session
+  const expiresSoon = !session?.expires_at || session.expires_at <= Math.floor(Date.now() / 1000) + 30
+  if (!session?.access_token || expiresSoon) {
+    const refreshed = await client.auth.refreshSession()
+    if (refreshed.error) throw refreshed.error
+    session = refreshed.data.session
+  }
+  const accessToken = session?.access_token
   if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente para continuar usando os recursos de IA e áudio.')
   return client.functions.invoke<T>(functionName, {
     ...options,
