@@ -1747,13 +1747,13 @@ export default function App() {
               {!user && <small className="photo-privacy-note">A geração de plano personalizado com IA exige conta conectada e pode consumir a cota de IA do projeto.</small>}
             </section>
             <div className="section-heading"><div><span className="eyebrow">SUAS FERRAMENTAS</span><h2>Escolha como praticar</h2></div></div>
-            <div className="tool-grid">
-              <button className="tool-card" onClick={() => setPage('tracks')}><span className="tool-icon blue"><Map size={20}/></span><strong>Trilhas práticas</strong><small>Missões em etapas e mini provas com aprovação.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('music')}><span className="tool-icon peach"><Music2 size={20}/></span><strong>Music Lab</strong><small>Versos originais, vocabulário e repetição guiada.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('lumi')}><span className="tool-icon violet"><MessageCircle size={20}/></span><strong>Conversa com a Lumi</strong><small>Pratique diálogos e receba correções pontuais.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('speak')}><span className="tool-icon mint"><Mic size={20}/></span><strong>Treino de fala</strong><small>Grave uma resposta e veja a transcrição.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('write')}><span className="tool-icon peach"><PenLine size={20}/></span><strong>Laboratório de escrita</strong><small>Construa frases e melhore seus textos.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('vocabulary')}><span className="tool-icon blue"><Bookmark size={20}/></span><strong>Meu vocabulário</strong><small>Guarde expressões que quer usar de verdade.</small><ArrowRight size={16}/></button>
+            <div className="tool-grid activity-card-grid">
+              <ActivityCard title="Trilhas práticas" benefit="Missões guiadas em situações reais." progress={`${learningTracks.length} trilhas disponíveis`} cta="Explorar" icon={<Map size={19}/>} onClick={() => setPage('tracks')} />
+              <ActivityCard title="Music Lab" benefit="Escute, entenda e pratique por trechos." progress="Listening · aprox. 5 min" cta="Abrir laboratório" icon={<Music2 size={19}/>} onClick={() => setPage('music')} />
+              <ActivityCard title="Conversa com Lumi" benefit="Pratique diálogos e receba correções." progress="Speaking · aprox. 5 min" cta="Conversar" icon={<MessageCircle size={19}/>} onClick={() => setPage('lumi')} />
+              <ActivityCard title="Treino de fala" benefit="Grave uma resposta e revise sua transcrição." progress="Speaking · aprox. 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
+              <ActivityCard title="Laboratório de escrita" benefit="Transforme ideias em frases claras." progress="Writing · aprox. 5 min" cta="Escrever" icon={<PenLine size={19}/>} onClick={() => setPage('write')} />
+              <ActivityCard title="Meu vocabulário" benefit="Construa um banco de expressões úteis." progress={`${words.length} itens salvos`} cta="Abrir caderno" icon={<Bookmark size={19}/>} onClick={() => setPage('vocabulary')} />
             </div>
           </>}
 
@@ -2036,9 +2036,9 @@ export default function App() {
             <section className="skills-progress-panel">
               <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
               <div className="skills-progress-grid">
-                {['speaking', 'listening', 'writing', 'grammar', 'vocabulary'].map(skill => {
+                {['listening', 'speaking', 'reading', 'writing', 'grammar', 'vocabulary'].map(skill => {
                   const score = learningEvidence.skillScores[skill]
-                  const labels: Record<string, string> = { speaking: 'Conversação', listening: 'Compreensão auditiva', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
+                  const labels: Record<string, string> = { listening: 'Escuta', speaking: 'Fala', reading: 'Leitura', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
                   return <article className="skill-progress-card" key={skill}>
                     <div><strong>{labels[skill]}</strong><span>{typeof score === 'number' ? score + '% nas tentativas registradas' : 'Aguardando dados suficientes'}</span></div>
                     <div className="skill-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
@@ -2047,22 +2047,24 @@ export default function App() {
               </div>
               <p className="skills-progress-note">As barras mostram médias das tentativas registradas por habilidade. Uma área sem dados ainda não foi avaliada; isso não significa desempenho zero.</p>
             </section>
-            <section className="learning-rhythm-panel">
-              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 7 dias</h2></div><span className="muted-caption">Dias com sessões registradas</span></div>
-              <div className="learning-week-grid">
-                {Array.from({ length: 7 }, (_, index) => {
+            <section className="learning-rhythm-panel learning-heatmap-panel">
+              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 30 dias</h2></div><span className="muted-caption">Minutos ativos e revisões registradas</span></div>
+              <div className="learning-heatmap-grid" role="group" aria-label="Calendário de estudo dos últimos 30 dias">
+                {Array.from({ length: 30 }, (_, index) => {
                   const date = new Date()
                   date.setHours(0, 0, 0, 0)
-                  date.setDate(date.getDate() - (6 - index))
-                  const active = sessions.some(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
-                  return <div className={active ? 'learning-day active' : 'learning-day'} key={date.toISOString()}>
-                    <small>{date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small>
-                    <strong>{date.getDate()}</strong>
-                    <i>{active ? <Check size={13}/> : null}</i>
+                  date.setDate(date.getDate() - (29 - index))
+                  const daySessions = sessions.filter(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
+                  const minutes = Math.round(daySessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0) / 60)
+                  const reviews = learningReviewItems.filter(item => item.last_reviewed_at && new Date(item.last_reviewed_at).toDateString() === date.toDateString()).length
+                  const intensity = minutes >= 30 ? 4 : minutes >= 15 ? 3 : minutes >= 5 ? 2 : minutes > 0 ? 1 : 0
+                  return <div className={`learning-heatmap-day intensity-${intensity}`} key={date.toISOString()} title={`${date.toLocaleDateString('pt-BR')}: ${minutes} min ativos, ${reviews} revisões`} aria-label={`${date.toLocaleDateString('pt-BR')}: ${minutes} minutos e ${reviews} revisões`}>
+                    <span>{minutes > 0 ? minutes + 'm' : ''}</span>
                   </div>
                 })}
               </div>
-              <p className="learning-rhythm-note">O calendário usa sessões com data registrada. Um dia sem marcação significa que não há sessão registrada, não que você necessariamente deixou de estudar.</p>
+              <div className="learning-heatmap-legend"><span>Menos</span>{[0,1,2,3,4].map(level=><i key={level} className={`intensity-${level}`}/>)}<span>Mais</span></div>
+              <p className="learning-rhythm-note">Cada quadrado usa os segundos ativos registrados, sem estimar tempo em abas ocultas ou períodos de inatividade. Revisões contam quando o aluno avalia um item da fila SRS.</p>
             </section>
             <section className="achievement-center">
               <div className="section-heading"><div><span className="eyebrow">CONQUISTAS</span><h2>Marcos da sua aprendizagem</h2></div><span className="muted-caption">Competências e consistência</span></div>
