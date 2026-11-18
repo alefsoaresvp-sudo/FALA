@@ -9,6 +9,7 @@ import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
 import GuidedCourse, { getNextLessonRecommendation, type SavedProgress } from './GuidedCourse'
 import ActivityCard from './components/ActivityCard'
+import Skeleton from './components/Skeleton'
 import { useActiveStudyTimer } from './hooks/useActiveStudyTimer'
 import { supabase } from './supabase'
 
@@ -1733,6 +1734,7 @@ export default function App() {
             </section>}
 
             {showDemoHint && !user && <div className="demo-banner"><Sparkles size={17}/><span>Você está explorando gratuitamente. Suas atividades básicas funcionam sem cadastro; a Lumi com IA e a sincronização exigem uma conta.</span><button onClick={() => setShowDemoHint(false)} aria-label="Fechar aviso"><X size={15}/></button></div>}
+            {cloudLoading && <Skeleton rows={2} compact className="dashboard-sync-skeleton" label="Sincronizando suas informações"/>}
 
             <div className="metrics-row">
               <article className="metric-card"><span className="metric-icon green"><Clock3 size={18}/></span><div><small>TEMPO DE PRÁTICA</small><strong>{totalMinutes} <i>min</i></strong><span>no seu histórico</span></div></article>
