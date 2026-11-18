@@ -123,7 +123,7 @@ try {
   await page.locator('.word-builder').waitFor({ state: 'visible' })
   await page.locator('.course-lumi-context-button').click()
   await page.getByRole('dialog', { name: 'Pergunte à Lumi' }).waitFor({ state: 'visible' })
-  assert.match(await page.getByRole('dialog').innerText(), /estrutura esperada/)
+  assert.match(await page.getByRole('textbox', { name: 'Dúvida para a Lumi' }).inputValue(), /estrutura esperada/i)
   await page.getByRole('button', { name: 'Continuar aula' }).click()
 
   await page.locator('.sidebar').getByRole('button', { name: 'Lumi IA', exact: true }).click()
