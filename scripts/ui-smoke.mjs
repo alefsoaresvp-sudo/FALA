@@ -69,6 +69,7 @@ try {
   assert.match(await page.locator('.sidebar .brand-logo-light').getAttribute('alt'), /FALA English/)
   const activeNav = page.locator('.sidebar .nav-link[aria-current="page"]')
   assert.equal(await activeNav.innerText(), 'Início', 'The active navigation item must be announced.')
+  await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).focus()
   await page.keyboard.press('Tab')
   const keyboardFocus = await page.evaluate(() => {
     const active = document.activeElement
