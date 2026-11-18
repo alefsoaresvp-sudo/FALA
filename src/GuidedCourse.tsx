@@ -1316,6 +1316,14 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const resetExercise = () => {
     recognitionRef.current?.stop()
     recognitionRef.current = null
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.onstop = null
+      mediaRecorderRef.current.stop()
+    }
+    mediaRecorderRef.current = null
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+    mediaStreamRef.current = null
+    mediaChunksRef.current = []
     setVoiceListening(false)
     setVoiceTranscript('')
     setSelectedChoice('')
@@ -1876,7 +1884,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word)}>{word}</button>)}</div>
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
-          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null} onClick={() => voiceListening ? stopCourseRecording() : void startSpeechCapture()}>{voiceListening ? 'Parar gravação' : 'Gravar voz'}</button></div>}
+          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição e pare para transcrever. A comparação verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null} onClick={() => voiceListening ? stopCourseRecording() : void startSpeechCapture()}>{voiceListening ? 'Parar gravação' : 'Gravar voz'}</button></div>}
           {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); onExerciseAttempt?.({ activityType: 'repeat_manual', skill: 'speaking', prompt: currentExercise.prompt, answer: 'Praticado manualmente', expected: currentExercise.answer, explanation: 'Prática autodeclarada, sem avaliação da fala.', correct: null }); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
           {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
