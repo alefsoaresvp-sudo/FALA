@@ -1486,6 +1486,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       mediaRecorderRef.current = recorder
       recorder.ondataavailable = event => { if (event.data.size) mediaChunksRef.current.push(event.data) }
       recorder.onerror = () => {
+        recorder.onstop = null
         setVoiceListening(false)
         setAudioNotice('O navegador interrompeu a gravação. Tente novamente ou digite sua resposta.')
         stream.getTracks().forEach(track => track.stop())
