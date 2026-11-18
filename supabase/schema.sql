@@ -266,3 +266,8 @@ drop trigger if exists learning_review_items_set_updated_at on public.learning_r
 create trigger learning_review_items_set_updated_at
 before update on public.learning_review_items
 for each row execute function public.set_updated_at();
+
+
+-- FALA V10 indexes for review-attempt lookup.
+create index if not exists learning_review_items_source_attempt_id_idx
+  on public.learning_review_items (source_attempt_id);
