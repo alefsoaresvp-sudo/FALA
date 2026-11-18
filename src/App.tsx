@@ -1051,7 +1051,7 @@ export default function App() {
 
     const completed = [...new Set([...activeTrackProgress.completed_lessons, trackLessonIndex])].sort((a, b) => a - b)
     updateTrackProgress(activeTrack.id, { ...activeTrackProgress, completed_lessons: completed })
-    await recordSession('lesson', 240, score, { track_id: activeTrack.id, lesson: lesson.title })
+    await recordSession('lesson', studyTimer.finish(), score, { track_id: activeTrack.id, lesson: lesson.title })
     setTrackFeedback('')
     setTrackMode('overview')
   }
@@ -1070,7 +1070,7 @@ export default function App() {
     setTrackFeedback(passed
       ? 'Módulo concluído. Você atingiu o mínimo de 70%.'
       : 'Você ainda não atingiu 70%. Revise as etapas e tente novamente.')
-    void recordSession('lesson', 300, score, { track_id: activeTrack.id, exam: true })
+    void recordSession('lesson', studyTimer.finish(), score, { track_id: activeTrack.id, exam: true })
   }
 
   const selectWritingPhoto = (file: File | null) => {
@@ -1127,7 +1127,7 @@ export default function App() {
       const reply = typeof data?.reply === 'string' ? data.reply.trim() : ''
       if (!reply) throw new Error('A Lumi não retornou uma análise.')
       setWritingPhotoFeedback(reply)
-      await recordSession('writing', 300, null, { source: 'photo' })
+      await recordSession('writing', studyTimer.finish(), null, { source: 'photo' })
     } catch (error) {
       setWritingPhotoFeedback('Não foi possível analisar a foto: ' + friendlyError(error))
     } finally {
@@ -1215,7 +1215,7 @@ export default function App() {
       const result = data?.structured as MusicAnalysis | undefined
       if (!result || !Array.isArray(result.lines) || !Array.isArray(result.vocabulary)) throw new Error('A análise veio incompleta. Tente novamente com um trecho menor.')
       setMusicAnalysis(result)
-      await recordSession('listening', 180, null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
+      await recordSession('listening', studyTimer.finish(), null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
     } catch (error) {
       setMusicAnalysisNotice('Não foi possível analisar o trecho: ' + await functionErrorDetail(error))
     } finally {
@@ -1304,7 +1304,7 @@ export default function App() {
       if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
     }
     const score = grade === 'again' ? 0 : grade === 'good' ? 85 : 100
-    await recordSession('vocabulary', 45, score, { term, recall: grade, next_review_days: nextInterval })
+    await recordSession('vocabulary', studyTimer.finish(), score, { term, recall: grade, next_review_days: nextInterval })
     if (dueWords.length === 1) setReviewComplete(true)
     else {
       setReviewIndex(dueWords.length > 0 ? 0 : (reviewIndex + 1) % Math.max(1, words.length))
@@ -1330,7 +1330,7 @@ export default function App() {
         const count = writingText.trim().split(/\s+/).filter(Boolean).length
         setWritingFeedback('Você escreveu ' + count + ' palavras. Revise se cada frase tem sujeito, verbo e pontuação. No modo demonstração, esta tela não atribui nota nem inventa correções; entre para receber a análise da Lumi.')
       }
-      await recordSession('writing', 240, null, { word_count: writingText.trim().split(/\s+/).length })
+      await recordSession('writing', studyTimer.finish(), null, { word_count: writingText.trim().split(/\s+/).length })
     } catch (error) {
       setWritingFeedback('Não foi possível analisar: ' + friendlyError(error))
     } finally {
@@ -1374,7 +1374,7 @@ export default function App() {
         }
         if (!supabase || !user) {
           setRecordingNotice('Gravação disponível neste aparelho. Entre na conta para solicitar a transcrição com a Lumi.')
-          await recordSession('speaking', 30, null, { source: 'local_recording' })
+          await recordSession('speaking', studyTimer.finish(), null, { source: 'local_recording' })
           return
         }
         setRecordingNotice('Enviando o áudio para transcrição...')
@@ -1418,7 +1418,7 @@ export default function App() {
           } catch (evaluationError) {
             setRecordingNotice('Transcrição concluída. A avaliação textual da Lumi não ficou disponível: ' + friendlyError(evaluationError))
           }
-          await recordSession('speaking', 30, textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
+          await recordSession('speaking', studyTimer.finish(), textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
         } catch (error) {
           setRecordingNotice('A transcrição falhou: ' + friendlyError(error))
         }
@@ -1652,7 +1652,7 @@ export default function App() {
             accent={profile.accent}
             goalLabel={profile.goal === 'travel' ? 'viagens' : profile.goal === 'work' ? 'trabalho' : profile.goal === 'study' ? 'estudos' : 'conversação e vida diária'}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
-            onLessonComplete={score => void recordSession('lesson', 300, score, { source: 'guided-course-v6' })}
+            onLessonComplete={(score, lessonId) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId })}
           />}
 
           {page === 'tracks' && <section className="tracks-layout">
