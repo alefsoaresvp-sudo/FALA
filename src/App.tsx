@@ -1697,6 +1697,9 @@ export default function App() {
           {page === 'learn' && <GuidedCourse
             accent={profile.accent}
             goalLabel={profile.goal === 'travel' ? 'viagens' : profile.goal === 'work' ? 'trabalho' : profile.goal === 'study' ? 'estudos' : 'conversação e vida diária'}
+            initialProgress={courseProgress}
+            onProgressChange={handleCourseProgressChange}
+            onExerciseAttempt={handleCourseExerciseAttempt}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
             onLessonComplete={(score, lessonId) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId })}
           />}
