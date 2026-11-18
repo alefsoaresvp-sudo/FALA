@@ -1060,6 +1060,48 @@ const units: Unit[] = [
   },
 ]
 
+
+export type NextLessonRecommendation = {
+  id: string
+  title: string
+  unitTitle: string
+  subtitle: string
+  objective: string
+  pattern: string
+  level: string
+  estimatedMinutes: number
+  skills: string[]
+}
+
+export function getNextLessonRecommendation(progress: SavedProgress | null): NextLessonRecommendation | null {
+  const completed = new Set(progress?.completedLessonIds ?? [])
+  const allLessons = units.flatMap(unit => unit.lessons.map(lesson => ({ lesson, unit })))
+  const next = allLessons.find(({ lesson }, index) =>
+    !completed.has(lesson.id) &&
+    (index === 0 || completed.has(allLessons[index - 1].lesson.id))
+  )
+  if (!next) return null
+  const { lesson, unit } = next
+  const content = lesson.exercises.map(exercise => exercise.kind)
+  const skills = [
+    ...(content.includes('listen') ? ['Escuta'] : []),
+    ...(content.includes('repeat') ? ['Fala'] : []),
+    ...(content.some(kind => kind === 'type' || kind === 'build') ? ['Escrita'] : []),
+    ...(content.includes('choice') ? ['Gramática'] : []),
+  ]
+  return {
+    id: lesson.id,
+    title: lesson.title,
+    unitTitle: unit.title,
+    subtitle: lesson.subtitle,
+    objective: lesson.objective,
+    pattern: lesson.pattern,
+    level: unit.level,
+    estimatedMinutes: Math.max(5, Math.min(12, Math.ceil(lesson.exercises.length * 1.1) + 2)),
+    skills: skills.length ? skills : ['Vocabulário', 'Compreensão'],
+  }
+}
+
 function loadProgress(): SavedProgress {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
