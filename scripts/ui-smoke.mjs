@@ -174,6 +174,8 @@ try {
   await page.getByRole('button', { name: 'Continuar', exact: true }).click()
 
   await page.locator('.sidebar').getByRole('button', { name: 'Lumi IA', exact: true }).click()
+  await page.getByRole('button', { name: 'Entrar para gravar mensagem' }).waitFor({ state: 'visible' })
+  assert.equal(await page.getByRole('button', { name: 'Entrar para gravar mensagem' }).isEnabled(), true, 'Guest users should be offered a clear sign-in action for the Lumi voice-recording fallback.')
   await page.getByRole('button', { name: 'Praticar conversa', exact: true }).click()
   const chatInput = page.getByRole('textbox', { name: 'Mensagem para a Lumi' })
   assert.match(await chatInput.inputValue(), /practice a short conversation/)
