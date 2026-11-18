@@ -722,3 +722,86 @@
 @media (prefers-reduced-motion:reduce) {
   .course-lesson-row,.course-primary-button,.course-choice-list button { transition:none; }
 }
+
+
+/* FALA V10.1 course palette aligned with the app-wide deep-blue / emerald system */
+.guided-course {
+  color:var(--ink,#0f172a);
+}
+.guided-course .course-hero,
+.guided-course .course-intro-card,
+.guided-course .lesson-teaching-card,
+.guided-course .lesson-exercise-card,
+.guided-course .course-unit-card {
+  border-color:var(--line,#e2e8f0);
+}
+.guided-course .course-primary-button {
+  min-height:44px;
+  color:#fff;
+  background:#173e63;
+  border:1px solid #173e63;
+}
+.guided-course .course-primary-button:hover { background:#123452; }
+.guided-course .course-secondary-button,
+.guided-course .course-review-button { min-height:44px; color:#173e63; }
+.guided-course .lesson-progress-track i,
+.guided-course .course-progress-orb > div i { background:#059669; }
+.guided-course .course-feedback.correct,
+.guided-course .course-feedback.correct p { color:#065f46; background:#ecfdf5; }
+.guided-course .grammar-pattern { color:#173e63; background:#eaf1f8; border-color:#d5e4f1; }
+.guided-course .course-brand-mark { color:#173e63; background:#eaf1f8; }
+.guided-course button:focus-visible,
+.guided-course input:focus-visible,
+.guided-course textarea:focus-visible {
+  outline:3px solid rgba(37,99,160,.58);
+  outline-offset:3px;
+}
+.guided-course button,.guided-course input,.guided-course textarea { font-size:14px; }
+.guided-course small,.guided-course .course-eyebrow,.guided-course .lesson-step-chip,
+.guided-course .exercise-card-topline,.guided-course .course-lesson-copy small {
+  font-size:12px !important;
+  line-height:1.45;
+}
+:root[data-theme="dark"] .guided-course {
+  color:#f1f5f9;
+}
+:root[data-theme="dark"] .guided-course .course-hero,
+:root[data-theme="dark"] .guided-course .course-intro-card,
+:root[data-theme="dark"] .guided-course .lesson-teaching-card,
+:root[data-theme="dark"] .guided-course .lesson-exercise-card,
+:root[data-theme="dark"] .guided-course .course-unit-card {
+  color:#f1f5f9;
+  background:#1e293b;
+  border-color:#334155;
+}
+:root[data-theme="dark"] .guided-course h1,
+:root[data-theme="dark"] .guided-course h2,
+:root[data-theme="dark"] .guided-course h3,
+:root[data-theme="dark"] .guided-course .course-lesson-copy strong,
+:root[data-theme="dark"] .guided-course .teaching-word strong { color:#f1f5f9; }
+:root[data-theme="dark"] .guided-course p,
+:root[data-theme="dark"] .guided-course small { color:#cbd5e1; }
+:root[data-theme="dark"] .guided-course .grammar-pattern,
+:root[data-theme="dark"] .guided-course .course-brand-mark { color:#bfdbfe; background:#1e3a5f; border-color:#365775; }
+:root[data-theme="dark"] .guided-course .course-primary-button { color:#0f172a; background:#93c5fd; border-color:#93c5fd; }
+:root[data-theme="dark"] .guided-course .course-primary-button:hover { background:#bfdbfe; }
+:root[data-theme="dark"] .guided-course .course-secondary-button,
+:root[data-theme="dark"] .guided-course .course-review-button { color:#bfdbfe; background:#1e3a5f; border-color:#365775; }
+:root[data-theme="dark"] .guided-course .course-feedback.correct { color:#d1fae5; background:#064e3b; }
+:root[data-theme="dark"] .guided-course .course-feedback.correct p { color:#d1fae5; background:transparent; }
+:root[data-theme="dark"] .guided-course .lesson-hint,
+:root[data-theme="dark"] .guided-course .lesson-tip-box,
+:root[data-theme="dark"] .guided-course .repeat-practice-box { color:#e2e8f0; background:#26374b; border-color:#3c526b; }
+:root[data-theme="dark"] .guided-course input,
+:root[data-theme="dark"] .guided-course textarea { color:#f1f5f9; background:#0f172a; border-color:#475569; }
+:root[data-theme="dark"] .guided-course input::placeholder,
+:root[data-theme="dark"] .guided-course textarea::placeholder { color:#94a3b8; }
+
+@media (max-width:767px) {
+  .guided-course .lesson-action-row,
+  .guided-course .lesson-prep-actions { gap:10px; }
+  .guided-course .course-primary-button,
+  .guided-course .course-secondary-button { min-height:44px; }
+  .guided-course .understand-audio-row > div { display:grid; grid-template-columns:1fr 1fr; }
+  .guided-course .understand-audio-row > div button { min-width:0; padding-inline:8px; }
+}
