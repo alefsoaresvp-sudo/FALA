@@ -123,8 +123,6 @@ const navItems = [
   { id: 'write' as Page, label: 'Escrita', icon: PenLine },
   { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
-  { id: 'speak' as Page, label: 'Treino de fala', icon: AudioLines },
-  { id: 'diagnostic' as Page, label: 'Diagnóstico', icon: Target },
 ]
 const primaryNavIds: Page[] = ['home', 'learn', 'practice', 'lumi', 'progress']
 const primaryNavItems = navItems.filter(item => primaryNavIds.includes(item.id))
@@ -947,6 +945,7 @@ export default function App() {
     setChatInput('')
     setChatNotice('')
     setChatBusy(true)
+    setVoiceActivity('thinking')
     try {
       if (supabase && user) {
         const { data, error } = await supabase.functions.invoke('tutor', {
@@ -983,6 +982,7 @@ export default function App() {
       setChatNotice('Falha ao conectar à Lumi: ' + detail)
     } finally {
       setChatBusy(false)
+      setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
     }
   }
 
@@ -1650,6 +1650,11 @@ export default function App() {
             <section className="welcome-strip">
               <div>
                 <span className="eyebrow">SEU INGLÊS, NO SEU RITMO</span>
+                <div className="dashboard-welcome-meta">
+                  <span className="dashboard-level-chip">{profile.level === 'beginner' ? 'A0–A1' : profile.level === 'basic' ? 'A2' : profile.level === 'intermediate' ? 'B1–B2' : profile.level === 'advanced' ? 'C1 · estimado' : 'Nível a descobrir'}</span>
+                  <span>{todayPracticeMinutes}/{profile.minutes} min da meta diária</span>
+                </div>
+                <div className="dashboard-welcome-progress"><i style={{ width: dailyGoalProgress + '%' }}/></div>
                 <h1>{profile.name ? 'Olá, ' + greeting(profile.name) + '.' : 'Inglês que acompanha sua vida.'}<br/><em>Aprenda para usar.</em></h1>
                 <p>Um curso guiado que ensina desde a primeira palavra, explica cada frase e faz você praticar até conseguir usar o inglês.</p>
                 <div className="welcome-actions">
@@ -1889,9 +1894,9 @@ export default function App() {
             </div>}
             <div className="section-heading"><div><span className="eyebrow">DRILLS RÁPIDOS</span><h2>Treine uma habilidade.</h2></div></div>
             <div className="dashboard-practice-grid">
-              <ActivityCard title="Escuta ativa" benefit="Identifique palavras e estruturas sem olhar a tradução." progress="Listening · 5 min" cta="Treinar escuta" icon={<Headphones size={19}/>} onClick={() => setPage('learn')} />
-              <ActivityCard title="Resposta oral" benefit="Produza frases sem ler um modelo pronto." progress="Speaking · 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
-              <ActivityCard title="Transformar frases" benefit="Reescreva uma ideia usando outra estrutura." progress="Grammar · 5 min" cta="Praticar gramática" icon={<BookOpen size={19}/>} onClick={() => setPage('learn')} />
+              <ActivityCard title="Escuta ativa" benefit="Identifique estruturas sem ver a tradução." progress="Listening · aprox. 5 min" cta="Treinar escuta" icon={<Headphones size={19}/>} onClick={() => setPage('learn')} />
+              <ActivityCard title="Resposta oral" benefit="Responda sem ler e reveja sua transcrição." progress="Speaking · aprox. 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
+              <ActivityCard title="Transformar frases" benefit="Pratique gramática com construção ativa." progress="Grammar · aprox. 5 min" cta="Praticar estrutura" icon={<BookOpen size={19}/>} onClick={() => setPage('learn')} />
             </div>
           </section>}
 
@@ -2032,7 +2037,7 @@ export default function App() {
             <article className="profile-settings-card"><div><span className="eyebrow">APARÊNCIA</span><h3>Escolha seu tema</h3><p>O tema fica salvo neste aparelho.</p></div><div className="theme-choice-buttons"><button className={theme==='light'?'active':''} onClick={() => setTheme('light')}><Sun size={17}/> Claro</button><button className={theme==='dark'?'active':''} onClick={() => setTheme('dark')}><Moon size={17}/> Escuro</button></div></article>
           </section>}
           {page === 'progress' && <section className="progress-layout">
-            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
+            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}>Fazer diagnóstico prático <Target size={15}/></button></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
             <section className="skills-progress-panel">
               <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
