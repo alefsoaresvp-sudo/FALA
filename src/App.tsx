@@ -288,11 +288,15 @@ export default function App() {
   const studyTimer = useActiveStudyTimer(['learn', 'practice', 'lumi', 'speak', 'write', 'tracks', 'music', 'vocabulary'].includes(page))
   const dueWords = useMemo(() => {
     const now = Date.now()
+    const sharedQueueTerms = new Set(learningReviewItems
+      .filter(item => item.item_type === 'vocabulary' && item.status === 'active')
+      .map(item => (item.expected_answer || '').toLowerCase()))
     return words.filter(term => {
+      if (sharedQueueTerms.has(term.toLowerCase())) return false
       const nextReviewAt = vocabSchedule[term]?.nextReviewAt
       return !nextReviewAt || new Date(nextReviewAt).getTime() <= now
     })
-  }, [words, vocabSchedule])
+  }, [words, vocabSchedule, learningReviewItems])
   const reviewQueue = dueWords.length ? dueWords : words
   const activeReviewTerm = reviewQueue.length ? reviewQueue[reviewIndex % reviewQueue.length] : ''
   const learningEvidence = useMemo(() => {
@@ -747,6 +751,15 @@ export default function App() {
     if (supabase && user && !activeReviewItem.id.startsWith('local-')) {
       const { error } = await supabase.from('learning_review_items').update(updatedFields).eq('id', activeReviewItem.id).eq('user_id', user.id)
       if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
+      if (activeReviewItem.item_type === 'vocabulary' && activeReviewItem.expected_answer) {
+        const { error: vocabularyError } = await supabase.from('vocabulary_items').update({
+          next_review_at: nextReviewAt, review_interval_days: nextInterval,
+        }).eq('user_id', user.id).eq('term', activeReviewItem.expected_answer)
+        if (vocabularyError) console.error('Vocabulary schedule sync failed', vocabularyError)
+      }
+    }
+    if (activeReviewItem.item_type === 'vocabulary' && activeReviewItem.expected_answer) {
+      setVocabSchedule(current => ({ ...current, [activeReviewItem.expected_answer]: { nextReviewAt, intervalDays: nextInterval } }))
     }
     await recordSession('vocabulary', studyTimer.finish(), grade === 'again' ? 0 : grade === 'good' ? 85 : 100, {
       source: 'shared-srs', item_type: activeReviewItem.item_type, interval_days: nextInterval, grade,
@@ -763,6 +776,19 @@ export default function App() {
     const detail = { meaning: explanation.slice(0, 300), example: '' }
     setWords(current => current.some(word => word.toLowerCase() === cleanTerm.toLowerCase()) ? current : [cleanTerm, ...current].slice(0, 100))
     setWordDetails(current => ({ ...current, [cleanTerm]: detail }))
+    if (!supabase || !user) {
+      const localItem: LearningReviewItem = {
+        id: 'local-lumi-' + Date.now(), item_type: 'phrase', prompt: 'Use a expressão: ' + cleanTerm,
+        expected_answer: cleanTerm, explanation: detail.meaning, context: 'Expressão salva da conversa com a Lumi',
+        skill: 'vocabulary', interval_days: 1, repetition_count: 0, lapse_count: 0,
+        next_review_at: nextReviewAt, status: 'active', metadata: { source: 'lumi-chat-save' },
+      }
+      setLearningReviewItems(current => {
+        const updated = [localItem, ...current]
+        try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+        return updated
+      })
+    }
     if (supabase && user) {
       const vocab = await supabase.from('vocabulary_items').upsert({
         user_id: user.id, term: cleanTerm, meaning: detail.meaning, example_sentence: null,
