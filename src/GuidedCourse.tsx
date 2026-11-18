@@ -1130,12 +1130,18 @@ function previousLocalDateKey() {
 }
 function normalize(value: string) {
   return value.toLowerCase().normalize('NFKD').replace(/[’‘]/g, "'")
-    .replace(/\b(i'm)\b/g, 'i am').replace(/\b(you're)\b/g, 'you are')
-    .replace(/\b(he's)\b/g, 'he is').replace(/\b(she's)\b/g, 'she is')
-    .replace(/\b(we're)\b/g, 'we are').replace(/\b(they're)\b/g, 'they are')
-    .replace(/\b(isn't)\b/g, 'is not').replace(/\b(aren't)\b/g, 'are not')
-    .replace(/\b(don't)\b/g, 'do not').replace(/\b(doesn't)\b/g, 'does not')
-    .replace(/\b(didn't)\b/g, 'did not').replace(/\b(can't)\b/g, 'cannot')
+    .replace(/\b(i'm|im)\b/g, 'i am').replace(/\b(you're|youre)\b/g, 'you are')
+    .replace(/\b(he's|hes)\b/g, 'he is').replace(/\b(she's|shes)\b/g, 'she is')
+    .replace(/\b(we're|were)\b/g, 'we are').replace(/\b(they're|theyre)\b/g, 'they are')
+    .replace(/\b(i've|ive)\b/g, 'i have').replace(/\b(you've|youve)\b/g, 'you have')
+    .replace(/\b(we've|weve)\b/g, 'we have').replace(/\b(they've|theyve)\b/g, 'they have')
+    .replace(/\b(it's|its)\b/g, 'it is').replace(/\b(that's|thats)\b/g, 'that is')
+    .replace(/\b(there's|theres)\b/g, 'there is').replace(/\b(what's|whats)\b/g, 'what is')
+    .replace(/\b(isn't|isnt)\b/g, 'is not').replace(/\b(aren't|arent)\b/g, 'are not')
+    .replace(/\b(don't|dont)\b/g, 'do not').replace(/\b(doesn't|doesnt)\b/g, 'does not')
+    .replace(/\b(didn't|didnt)\b/g, 'did not').replace(/\b(can't|cant)\b/g, 'cannot')
+    .replace(/\b(won't|wont)\b/g, 'will not').replace(/\b(shouldn't|shouldnt)\b/g, 'should not')
+    .replace(/\b(wouldn't|wouldnt)\b/g, 'would not').replace(/\b(couldn't|couldnt)\b/g, 'could not')
     .replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim()
 }
 function editDistance(left: string, right: string) {
@@ -1154,15 +1160,26 @@ function editDistance(left: string, right: string) {
 function speechMatches(transcript: string, expected: string) {
   const heard = normalize(transcript).split(' ').filter(Boolean)
   const target = normalize(expected).split(' ').filter(Boolean)
+  if (!heard.length || !target.length) return false
   if (heard.join(' ') === target.join(' ')) return true
-  if (!heard.length || !target.length || heard.length !== target.length) return false
-  let mismatches = 0
-  for (let index = 0; index < target.length; index += 1) {
-    if (heard[index] === target[index]) continue
-    if (target[index].length >= 5 && editDistance(heard[index], target[index]) <= 1) continue
-    mismatches += 1
+
+  // Word-level edit distance tolerates one omitted/extra token from browser ASR.
+  const row = Array.from({ length: target.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= heard.length; i += 1) {
+    let diagonal = row[0]
+    row[0] = i
+    for (let j = 1; j <= target.length; j += 1) {
+      const previous = row[j]
+      const same = heard[i - 1] === target[j - 1]
+      const nearPhonetic = Math.max(heard[i - 1].length, target[j - 1].length) >= 5
+        && editDistance(heard[i - 1], target[j - 1]) <= 1
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diagonal + (same || nearPhonetic ? 0 : 1))
+      diagonal = previous
+    }
   }
-  return mismatches <= 1
+  const distance = row[target.length]
+  const similarity = 1 - distance / Math.max(heard.length, target.length)
+  return distance <= 1 || (Math.max(heard.length, target.length) >= 7 && similarity >= 0.88)
 }
 function speakEnglish(text: string, accent: 'us' | 'uk', rate = 1) {
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false
@@ -1196,6 +1213,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [voiceListening, setVoiceListening] = useState(false)
   const recognitionRef = useRef<CourseSpeechInstance | null>(null)
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
+  const [lumiDrawerOpen, setLumiDrawerOpen] = useState(false)
+  const [lumiQuestionDraft, setLumiQuestionDraft] = useState('')
 
   const allLessons = useMemo(() => units.flatMap(unit => unit.lessons), [])
   const currentLesson = allLessons.find(lesson => lesson.id === activeLessonId) ?? null
@@ -1229,6 +1248,13 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     if ('speechSynthesis' in window) window.speechSynthesis.cancel()
   }, [])
 
+  const openLumiDrawer = () => {
+    if (!currentLesson) return
+    setLumiQuestionDraft(currentExercise
+      ? 'Estou na aula "' + currentLesson.title + '". A questão é: ' + currentExercise.prompt + ' Estrutura esperada: ' + currentExercise.answer + '. Explique o raciocínio sem apenas revelar a resposta.'
+      : 'Estou na aula "' + currentLesson.title + '". Explique a estrutura: ' + currentLesson.pattern)
+    setLumiDrawerOpen(true)
+  }
   const resetExercise = () => {
     recognitionRef.current?.stop()
     recognitionRef.current = null
@@ -1638,6 +1664,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
           <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
           <span>ETAPA 3/5 · EXERCÍCIO {step + 1}/{activeExercises.length}</span>
+          <button className="course-lumi-context-button" onClick={openLumiDrawer}><MessageCircle size={15}/> Perguntar à Lumi</button>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">PRATIQUE · {currentLesson.subtitle.toUpperCase()}</span>
@@ -1670,13 +1697,21 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             {!checked && <small>Resposta esperada: {currentExercise.answer}</small>}
           </div>}
           <div className="lesson-action-row">
-            <button className="course-secondary-button" onClick={() => onAskTutor('Estou na aula "' + currentLesson.title + '". Me explique de outra forma: ' + currentExercise.prompt + ' Minha dúvida é sobre: ' + currentExercise.answer)}><CircleHelp size={16}/> Tirar dúvida com a Lumi</button>
+            <button className="course-secondary-button" onClick={openLumiDrawer}><CircleHelp size={16}/> Tirar dúvida com a Lumi</button>
             {checked === true ? <button className="course-primary-button" onClick={nextStep}>{step === activeExercises.length - 1 ? 'Ir para etapa oral' : 'Continuar'} <ArrowRight size={16}/></button>
               : checked === false ? <button className="course-primary-button" onClick={retry}><RotateCcw size={16}/> Tentar novamente</button>
                 : <button className="course-primary-button" disabled={!canCheck} onClick={verify}>Conferir resposta <Check size={16}/></button>}
           </div>
         </article>
-        <p className="lesson-footnote">Dica: não decore só a resposta. Entenda a ordem das palavras; depois tente criar uma frase parecida com algo da sua rotina.</p>
+        {lumiDrawerOpen && <div className="course-lumi-drawer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setLumiDrawerOpen(false) }}>
+          <aside className="course-lumi-drawer" role="dialog" aria-modal="true" aria-labelledby="course-lumi-drawer-title">
+            <div className="course-lumi-drawer-heading"><div><span className="course-eyebrow">TUTORA CONTEXTUAL</span><h2 id="course-lumi-drawer-title">Pergunte à Lumi</h2></div><button className="course-icon-button" onClick={() => setLumiDrawerOpen(false)} aria-label="Fechar ajuda da Lumi"><X size={18}/></button></div>
+            <p>A Lumi receberá o contexto desta aula e da questão atual para explicar o ponto de dúvida.</p>
+            <textarea value={lumiQuestionDraft} onChange={event => setLumiQuestionDraft(event.target.value)} rows={5} aria-label="Dúvida para a Lumi" />
+            <div className="course-lumi-drawer-actions"><button className="course-secondary-button" onClick={() => setLumiDrawerOpen(false)}>Continuar aula</button><button className="course-primary-button" disabled={!lumiQuestionDraft.trim()} onClick={() => { const question = lumiQuestionDraft.trim(); setLumiDrawerOpen(false); onAskTutor(question) }}>Enviar à Lumi <ArrowRight size={15}/></button></div>
+          </aside>
+        </div>}
+        <p className="lesson-footnote">Atalhos: Enter confirma uma resposta; R ou Espaço repete o áudio. Dica: entenda a ordem das palavras e crie uma frase parecida com algo da sua rotina.</p>
       </section>
     )
   }
