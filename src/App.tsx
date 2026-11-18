@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
@@ -7,10 +7,12 @@ import {
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
-import GuidedCourse from './GuidedCourse'
+import GuidedCourse, { getNextLessonRecommendation, type SavedProgress } from './GuidedCourse'
+import ActivityCard from './components/ActivityCard'
+import { useActiveStudyTimer } from './hooks/useActiveStudyTimer'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
+type Page = 'home' | 'learn' | 'practice' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -37,6 +39,21 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
+type LearningReviewItem = {
+  id: string
+  item_type: 'vocabulary' | 'grammar' | 'phrase' | 'error'
+  prompt: string
+  expected_answer: string
+  explanation: string
+  context: string
+  skill: string
+  interval_days: number
+  repetition_count: number
+  lapse_count: number
+  next_review_at: string
+  status: 'active' | 'mastered' | 'archived'
+  metadata: Record<string, unknown>
+}
 const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
 const SESSIONS_KEY = 'fala-local-sessions-v1'
@@ -97,17 +114,18 @@ function demoAnswer(message: string, profile: Profile) {
 const navItems = [
   { id: 'home' as Page, label: 'Início', icon: Home },
   { id: 'learn' as Page, label: 'Aprender', icon: BookOpen },
+  { id: 'practice' as Page, label: 'Praticar', icon: RotateCcw },
   { id: 'lumi' as Page, label: 'Lumi IA', icon: MessageCircle },
-  { id: 'speak' as Page, label: 'Falar', icon: AudioLines },
-  { id: 'write' as Page, label: 'Escrever', icon: PenLine },
-  { id: 'tracks' as Page, label: 'Trilhas', icon: Map },
-  { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
-  { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
-  { id: 'diagnostic' as Page, label: 'Descobrir meu nível', icon: Target },
+  { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
+  { id: 'tracks' as Page, label: 'Trilhas', icon: Map },
+  { id: 'write' as Page, label: 'Escrita', icon: PenLine },
+  { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
+  { id: 'speak' as Page, label: 'Treino de fala', icon: AudioLines },
+  { id: 'diagnostic' as Page, label: 'Diagnóstico', icon: Target },
 ]
-const primaryNavIds: Page[] = ['home', 'learn', 'lumi', 'speak', 'progress']
+const primaryNavIds: Page[] = ['home', 'learn', 'practice', 'lumi', 'progress']
 const primaryNavItems = navItems.filter(item => primaryNavIds.includes(item.id))
 const toolNavItems = navItems.filter(item => !primaryNavIds.includes(item.id))
 
@@ -226,6 +244,13 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
   const [recentAttempts, setRecentAttempts] = useState<ActivityAttempt[]>([])
   const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
+  const [courseProgress, setCourseProgress] = useState<SavedProgress | null>(() => readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+  const [courseProgressLoaded, setCourseProgressLoaded] = useState(false)
+  const [learningReviewItems, setLearningReviewItems] = useState<LearningReviewItem[]>([])
+  const [reviewIndex, setReviewIndex] = useState(0)
+  const [reviewRevealed, setReviewRevealed] = useState(false)
+  const [lumiMode, setLumiMode] = useState<'conversation' | 'guided' | 'roleplay'>('conversation')
+  const [voiceActivity, setVoiceActivity] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -254,6 +279,12 @@ export default function App() {
     return Math.round(seconds / 60)
   }, [sessions])
   const dailyGoalProgress = Math.min(100, Math.round(todayPracticeMinutes / Math.max(1, profile.minutes) * 100))
+  const nextLesson = useMemo(() => getNextLessonRecommendation(courseProgress), [courseProgress])
+  const dueReviewItems = useMemo(() => learningReviewItems
+    .filter(item => item.status === 'active' && new Date(item.next_review_at).getTime() <= Date.now())
+    .sort((a, b) => new Date(a.next_review_at).getTime() - new Date(b.next_review_at).getTime()), [learningReviewItems])
+  const activeReviewItem = dueReviewItems.length ? dueReviewItems[reviewIndex % dueReviewItems.length] : null
+  const studyTimer = useActiveStudyTimer(['learn', 'practice', 'lumi', 'speak', 'write', 'tracks', 'music', 'vocabulary'].includes(page))
   const dueWords = useMemo(() => {
     const now = Date.now()
     return words.filter(term => {
@@ -284,7 +315,7 @@ export default function App() {
     return { skillScores, recentMistakes, previousInsights }
   }, [recentAttempts, learnerInsights])
   const titleByPage: Record<Page, string> = {
-    home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
+    home: 'Visão geral', learn: 'Curso guiado', practice: 'Revisões e drills', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', diagnostic: 'Diagnóstico de nível', profile: 'Meu perfil',
   }
 
