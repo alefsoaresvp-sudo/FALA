@@ -1265,14 +1265,59 @@ export default function App() {
     if (!term) return
     const updated = [term, ...words.filter(word => word.toLowerCase() !== term.toLowerCase())].slice(0, 100)
     const nextReviewAt = new Date().toISOString()
+    const meaning = wordDetails[term]?.meaning || ''
+    const example = wordDetails[term]?.example || ''
     setWords(updated)
     setVocabSchedule(current => ({ ...current, [term]: { nextReviewAt, intervalDays: 1 } }))
     setNewWord('')
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
-    if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '', example_sentence: wordDetails[term]?.example || null, next_review_at: nextReviewAt, review_interval_days: 1 }, { onConflict: 'user_id,term' })
-      if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
+    const localItem: LearningReviewItem = {
+      id: 'local-vocab-' + term.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      item_type: 'vocabulary',
+      prompt: 'Recupere o significado e use: ' + term,
+      expected_answer: term,
+      explanation: meaning,
+      context: example || 'Expressão salva no vocabulário',
+      skill: 'vocabulary',
+      interval_days: 1,
+      repetition_count: 0,
+      lapse_count: 0,
+      next_review_at: nextReviewAt,
+      status: 'active',
+      metadata: { term, example_sentence: example, source: 'vocabulary-library' },
     }
+    if (supabase && user) {
+      const { error } = await supabase.from('vocabulary_items').upsert({
+        user_id: user.id, term, meaning, example_sentence: example || null,
+        next_review_at: nextReviewAt, review_interval_days: 1,
+      }, { onConflict: 'user_id,term' })
+      if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
+      const existing = await supabase.from('learning_review_items').select('id')
+        .eq('user_id', user.id).eq('item_type', 'vocabulary').eq('expected_answer', term).eq('status', 'active').limit(1).maybeSingle()
+      if (existing.data?.id) {
+        const updatedItem = await supabase.from('learning_review_items').update({
+          prompt: localItem.prompt, explanation: meaning, context: example || 'Expressão salva no vocabulário',
+          interval_days: 1, repetition_count: 0, lapse_count: 0, next_review_at: nextReviewAt, metadata: localItem.metadata,
+        }).eq('id', existing.data.id).select('*').single()
+        if (!updatedItem.error && updatedItem.data) {
+          setLearningReviewItems(current => [updatedItem.data as LearningReviewItem, ...current.filter(item => item.id !== existing.data.id)])
+        }
+      } else {
+        const savedItem = await supabase.from('learning_review_items').insert({
+          user_id: user.id, item_type: 'vocabulary', prompt: localItem.prompt, expected_answer: term,
+          explanation: meaning, context: localItem.context, skill: 'vocabulary',
+          interval_days: 1, next_review_at: nextReviewAt, metadata: localItem.metadata,
+        }).select('*').single()
+        if (!savedItem.error && savedItem.data) setLearningReviewItems(current => [savedItem.data as LearningReviewItem, ...current])
+      }
+    } else {
+      setLearningReviewItems(current => {
+        const next = [localItem, ...current.filter(item => item.expected_answer.toLowerCase() !== term.toLowerCase())]
+        try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(next)) } catch { /* local fallback */ }
+        return next
+      })
+    }
+    setToast('Expressão salva e adicionada à fila de revisão espaçada.')
   }
 
   const deleteWord = async (term: string) => {
@@ -1289,10 +1334,11 @@ export default function App() {
   const gradeVocabularyReview = async (grade: 'again' | 'good' | 'easy') => {
     const term = activeReviewTerm
     if (!term) return
+    const schedule = [1, 3, 7, 15, 30]
     const currentInterval = Math.max(1, vocabSchedule[term]?.intervalDays || 1)
-    const nextInterval = grade === 'again' ? 1 : grade === 'good'
-      ? Math.min(365, Math.max(2, currentInterval * 2))
-      : Math.min(365, Math.max(4, currentInterval * 3))
+    const currentIndex = Math.max(0, schedule.indexOf(currentInterval))
+    const nextIndex = grade === 'again' ? 0 : Math.min(schedule.length - 1, currentIndex + (grade === 'easy' ? 2 : 1))
+    const nextInterval = schedule[nextIndex]
     const nextDate = new Date()
     nextDate.setDate(nextDate.getDate() + nextInterval)
     const nextReviewAt = nextDate.toISOString()
