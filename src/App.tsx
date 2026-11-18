@@ -1180,7 +1180,7 @@ export default function App() {
       const name = error instanceof DOMException ? error.name : ''
       setVoiceMessage(name === 'NotAllowedError'
         ? 'O acesso ao microfone foi negado. Libere a permissão do microfone no navegador e tente novamente.'
-        : 'Não foi possível iniciar a Lumi por voz: ' + await functionErrorDetail(error))
+        : 'Não foi possível iniciar a voz ao vivo: ' + await functionErrorDetail(error) + ' Use “Gravar mensagem para a Lumi” abaixo como alternativa por turnos.')
     }
   }
 
@@ -2312,8 +2312,8 @@ export default function App() {
                   {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
                 </button>
                 <small>{user ? 'Voz ao vivo ou mensagem gravada; o arquivo é descartado após a transcrição.' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
-                <button className={lumiRecording ? 'button voice-stop' : 'button ghost'} onClick={() => lumiRecording ? stopLumiRecording() : void startLumiRecording()} disabled={!user || voiceStatus === 'connecting' || voiceStatus === 'connected' || (!lumiRecording && chatBusy)}>
-                  {lumiRecording ? <><X size={16}/> Parar gravação</> : <><Mic size={16}/> Gravar mensagem para a Lumi</>}
+                <button className={lumiRecording ? 'button voice-stop' : 'button ghost'} onClick={() => lumiRecording ? stopLumiRecording() : void startLumiRecording()} disabled={voiceStatus === 'connecting' || voiceStatus === 'connected' || (!lumiRecording && chatBusy)}>
+                  {lumiRecording ? <><X size={16}/> Parar gravação</> : <><Mic size={16}/> {user ? 'Gravar mensagem para a Lumi' : 'Entrar para gravar mensagem'}</>}
                 </button>
                 {lumiRecordingNotice && <small className="lumi-recording-notice">{lumiRecordingNotice}</small>}
               </div>
