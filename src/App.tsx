@@ -298,6 +298,9 @@ export default function App() {
     return Math.round(seconds / 60)
   }, [sessions])
   const dailyGoalProgress = Math.min(100, Math.round(todayPracticeMinutes / Math.max(1, profile.minutes) * 100))
+  const diagnosticWritingWordCount = diagnosticWritingSample.trim() ? diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length : 0
+  const diagnosticWritingSentenceCount = diagnosticWritingSample.split(/[.!?]+/).map(sentence => sentence.trim()).filter(Boolean).length
+  const diagnosticSpeechWordCount = diagnosticSpeechSample.trim() ? diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length : 0
   const nextLesson = useMemo(() => getNextLessonRecommendation(courseProgress), [courseProgress])
   const dueReviewItems = useMemo(() => learningReviewItems
     .filter(item => item.status === 'active' && new Date(item.next_review_at).getTime() <= Date.now())
