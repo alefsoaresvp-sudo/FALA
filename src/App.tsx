@@ -246,6 +246,7 @@ export default function App() {
   const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
   const [courseProgress, setCourseProgress] = useState<SavedProgress | null>(() => readLocal<SavedProgress | null>('fala-course-progress-v1', null))
   const [courseProgressLoaded, setCourseProgressLoaded] = useState(false)
+  const [nextLessonStartId, setNextLessonStartId] = useState<string | null>(null)
   const [learningReviewItems, setLearningReviewItems] = useState<LearningReviewItem[]>([])
   const [reviewIndex, setReviewIndex] = useState(0)
   const [reviewRevealed, setReviewRevealed] = useState(false)
@@ -1608,7 +1609,7 @@ export default function App() {
                 <h1>{profile.name ? 'Olá, ' + greeting(profile.name) + '.' : 'Inglês que acompanha sua vida.'}<br/><em>Aprenda para usar.</em></h1>
                 <p>Um curso guiado que ensina desde a primeira palavra, explica cada frase e faz você praticar até conseguir usar o inglês.</p>
                 <div className="welcome-actions">
-                  <button className="button primary" onClick={() => setPage('learn')}>Começar a estudar <ArrowRight size={16}/></button>
+                  <button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Continuar aprendendo <ArrowRight size={16}/></button>
                   <button className="button ghost" onClick={() => setPage('lumi')}><MessageCircle size={16}/> Conversar com a Lumi</button>
                 </div>
               </div>
@@ -1633,46 +1634,65 @@ export default function App() {
               <article className="metric-card"><span className="metric-icon lilac"><Trophy size={18}/></span><div><small>APROVEITAMENTO</small><strong>{averageScore === null ? '—' : averageScore + '%'}</strong><span>{averageScore === null ? 'ainda sem dados suficientes' : 'média das tentativas'}</span></div></article>
             </div>
 
-            <section className="dashboard-command-grid" aria-label="Plano de aprendizagem de hoje">
-              <article className="dashboard-next-card">
-                <div className="dashboard-next-topline">
-                  <span className="dashboard-live-label"><i/> SUA PRÓXIMA AÇÃO</span>
-                  <span className="dashboard-level-chip">{profile.level === 'unsure' ? 'NÍVEL A DESCOBRIR' : profile.level.toUpperCase()}</span>
+            <section className="dashboard-priority-block">
+              <div className="section-heading">
+                <div><span className="eyebrow">SEU PRÓXIMO PASSO</span><h2>Uma prioridade de cada vez.</h2></div>
+                <span className="muted-caption">{todayPracticeMinutes}/{profile.minutes} min hoje</span>
+              </div>
+              <div className="dashboard-activity-grid">
+                <ActivityCard
+                  title={nextLesson?.title || 'Trilha concluída'}
+                  benefit={nextLesson ? nextLesson.objective : 'Você concluiu todas as aulas atualmente desbloqueadas.'}
+                  progress={nextLesson ? `${nextLesson.estimatedMinutes} min · ${nextLesson.skills.join(' / ')}` : 'Parabéns pelo progresso'}
+                  cta={nextLesson ? 'Continuar aprendendo' : 'Revisar curso'}
+                  icon={<BookOpen size={19}/>}
+                  onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}
+                  tone="primary"
+                />
+                <ActivityCard
+                  title="Revisão inteligente"
+                  benefit={dueReviewItems.length + dueWords.length ? 'Recupere estruturas, frases e palavras antes de esquecer.' : 'Sua fila está em dia. Salve expressões e erros para revisar depois.'}
+                  progress={`${dueReviewItems.length + dueWords.length} itens pendentes`}
+                  cta="Abrir revisões"
+                  icon={<RotateCcw size={19}/>}
+                  onClick={() => setPage('practice')}
+                  tone="success"
+                />
+                <ActivityCard
+                  title="Missão do dia"
+                  benefit={courseProgress?.streakDays ? 'Mantenha sua sequência com uma sessão focada hoje.' : 'Comece uma sequência curta de prática diária.'}
+                  progress={`${courseProgress?.streakDays ?? 0} dias de sequência · meta ${dailyGoalProgress}%`}
+                  cta="Fazer missão"
+                  icon={<Flame size={19}/>}
+                  onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}
+                  tone="success"
+                />
+              </div>
+              <section className="dashboard-skills-snapshot">
+                <div className="section-heading"><div><span className="eyebrow">EVOLUÇÃO</span><h2>Suas habilidades</h2></div><button className="text-button" onClick={() => setPage('progress')}>Ver progresso <ArrowRight size={14}/></button></div>
+                <div className="dashboard-skill-grid">
+                  {[
+                    ['listening', 'Escuta'], ['speaking', 'Fala'], ['reading', 'Leitura'],
+                    ['writing', 'Escrita'], ['grammar', 'Gramática'], ['vocabulary', 'Vocabulário'],
+                  ].map(([skill, label]) => {
+                    const score = learningEvidence.skillScores[skill]
+                    return <div className="dashboard-skill-item" key={skill}>
+                      <div><strong>{label}</strong><span>{typeof score === 'number' ? score + '%' : 'Sem dados'}</span></div>
+                      <div className="dashboard-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
+                    </div>
+                  })}
                 </div>
-                <div className="dashboard-next-copy">
-                  <span className="eyebrow">{dueWords.length ? 'REVISÃO INTELIGENTE' : 'CURSO PRINCIPAL'}</span>
-                  <h2>{dueWords.length ? 'Vamos recuperar o que você aprendeu.' : 'Continue de onde você parou.'}</h2>
-                  <p>{dueWords.length ? dueWords.length + ' expressões estão prontas para revisão. Tente lembrar antes de revelar a resposta.' : 'Uma aula curta agora vale mais do que esperar pelo momento perfeito. Aprenda, pratique e use uma nova estrutura em inglês.'}</p>
-                </div>
-                <div className="dashboard-next-footer">
-                  <div className="dashboard-next-meta"><span><Clock3 size={14}/>{profile.minutes} min por dia</span><span><BookOpen size={14}/>Aulas guiadas</span></div>
-                  <button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button>
-                </div>
-              </article>
-              <aside className="dashboard-side-stack">
-                <article className="dashboard-goal-card">
-                  <div className="dashboard-card-heading"><span className="dashboard-icon goal"><Target size={17}/></span><span>META DE HOJE</span></div>
-                  <strong>{todayPracticeMinutes} <small>/ {profile.minutes} min</small></strong>
-                  <div className="dashboard-progress-track"><i style={{ width: dailyGoalProgress + '%' }}/></div>
-                  <p>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos para sua meta.'}</p>
-                </article>
-                <article className="dashboard-review-card">
-                  <div className="dashboard-card-heading"><span className="dashboard-icon review"><Bookmark size={17}/></span><span>REVISÃO PENDENTE</span></div>
-                  <strong>{dueWords.length ? dueWords.length + ' expressões' : 'Tudo em dia'}</strong>
-                  <p>{dueWords.length ? 'Recupere o significado sem olhar a resposta.' : 'Suas palavras salvas não têm revisão vencida.'}</p>
-                  <button className="dashboard-text-action" onClick={() => dueWords.length ? startVocabularyReview() : setPage('vocabulary')}>{dueWords.length ? 'Começar revisão' : 'Abrir vocabulário'} <ChevronRight size={15}/></button>
-                </article>
-              </aside>
+              </section>
             </section>
 
             <section className="dashboard-quick-practice">
-              <div className="section-heading"><div><span className="eyebrow">ESCOLHA UMA HABILIDADE</span><h2>Pratique do seu jeito</h2></div><span className="muted-caption">Atalhos para treinar</span></div>
+              <div className="section-heading"><div><span className="eyebrow">FERRAMENTAS DE PRÁTICA</span><h2>Escolha uma ferramenta.</h2></div></div>
               <div className="dashboard-practice-grid">
-                <button className="dashboard-practice-card" onClick={() => setPage('speak')}><span className="dashboard-practice-icon speaking"><Mic size={19}/></span><span><strong>Falar</strong><small>Treine sua resposta em voz alta</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('write')}><span className="dashboard-practice-icon writing"><PenLine size={19}/></span><span><strong>Escrever</strong><small>Transforme ideias em frases</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('lumi')}><span className="dashboard-practice-icon conversation"><MessageCircle size={19}/></span><span><strong>Conversar com a Lumi</strong><small>Pratique um diálogo no seu nível</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('tracks')}><span className="dashboard-practice-icon missions"><Map size={19}/></span><span><strong>Situações reais</strong><small>Resolva uma missão em inglês</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}><span className="dashboard-practice-icon diagnosis"><Target size={19}/></span><span><strong>Descobrir meu nível</strong><small>Faça uma avaliação inicial rápida</small></span><ArrowRight size={16}/></button>
+                <ActivityCard title="Lumi IA" benefit="Treine uma conversa com correções contextuais." progress="Conversa livre · 5–10 min" cta="Conversar" icon={<MessageCircle size={19}/>} onClick={() => setPage('lumi')} />
+                <ActivityCard title="Trilhas reais" benefit="Pratique inglês em situações do cotidiano." progress={`${learningTracks.length} trilhas · prática guiada`} cta="Explorar trilhas" icon={<Map size={19}/>} onClick={() => setPage('tracks')} />
+                <ActivityCard title="Vocabulário" benefit="Guarde expressões que deseja usar naturalmente." progress={`${words.length} expressões salvas`} cta="Abrir caderno" icon={<Bookmark size={19}/>} onClick={() => setPage('vocabulary')} />
+                <ActivityCard title="Escrita" benefit="Construa respostas e melhore a clareza das frases." progress="Writing Lab · 5–10 min" cta="Praticar escrita" icon={<PenLine size={19}/>} onClick={() => setPage('write')} />
+                <ActivityCard title="Music Lab" benefit="Aprenda inglês com trechos que você escolheu." progress="Listening · 5–10 min" cta="Abrir laboratório" icon={<Music2 size={19}/>} onClick={() => setPage('music')} />
               </div>
             </section>
 
@@ -1700,6 +1720,8 @@ export default function App() {
             initialProgress={courseProgress}
             onProgressChange={handleCourseProgressChange}
             onExerciseAttempt={handleCourseExerciseAttempt}
+            autoStartLessonId={nextLessonStartId}
+            onAutoStartComplete={() => setNextLessonStartId(null)}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
             onLessonComplete={(score, lessonId) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId })}
           />}
