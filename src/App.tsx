@@ -51,6 +51,7 @@ type LearningReviewItem = {
   repetition_count: number
   lapse_count: number
   next_review_at: string
+  last_reviewed_at?: string | null
   status: 'active' | 'mastered' | 'archived'
   metadata: Record<string, unknown>
 }
