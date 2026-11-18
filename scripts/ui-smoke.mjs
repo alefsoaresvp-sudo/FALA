@@ -70,6 +70,8 @@ try {
       getComputedStyle(active).outlineWidth === '3px'
   })
   assert.ok(tourKeyboardFocus, 'The initial tour must receive keyboard focus and show a visible focus indicator.')
+  await page.keyboard.press('Shift+Tab')
+  assert.ok(await page.getByRole('button', { name: 'Pular tour' }).evaluate(el => el === document.activeElement), 'Shift+Tab must remain trapped inside the app tour.')
   await page.getByRole('button', { name: 'Pular tour' }).click()
   await page.locator('.sidebar .brand-logo-light').waitFor({ state: 'visible' })
   const logoLoaded = await page.locator('.sidebar .brand-logo-light').evaluate(img => img.complete && img.naturalWidth > 0)
@@ -112,6 +114,10 @@ try {
   await page.locator('.sidebar').getByRole('button', { name: 'Aprender', exact: true }).click()
   assert.match(await page.locator('.topbar-title').innerText(), /Curso guiado/)
   await page.locator('.course-intro-card').waitFor({ state: 'visible' })
+  const introMethod = await page.locator('.course-intro-steps').innerText()
+  for (const phase of ['Aprender', 'Entender', 'Praticar', 'Falar', 'Corrigir', 'Revisar', 'Aplicar']) {
+    assert.match(introMethod, new RegExp(phase), 'The lesson introduction must present all seven learning stages.')
+  }
   await page.getByRole('button', { name: 'Começar minha primeira aula' }).click()
   await page.locator('.course-hero').waitFor({ state: 'visible' })
   await page.locator('.course-lesson-row:not(.locked)').first().click()

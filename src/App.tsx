@@ -359,6 +359,19 @@ export default function App() {
     )
     return { skillScores, recentMistakes, previousInsights }
   }, [recentAttempts, learnerInsights])
+  const currentWeekAttempts = useMemo(() => {
+    const start = new Date()
+    const mondayOffset = (start.getDay() + 6) % 7
+    start.setDate(start.getDate() - mondayOffset)
+    start.setHours(0, 0, 0, 0)
+    const startTime = start.getTime()
+    return recentAttempts.filter(attempt => attempt.attempted_at && new Date(attempt.attempted_at).getTime() >= startTime)
+  }, [recentAttempts])
+  const weeklyChallengeProgress = Math.min(3,
+    (currentWeekAttempts.some(item => item.skill === 'listening') ? 1 : 0) +
+    (currentWeekAttempts.some(item => item.skill === 'speaking') ? 1 : 0) +
+    (currentWeekAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0)
+  )
   const titleByPage: Record<Page, string> = {
     home: 'Visão geral', learn: 'Curso guiado', practice: 'Revisões e drills', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', diagnostic: 'Diagnóstico de nível', profile: 'Meu perfil',
@@ -417,7 +430,7 @@ export default function App() {
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
           supabase.from('learning_plans').select('plan').eq('user_id', user.id).maybeSingle(),
-          supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(20),
+          supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(100),
           supabase.from('learner_insights').select('skill,observation,recommendation,confidence').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
           supabase.from('course_progress').select('*').eq('user_id', user.id).eq('course_id', 'core-english').maybeSingle(),
           supabase.from('learning_review_items').select('*').eq('user_id', user.id).eq('status', 'active').order('next_review_at', { ascending: true }).limit(100),
@@ -550,8 +563,33 @@ export default function App() {
 
   useEffect(() => {
     if (appTourStep === null) return
-    const firstAction = document.querySelector<HTMLButtonElement>('.app-tour-dialog button')
-    firstAction?.focus()
+    const dialog = document.querySelector<HTMLElement>('.app-tour-dialog')
+    if (!dialog) return
+    const getFocusables = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ))
+    getFocusables()[0]?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAppTourStep(null)
+        try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ }
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusables = getFocusables()
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
   }, [appTourStep])
 
   useEffect(() => {
@@ -677,7 +715,7 @@ export default function App() {
       console.error('FALA activity attempt sync failed', error)
       return
     }
-    if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current].slice(0, 20))
+    if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current] .slice(0, 100))
   }
 
   const handleCourseProgressChange = useCallback((next: SavedProgress) => {
@@ -728,14 +766,14 @@ export default function App() {
         setToast('A tentativa foi registrada apenas localmente: ' + savedAttempt.error.message)
       } else if (savedAttempt.data) {
         sourceAttemptId = savedAttempt.data.id
-        setRecentAttempts(current => [savedAttempt.data as ActivityAttempt, ...current].slice(0, 40))
+        setRecentAttempts(current => [savedAttempt.data as ActivityAttempt, ...current].slice(0, 100))
       }
     } else {
       setRecentAttempts(current => [{
         ...attemptPayload,
         id: 'local-' + Date.now(),
         attempted_at: new Date().toISOString(),
-      } as ActivityAttempt, ...current].slice(0, 40))
+      } as ActivityAttempt, ...current].slice(0, 100))
     }
 
     if (attempt.correct !== false) return
@@ -1830,7 +1868,7 @@ export default function App() {
               <div>
                 <span className="eyebrow">SEU INGLÊS, NO SEU RITMO</span>
                 <div className="dashboard-welcome-meta">
-                  <span className="dashboard-level-chip">{profile.level === 'beginner' ? 'A0–A1' : profile.level === 'basic' ? 'A2' : profile.level === 'intermediate' ? 'B1–B2' : profile.level === 'advanced' ? 'C1 · estimado' : 'Nível a descobrir'}</span>
+                  <span className="dashboard-level-chip">{profile.level === 'beginner' ? 'A0–A1' : profile.level === 'basic' ? 'A2' : profile.level === 'intermediate' ? 'B1–B2' : profile.level === 'advanced' ? 'Avançado · estimado' : 'Nível a descobrir'}</span>
                   <span>{todayPracticeMinutes}/{profile.minutes} min da meta diária</span>
                 </div>
                 <div className="dashboard-welcome-progress"><i style={{ width: dailyGoalProgress + '%' }}/></div>
@@ -1952,7 +1990,7 @@ export default function App() {
             autoStartLessonId={nextLessonStartId}
             onAutoStartComplete={() => setNextLessonStartId(null)}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
-            onLessonComplete={(score, lessonId) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId })}
+            onLessonComplete={(score, lessonId, coveredSkills = []) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId, covered_skills: coveredSkills })}
           />}
 
           {page === 'tracks' && <section className="tracks-layout">
@@ -2223,7 +2261,7 @@ export default function App() {
             {diagnosticNotice && <p className="inline-notice diagnostic-analysis-notice">{diagnosticNotice}</p>}
             {diagnosticResult && <article className="diagnostic-result-card">
               <span className="eyebrow">ESTIMATIVA MULTICRITÉRIO · NÃO É CERTIFICADO</span>
-              <strong>{diagnosticResult.level === 'beginner' ? 'A0–A1 · Iniciante' : diagnosticResult.level === 'basic' ? 'A2 · Básico' : diagnosticResult.level === 'intermediate' ? 'B1–B2 · Intermediário' : 'C1 · Avançado'}</strong>
+              <strong>{diagnosticResult.level === 'beginner' ? 'A0–A1 · Iniciante' : diagnosticResult.level === 'basic' ? 'A2 · Básico' : diagnosticResult.level === 'intermediate' ? 'B1–B2 · Intermediário' : 'Avançado · validar'}</strong>
               <p>Resultado composto: <b>{diagnosticResult.score}/100</b>. Você acertou {Math.round(diagnosticResult.quizScore / 100 * diagnosticQuestions.length)} de {diagnosticQuestions.length} questões. A escrita e a transcrição oral participam do cálculo com pesos próprios; a etapa oral avalia o texto reconhecido, não pronúncia, sotaque ou fonética.</p>
               <div className="diagnostic-score-grid">
                 <article><span>Conhecimento objetivo · 40%</span><strong>{diagnosticResult.quizScore}%</strong><div><i style={{width: diagnosticResult.quizScore + '%'}}/></div></article>
@@ -2288,8 +2326,8 @@ export default function App() {
                   { icon: Flame, title: 'Criando ritmo', detail: 'Registre 5 sessões de estudo', unlocked: completedSessions >= 5, current: Math.min(completedSessions, 5), target: 5 },
                   { icon: Bookmark, title: 'Caderno vivo', detail: 'Salve 5 palavras ou expressões', unlocked: words.length >= 5, current: Math.min(words.length, 5), target: 5 },
                   { icon: Trophy, title: 'Consistência', detail: 'Alcance média de 70% nas tentativas', unlocked: averageScore !== null && averageScore >= 70, current: averageScore ?? 0, target: 70 },
-                  { icon: Headphones, title: 'Ouvido atento', detail: 'Conclua 10 sessões de escuta', unlocked: sessions.filter(item => item.activity_type === 'listening').length >= 10, current: sessions.filter(item => item.activity_type === 'listening').length, target: 10 },
-                  { icon: Mic, title: 'Voz ativa', detail: 'Registre 10 práticas de fala', unlocked: sessions.filter(item => item.activity_type === 'speaking').length >= 10, current: sessions.filter(item => item.activity_type === 'speaking').length, target: 10 },
+                  { icon: Headphones, title: 'Ouvido atento', detail: 'Conclua 10 exercícios de escuta', unlocked: recentAttempts.filter(item => item.skill === 'listening').length >= 10, current: recentAttempts.filter(item => item.skill === 'listening').length, target: 10 },
+                  { icon: Mic, title: 'Voz ativa', detail: 'Registre 10 respostas em inglês', unlocked: recentAttempts.filter(item => item.skill === 'speaking').length >= 10, current: recentAttempts.filter(item => item.skill === 'speaking').length, target: 10 },
                   { icon: RotateCcw, title: 'Memória em dia', detail: 'Conclua 10 revisões espaçadas', unlocked: sessions.filter(item => item.activity_type === 'vocabulary').length >= 10, current: sessions.filter(item => item.activity_type === 'vocabulary').length, target: 10 },
                   { icon: Target, title: 'Aplicação real', detail: 'Crie 5 respostas originais nas aulas', unlocked: recentAttempts.filter(item => item.activity_type === 'real_life_application').length >= 5, current: recentAttempts.filter(item => item.activity_type === 'real_life_application').length, target: 5 },
                 ].map(achievement => {
@@ -2307,7 +2345,7 @@ export default function App() {
             </section>
             <section className="weekly-challenge-panel">
               <div><span className="eyebrow">DESAFIO DA SEMANA</span><h2>Escute, responda e aplique.</h2><p>Complete uma atividade de escuta, uma resposta falada e uma aplicação escrita. O objetivo é transferir o conteúdo para uma situação real.</p></div>
-              <div className="weekly-challenge-progress"><span>{Math.min(3, (sessions.some(item => item.activity_type === 'listening') ? 1 : 0) + (sessions.some(item => item.activity_type === 'speaking') ? 1 : 0) + (recentAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0))}/3 etapas concluídas</span><div><i style={{width: (Math.min(3, (sessions.some(item => item.activity_type === 'listening') ? 1 : 0) + (sessions.some(item => item.activity_type === 'speaking') ? 1 : 0) + (recentAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0)) / 3 * 100) + '%'}}/></div></div>
+              <div className="weekly-challenge-progress"><span>{weeklyChallengeProgress}/3 etapas concluídas</span><div><i style={{width: (weeklyChallengeProgress / 3 * 100) + '%'}}/></div></div>
               <button className="button primary" onClick={() => setPage('learn')}>Continuar desafio <ArrowRight size={15}/></button>
             </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>

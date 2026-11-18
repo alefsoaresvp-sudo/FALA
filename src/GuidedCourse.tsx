@@ -60,7 +60,7 @@ type Props = {
   accent?: 'us' | 'uk'
   goalLabel?: string
   onAskTutor: (question: string) => void
-  onLessonComplete: (score: number, lessonId?: string) => void
+  onLessonComplete: (score: number, lessonId?: string, coveredSkills?: Array<'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'>) => void
   initialProgress?: SavedProgress | null
   onProgressChange?: (progress: SavedProgress) => void
   onExerciseAttempt?: (attempt: CourseAttemptPayload) => void
@@ -1437,7 +1437,14 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       activeLessonId: null,
     }))
     setActiveLessonId(null)
-    onLessonComplete(score, currentLesson.id)
+    const coveredSkills = new Set<'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'>(['listening'])
+    for (const exercise of currentLesson.exercises) {
+      if (exercise.kind === 'repeat') coveredSkills.add('speaking')
+      else if (exercise.kind === 'type' || exercise.kind === 'build') coveredSkills.add('writing')
+      else if (exercise.kind === 'choice') coveredSkills.add('grammar')
+      else if (exercise.kind === 'listen') coveredSkills.add('listening')
+    }
+    onLessonComplete(score, currentLesson.id, [...coveredSkills])
   }
   const startFreeSpeaking = () => {
     const browserWindow = window as BrowserSpeechWindow
@@ -1458,12 +1465,6 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         setFreeSpeechTranscript(transcript)
         setVoiceTranscript(transcript)
         setAudioNotice('Transcrição capturada. Ela registra as palavras reconhecidas; não é uma nota fonética.')
-        onExerciseAttempt?.({
-          activityType: 'speaking', skill: 'speaking',
-          prompt: 'Produção oral livre: ' + (currentLesson?.pattern || 'estrutura da aula'),
-          answer: transcript, expected: currentLesson?.pattern || '',
-          explanation: 'Resposta oral transcrita pelo navegador, sem avaliação fonética automática.', correct: null,
-        })
       }
       recognition.onerror = event => setAudioNotice('Não foi possível acessar o microfone (' + (event.error || 'erro') + '). Verifique a permissão.')
       recognition.onend = () => { setVoiceListening(false); recognitionRef.current = null }
@@ -1569,9 +1570,13 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <h1>Vamos começar <em>do zero.</em></h1>
         <p>Você não precisa saber nenhuma palavra. O curso vai ensinar primeiro, explicar cada parte e só depois pedir que você pratique.</p>
         <div className="course-intro-steps">
-          <article><span>01</span><div><strong>Aprenda</strong><small>Veja palavras, tradução, exemplos e a regra por trás da frase.</small></div></article>
-          <article><span>02</span><div><strong>Pratique</strong><small>Escolha, monte frases, escreva, escute e repita em voz alta.</small></div></article>
-          <article><span>03</span><div><strong>Revise e avance</strong><small>As lições são liberadas em sequência e seu progresso fica salvo.</small></div></article>
+          <article><span>01</span><div><strong>Aprender</strong><small>Entenda palavras, expressões, regras e exemplos no contexto.</small></div></article>
+          <article><span>02</span><div><strong>Entender</strong><small>Escute frases em velocidade normal e reduzida; recupere o que ouviu.</small></div></article>
+          <article><span>03</span><div><strong>Praticar</strong><small>Escolha, complete, monte e escreva respostas sem copiar o modelo.</small></div></article>
+          <article><span>04</span><div><strong>Falar</strong><small>Produza uma resposta própria e revise a transcrição quando disponível.</small></div></article>
+          <article><span>05</span><div><strong>Corrigir</strong><small>Veja os erros recorrentes e entenda o que precisa de reforço.</small></div></article>
+          <article><span>06</span><div><strong>Revisar</strong><small>Recupere as estruturas antes de esquecer e repita as que ainda não domina.</small></div></article>
+          <article><span>07</span><div><strong>Aplicar</strong><small>Use a estrutura em uma resposta original de uma situação real.</small></div></article>
         </div>
         <button className="course-primary-button" onClick={finishIntro}>Começar minha primeira aula <ArrowRight size={17}/></button>
         <small className="course-intro-note">Sem teste de entrada. A primeira lição começa com cumprimentos.</small>
@@ -1580,7 +1585,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round(10 + ((step + 1) / Math.max(1, activeExercises.length)) * 90)
+    const progressPercent = Math.round(29 + ((step + 1) / Math.max(1, activeExercises.length)) * 28)
     const hintText = currentExercise.hint ?? (currentExercise.kind === 'choice'
       ? 'Traduza as opções e elimine as que não combinam com a pergunta.'
       : currentExercise.kind === 'build'
@@ -1599,8 +1604,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })); resetExercise() }} aria-label="Sair da aula"><X size={19}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '10%' }}/></div>
-          <span>ETAPA 1/5</span>
+          <div className="lesson-progress-track"><i style={{ width: '14%' }}/></div>
+          <span>ETAPA 1/7</span>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">PRIMEIRO, APRENDA · {currentLesson.subtitle.toUpperCase()}</span>
@@ -1629,8 +1634,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => setLessonPhase('learn')} aria-label="Voltar para aprender"><BookOpen size={18}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '40%' }}/></div>
-          <span>ETAPA 2/5</span>
+          <div className="lesson-progress-track"><i style={{ width: '29%' }}/></div>
+          <span>ETAPA 2/7</span>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">OUÇA E ENTENDA · SEM TRADUÇÃO IMEDIATA</span>
@@ -1660,8 +1665,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => setLessonPhase('practice')} aria-label="Rever exercícios"><RotateCcw size={18}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '82%' }}/></div>
-          <span>ETAPA 4/5</span>
+          <div className="lesson-progress-track"><i style={{ width: '57%' }}/></div>
+          <span>ETAPA 4/7</span>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">PRODUÇÃO ORAL · SEM LER</span>
@@ -1681,7 +1686,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <textarea className="course-answer-input course-speaking-textarea" value={freeSpeechTranscript} onChange={event => setFreeSpeechTranscript(event.target.value)} rows={3} placeholder="Ou digite a frase que você falou…"/>
           <div className="lesson-action-row">
             <button className="course-secondary-button" onClick={() => onAskTutor('Estou na etapa oral da aula "' + currentLesson.title + '". Minha estrutura-alvo é ' + currentLesson.pattern + '. Dê feedback breve sobre esta resposta: ' + freeSpeechTranscript)}>Perguntar à Lumi</button>
-            <button className="course-primary-button" onClick={() => { if (freeSpeechTranscript.trim()) onExerciseAttempt?.({ activityType: 'speaking_free_response', skill: 'speaking', prompt: 'Responda sem ler: apresente uma ideia em inglês e explique um detalhe.', answer: freeSpeechTranscript, expected: 'Resposta espontânea que comunica uma ideia com ao menos um detalhe.', explanation: 'A etapa registra o conteúdo transcrito. Ela não mede pronúncia ou qualidade fonética.', correct: null }); setLessonPhase('correct') }}>Ver correções <ArrowRight size={16}/></button>
+            <button className="course-primary-button" disabled={freeSpeechTranscript.trim().split(/\s+/).filter(Boolean).length < 5 || voiceListening} onClick={() => { if (freeSpeechTranscript.trim()) onExerciseAttempt?.({ activityType: 'speaking_free_response', skill: 'speaking', prompt: 'Responda sem ler: apresente uma ideia em inglês e explique um detalhe.', answer: freeSpeechTranscript, expected: 'Resposta espontânea que comunica uma ideia com ao menos um detalhe.', explanation: 'A etapa registra o conteúdo transcrito. Ela não mede pronúncia ou qualidade fonética.', correct: null }); setLessonPhase('correct') }}>Ver correções <ArrowRight size={16}/></button>
           </div>
         </article>
       </section>
@@ -1689,6 +1694,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
 
     if (lessonPhase === 'correct') return (
       <section className="guided-course lesson-stage-screen">
+        <div className="lesson-topbar"><span>ETAPA 5/7</span><div className="lesson-progress-track"><i style={{ width: '71%' }}/></div></div>
         <div className="lesson-stage-heading"><span className="course-eyebrow">05 · CORRIGIR</span><h1>Entenda o que precisa <em>melhorar.</em></h1><p>Reveja os pontos que exigiram uma nova tentativa antes de avançar.</p></div>
         <div className="lesson-correction-summary">
           <div className="lesson-correction-metric"><strong>{mistakes}</strong><span>respostas que precisaram de correção</span></div>
@@ -1701,6 +1707,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     )
     if (lessonPhase === 'apply') return (
       <section className="guided-course lesson-stage-screen">
+        <div className="lesson-topbar"><span>ETAPA 7/7</span><div className="lesson-progress-track"><i style={{ width: '100%' }}/></div></div>
         <div className="lesson-stage-heading"><span className="course-eyebrow">07 · APLICAR</span><h1>Use o inglês fora do <em>exercício.</em></h1><p>Crie uma resposta própria usando o padrão desta aula. Não copie a frase-modelo.</p></div>
         <article className="lesson-application-card">
           <span className="course-eyebrow">SITUAÇÃO REAL</span>
@@ -1723,8 +1730,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => setLessonPhase('speak')} aria-label="Voltar para fala"><RotateCcw size={18}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '100%' }}/></div>
-          <span>ETAPA 5/5</span>
+          <div className="lesson-progress-track"><i style={{ width: '86%' }}/></div>
+          <span>ETAPA 6/7</span>
         </div>
         <div className="lesson-context"><span className="course-eyebrow">RESUMO DA LIÇÃO</span><h1>O que você praticou.</h1><p>Revise a estrutura e conclua para salvar seu avanço.</p></div>
         <article className="lesson-teaching-card">
@@ -1746,7 +1753,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
           <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
-          <span>ETAPA 3/5 · EXERCÍCIO {step + 1}/{activeExercises.length}</span>
+          <span>ETAPA 3/7 · EXERCÍCIO {step + 1}/{activeExercises.length}</span>
           <button className="course-lumi-context-button" onClick={openLumiDrawer}><MessageCircle size={15}/> Perguntar à Lumi</button>
         </div>
         <div className="lesson-context">
