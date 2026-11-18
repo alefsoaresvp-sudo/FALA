@@ -54,7 +54,7 @@ type CourseAttemptPayload = {
   answer: string
   expected: string
   explanation: string
-  correct: boolean
+  correct: boolean | null
 }
 type Props = {
   accent?: 'us' | 'uk'
@@ -1384,7 +1384,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           activityType: 'speaking', skill: 'speaking',
           prompt: 'Produção oral livre: ' + (currentLesson?.pattern || 'estrutura da aula'),
           answer: transcript, expected: currentLesson?.pattern || '',
-          explanation: 'Resposta oral transcrita pelo navegador, sem avaliação fonética automática.', correct: transcript.length > 0,
+          explanation: 'Resposta oral transcrita pelo navegador, sem avaliação fonética automática.', correct: null,
         })
       }
       recognition.onerror = event => setAudioNotice('Não foi possível acessar o microfone (' + (event.error || 'erro') + '). Verifique a permissão.')
@@ -1417,7 +1417,17 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         setVoiceTranscript(transcript)
         const matched = speechMatches(transcript, currentExercise.answer)
         setChecked(matched)
-        if (!matched) setMistakes(value => value + 1)
+        onExerciseAttempt?.({
+          activityType: 'repeat_speech_check', skill: 'speaking', prompt: currentExercise.prompt,
+          answer: transcript, expected: currentExercise.answer, explanation: currentExercise.explanation, correct: matched,
+        })
+        if (!matched) {
+          setMistakes(value => value + 1)
+          if (!currentExercise.isRetry) setRetryQueue(current => [...current, {
+            ...currentExercise, kind: 'repeat', isRetry: true,
+            prompt: 'Repita novamente a estrutura que precisa de reforço: ' + currentExercise.prompt,
+          }])
+        }
         setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
       }
       recognition.onerror = event => {
@@ -1650,7 +1660,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
           {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null || voiceListening} onClick={startSpeechCapture}>{voiceListening ? 'Ouvindo...' : 'Gravar voz'}</button></div>}
-          {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
+          {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); onExerciseAttempt?.({ activityType: 'repeat_manual', skill: 'speaking', prompt: currentExercise.prompt, answer: 'Praticado manualmente', expected: currentExercise.answer, explanation: 'Prática autodeclarada, sem avaliação da fala.', correct: null }); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
           {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
           {checked !== null && <div className={checked ? 'course-feedback correct' : 'course-feedback incorrect'}>
