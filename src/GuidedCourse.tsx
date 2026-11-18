@@ -64,6 +64,7 @@ type Props = {
   initialProgress?: SavedProgress | null
   onProgressChange?: (progress: SavedProgress) => void
   onExerciseAttempt?: (attempt: CourseAttemptPayload) => void
+  onTranscribeAudio?: (blob: Blob) => Promise<string>
   autoStartLessonId?: string | null
   onAutoStartComplete?: () => void
 }
@@ -1212,7 +1213,7 @@ function speakEnglish(text: string, accent: 'us' | 'uk', rate = 1) {
   return true
 }
 
-export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt, autoStartLessonId, onAutoStartComplete }: Props) {
+export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt, onTranscribeAudio, autoStartLessonId, onAutoStartComplete }: Props) {
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
@@ -1231,6 +1232,9 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   const [applicationDraft, setApplicationDraft] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
   const recognitionRef = useRef<CourseSpeechInstance | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const mediaChunksRef = useRef<Blob[]>([])
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
   const [lumiDrawerOpen, setLumiDrawerOpen] = useState(false)
   const [lumiQuestionDraft, setLumiQuestionDraft] = useState('')
@@ -1293,6 +1297,12 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
 
   useEffect(() => () => {
     recognitionRef.current?.stop()
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.onstop = null
+      mediaRecorderRef.current.stop()
+    }
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+    mediaStreamRef.current = null
     if ('speechSynthesis' in window) window.speechSynthesis.cancel()
   }, [])
 
@@ -1446,16 +1456,102 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     }
     onLessonComplete(score, currentLesson.id, [...coveredSkills])
   }
-  const startFreeSpeaking = () => {
+  const stopCourseRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop()
+      return
+    }
+    recognitionRef.current?.stop()
+  }
+  const startMediaRecording = async (mode: 'free' | 'repeat', exercise?: Exercise): Promise<boolean> => {
+    if (!onTranscribeAudio || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return false
+    try {
+      setAudioNotice('Solicitando permissão para usar o microfone…')
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      mediaStreamRef.current = stream
+      mediaChunksRef.current = []
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      recorder.ondataavailable = event => { if (event.data.size) mediaChunksRef.current.push(event.data) }
+      recorder.onerror = () => {
+        setVoiceListening(false)
+        setAudioNotice('O navegador interrompeu a gravação. Tente novamente ou digite sua resposta.')
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        setVoiceListening(false)
+        const audioType = recorder.mimeType || mediaChunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(mediaChunksRef.current, { type: audioType })
+        mediaChunksRef.current = []
+        if (!blob.size) {
+          setAudioNotice('O áudio ficou vazio. Grave por alguns segundos e tente novamente.')
+          return
+        }
+        setAudioNotice('Gravação concluída. Enviando para transcrição…')
+        try {
+          const transcript = (await onTranscribeAudio(blob)).trim()
+          if (!transcript) throw new Error('Nenhuma palavra foi reconhecida. Tente novamente em um ambiente silencioso.')
+          setVoiceTranscript(transcript)
+          if (mode === 'free') {
+            setFreeSpeechTranscript(transcript)
+            setAudioNotice('Transcrição concluída. A análise registra as palavras reconhecidas, não a pronúncia fonética.')
+            return
+          }
+          if (!exercise) return
+          const matched = speechMatches(transcript, exercise.answer)
+          setChecked(matched)
+          onExerciseAttempt?.({
+            activityType: 'repeat_speech_check', skill: 'speaking', prompt: exercise.prompt,
+            answer: transcript, expected: exercise.answer, explanation: exercise.explanation, correct: matched,
+          })
+          if (!matched) {
+            setMistakes(value => value + 1)
+            if (!exercise.isRetry) setRetryQueue(current => [...current, {
+              ...exercise, kind: 'repeat', isRetry: true,
+              prompt: 'Repita novamente a estrutura que precisa de reforço: ' + exercise.prompt,
+            }])
+          }
+          setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
+        } catch (error) {
+          setAudioNotice('A gravação foi capturada, mas a transcrição falhou: ' + (error instanceof Error ? error.message : 'erro desconhecido') + ' Você ainda pode digitar a resposta.')
+        }
+      }
+      recorder.start(250)
+      setVoiceListening(true)
+      setAudioNotice('Gravando pelo microfone. Fale e toque em “Parar gravação” para transcrever.')
+      return true
+    } catch (error) {
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      setVoiceListening(false)
+      setAudioNotice(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Permissão do microfone negada. Libere o acesso ao microfone no navegador e tente novamente.'
+        : 'Não foi possível iniciar a gravação: ' + (error instanceof Error ? error.message : 'verifique o microfone e tente novamente.'))
+      return true
+    }
+  }
+  const startFreeSpeaking = async () => {
     const browserWindow = window as BrowserSpeechWindow
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
     if (!Recognition) {
       setAudioNotice('O reconhecimento de fala não está disponível neste navegador. Você ainda pode escrever uma resposta e avançar.')
       return
     }
+    setAudioNotice('')
+    setFreeSpeechTranscript('')
+    setVoiceTranscript('')
+    if (await startMediaRecording('free')) return
     try {
-      setAudioNotice('')
-      setFreeSpeechTranscript('')
       const recognition = new Recognition()
       recognition.lang = accent === 'uk' ? 'en-GB' : 'en-US'
       recognition.interimResults = false
@@ -1476,8 +1572,11 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
     }
   }
-  const startSpeechCapture = () => {
+  const startSpeechCapture = async () => {
     if (!currentExercise || currentExercise.kind !== 'repeat' || checked !== null) return
+    setVoiceTranscript('')
+    setAudioNotice('')
+    if (await startMediaRecording('repeat', currentExercise)) return
     const browserWindow = window as BrowserSpeechWindow
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
     if (!Recognition) {
@@ -1679,7 +1778,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           <p className="lesson-speaking-prompt">Tente dizer duas frases curtas. Use uma expressão aprendida e acrescente um detalhe sobre sua rotina.</p>
           <div className="repeat-practice-box">
             <Mic size={20}/><div><strong>{voiceListening ? 'Ouvindo sua resposta…' : 'Grave sua resposta aqui'}</strong><small>O navegador transcreve sua fala. A transcrição ajuda a revisar as palavras, mas não mede sotaque ou qualidade fonética.</small></div>
-            <button disabled={voiceListening} onClick={startFreeSpeaking}>{voiceListening ? 'Ouvindo…' : 'Gravar resposta'}</button>
+            <button onClick={() => voiceListening ? stopCourseRecording() : void startFreeSpeaking()}>{voiceListening ? 'Parar gravação' : 'Gravar resposta'}</button>
           </div>
           {freeSpeechTranscript && <div className="course-feedback correct"><strong>Resposta capturada</strong><p>{freeSpeechTranscript}</p></div>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
@@ -1777,7 +1876,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word)}>{word}</button>)}</div>
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
-          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null || voiceListening} onClick={startSpeechCapture}>{voiceListening ? 'Ouvindo...' : 'Gravar voz'}</button></div>}
+          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null} onClick={() => voiceListening ? stopCourseRecording() : void startSpeechCapture()}>{voiceListening ? 'Parar gravação' : 'Gravar voz'}</button></div>}
           {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); onExerciseAttempt?.({ activityType: 'repeat_manual', skill: 'speaking', prompt: currentExercise.prompt, answer: 'Praticado manualmente', expected: currentExercise.answer, explanation: 'Prática autodeclarada, sem avaliação da fala.', correct: null }); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
           {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
