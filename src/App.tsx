@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
+  Activity, ArrowRight, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
   Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2, PenLine, Play, Plus,
   Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X, Search, Sun, Moon, CircleUserRound, RotateCcw, Eye,
@@ -267,7 +267,7 @@ export default function App() {
   const [courseProgressLoaded, setCourseProgressLoaded] = useState(false)
   const [nextLessonStartId, setNextLessonStartId] = useState<string | null>(null)
   const [learningReviewItems, setLearningReviewItems] = useState<LearningReviewItem[]>([])
-  const [reviewIndex, setReviewIndex] = useState(0)
+  const [learningReviewIndex, setLearningReviewIndex] = useState(0)
   const [reviewRevealed, setReviewRevealed] = useState(false)
   const [lumiMode, setLumiMode] = useState<'conversation' | 'guided' | 'roleplay'>('conversation')
   const [voiceActivity, setVoiceActivity] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
@@ -299,14 +299,11 @@ export default function App() {
     return Math.round(seconds / 60)
   }, [sessions])
   const dailyGoalProgress = Math.min(100, Math.round(todayPracticeMinutes / Math.max(1, profile.minutes) * 100))
-  const diagnosticWritingWordCount = diagnosticWritingSample.trim() ? diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length : 0
-  const diagnosticWritingSentenceCount = diagnosticWritingSample.split(/[.!?]+/).map(sentence => sentence.trim()).filter(Boolean).length
-  const diagnosticSpeechWordCount = diagnosticSpeechSample.trim() ? diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length : 0
   const nextLesson = useMemo(() => getNextLessonRecommendation(courseProgress), [courseProgress])
   const dueReviewItems = useMemo(() => learningReviewItems
     .filter(item => item.status === 'active' && new Date(item.next_review_at).getTime() <= Date.now())
     .sort((a, b) => new Date(a.next_review_at).getTime() - new Date(b.next_review_at).getTime()), [learningReviewItems])
-  const activeReviewItem = dueReviewItems.length ? dueReviewItems[reviewIndex % dueReviewItems.length] : null
+  const activeReviewItem = dueReviewItems.length ? dueReviewItems[learningReviewIndex % dueReviewItems.length] : null
   const studyTimer = useActiveStudyTimer(['learn', 'practice', 'lumi', 'speak', 'write', 'tracks', 'music', 'vocabulary'].includes(page))
   const dueWords = useMemo(() => {
     const now = Date.now()
@@ -794,7 +791,7 @@ export default function App() {
       source: 'shared-srs', item_type: activeReviewItem.item_type, interval_days: nextInterval, grade,
     })
     setReviewRevealed(false)
-    setReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
+    setLearningReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
     setToast(mastered ? 'Estrutura marcada como dominada após cinco revisões.' : grade === 'again' ? 'Esse item volta amanhã.' : 'Próxima revisão em ' + nextInterval + ' dias.')
   }
 
@@ -1398,12 +1395,13 @@ export default function App() {
       const existing = await supabase.from('learning_review_items').select('id')
         .eq('user_id', user.id).eq('item_type', 'vocabulary').eq('expected_answer', term).eq('status', 'active').limit(1).maybeSingle()
       if (existing.data?.id) {
+        const existingId = existing.data.id
         const updatedItem = await supabase.from('learning_review_items').update({
           prompt: localItem.prompt, explanation: meaning, context: example || 'Expressão salva no vocabulário',
           interval_days: 1, repetition_count: 0, lapse_count: 0, next_review_at: nextReviewAt, metadata: localItem.metadata,
-        }).eq('id', existing.data.id).select('*').single()
+        }).eq('id', existingId).select('*').single()
         if (!updatedItem.error && updatedItem.data) {
-          setLearningReviewItems(current => [updatedItem.data as LearningReviewItem, ...current.filter(item => item.id !== existing.data.id)])
+          setLearningReviewItems(current => [updatedItem.data as LearningReviewItem, ...current.filter(item => item.id !== existingId)])
         }
       } else {
         const savedItem = await supabase.from('learning_review_items').insert({
