@@ -268,6 +268,8 @@ export default function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [lumiVoiceId, setLumiVoiceId] = useState(() => readLocal('fala-lumi-voice-v1', 'MEJe6hPrI48Kt2lFuVe3'))
   const [voiceMessage, setVoiceMessage] = useState('')
+  const [lumiRecording, setLumiRecording] = useState(false)
+  const [lumiRecordingNotice, setLumiRecordingNotice] = useState('')
   const [words, setWords] = useState<string[]>(() => readLocal(WORDS_KEY, ['actually', 'figure out', 'I am looking forward to']))
   const [vocabSchedule, setVocabSchedule] = useState<Record<string, VocabularySchedule>>(() => readLocal('fala-vocab-schedule-v1', {}))
   const [wordDetails, setWordDetails] = useState<Record<string, { meaning: string; example: string }>>(() => readLocal(VOCAB_DETAILS_KEY, {}))
@@ -332,6 +334,9 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const voiceConversationRef = useRef<{ endSession: () => Promise<void> } | null>(null)
+  const lumiRecorderRef = useRef<MediaRecorder | null>(null)
+  const lumiStreamRef = useRef<MediaStream | null>(null)
+  const lumiChunksRef = useRef<Blob[]>([])
 
   const isConnected = !!user
   const totalMinutes = useMemo(() => Math.round(sessions.reduce((sum, item) => sum + (item.duration_seconds || 0), 0) / 60), [sessions])
@@ -579,6 +584,16 @@ export default function App() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [chat, chatBusy])
+
+  useEffect(() => () => {
+    if (lumiRecorderRef.current?.state === 'recording') {
+      lumiRecorderRef.current.onstop = null
+      lumiRecorderRef.current.stop()
+    }
+    lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+    lumiStreamRef.current = null
+    window.speechSynthesis?.cancel()
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -1169,10 +1184,28 @@ export default function App() {
     }
   }
 
-  const sendChat = async (event: FormEvent) => {
-    event.preventDefault()
-    const message = chatInput.trim()
-    if (!message || chatBusy) return
+  const speakLumiReply = (text: string) => {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      setLumiRecordingNotice('A resposta chegou em texto, mas este navegador não oferece reprodução de voz.')
+      setVoiceActivity('idle')
+      return
+    }
+    window.speechSynthesis.cancel()
+    const language = profile.accent === 'uk' ? 'en-GB' : 'en-US'
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = language
+    utterance.rate = 0.96
+    const voice = window.speechSynthesis.getVoices().find(item => item.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase()))
+    if (voice) utterance.voice = voice
+    utterance.onstart = () => setVoiceActivity('speaking')
+    utterance.onend = () => setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
+    utterance.onerror = () => setVoiceActivity('idle')
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const sendChatMessage = async (rawMessage: string, speakReply = false): Promise<boolean> => {
+    const message = rawMessage.trim()
+    if (!message || chatBusy) return false
     const modeInstruction = lumiMode === 'guided'
       ? 'Modo correção guiada: corrija um padrão relevante por vez, explique brevemente em português e peça uma nova tentativa. '
       : lumiMode === 'roleplay'
@@ -1185,6 +1218,7 @@ export default function App() {
     setChatNotice('')
     setChatBusy(true)
     setVoiceActivity('thinking')
+    let replyForSpeech = ''
     try {
       if (supabase && user) {
         const { data, error } = await invokeAuthenticatedFunction('tutor', {
@@ -1196,6 +1230,7 @@ export default function App() {
         if (error) throw error
         const reply = typeof data?.reply === 'string' ? data.reply : ''
         if (!reply) throw new Error('A Lumi não retornou uma resposta.')
+        replyForSpeech = reply
         setChat(current => [...current, { role: 'assistant', text: reply, note: data?.correction }])
         await supabase.from('chat_messages').insert([
           { user_id: user.id, role: 'user', content: message },
@@ -1206,22 +1241,108 @@ export default function App() {
             user_id: user.id, skill: data.learning_insight.skill || 'speaking',
             observation: data.learning_insight.observation, recommendation: data.learning_insight.recommendation,
             confidence: Math.max(0, Math.min(1, Number(data.learning_insight.confidence) || 0)),
-            evidence: { source: 'conversation' },
+            evidence: { source: speakReply ? 'voice_turn' : 'conversation' },
           }).select('skill,observation,recommendation,confidence').single()
           if (!insightError && savedInsight) setLearnerInsights(current => [savedInsight as LearnerInsight, ...current].slice(0, 5))
         }
       } else {
         await new Promise(resolve => window.setTimeout(resolve, 500))
-        setChat(current => [...current, { role: 'assistant', text: demoAnswer(message, profile) }])
+        const reply = demoAnswer(message, profile)
+        replyForSpeech = reply
+        setChat(current => [...current, { role: 'assistant', text: reply }])
         setChatNotice('Modo demonstração: respostas de IA personalizadas e histórico entre dispositivos exigem uma conta conectada.')
       }
+      if (speakReply && replyForSpeech) speakLumiReply(replyForSpeech)
+      return true
     } catch (error) {
       const detail = await functionErrorDetail(error)
       setChat(current => [...current, { role: 'assistant', text: 'Não consegui responder agora. ' + detail }])
       setChatNotice('Falha ao conectar à Lumi: ' + detail)
+      setVoiceActivity('idle')
+      return false
     } finally {
       setChatBusy(false)
-      setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
+      if (!speakReply) setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
+    }
+  }
+
+  const sendChat = async (event: FormEvent) => {
+    event.preventDefault()
+    await sendChatMessage(chatInput)
+  }
+
+  const stopLumiRecording = () => {
+    if (lumiRecorderRef.current?.state === 'recording') lumiRecorderRef.current.stop()
+  }
+
+  const startLumiRecording = async () => {
+    if (lumiRecording || chatBusy) return
+    if (!supabase || !user) {
+      setAuthMode('signin')
+      setAuthOpen(true)
+      setAuthMessage('Entre na sua conta para gravar uma mensagem de voz para a Lumi.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext || typeof MediaRecorder === 'undefined') {
+      setLumiRecordingNotice('Este navegador não oferece gravação de áudio nesta página. Use Safari ou Chrome atualizado em HTTPS.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      lumiStreamRef.current = stream
+      lumiChunksRef.current = []
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+      lumiRecorderRef.current = recorder
+      recorder.ondataavailable = event => { if (event.data.size) lumiChunksRef.current.push(event.data) }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        stream.getTracks().forEach(track => track.stop())
+        lumiStreamRef.current = null
+        lumiRecorderRef.current = null
+        setLumiRecording(false)
+        setLumiRecordingNotice('O navegador interrompeu a gravação. Tente novamente.')
+        setVoiceActivity('idle')
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        lumiStreamRef.current = null
+        lumiRecorderRef.current = null
+        setLumiRecording(false)
+        const audioType = recorder.mimeType || lumiChunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(lumiChunksRef.current, { type: audioType })
+        lumiChunksRef.current = []
+        if (!blob.size) {
+          setLumiRecordingNotice('O áudio ficou vazio. Grave por alguns segundos e tente novamente.')
+          setVoiceActivity('idle')
+          return
+        }
+        setLumiRecordingNotice('Áudio capturado. Transcrevendo sua mensagem…')
+        setVoiceActivity('thinking')
+        try {
+          const recognized = await transcribeCourseAudio(blob)
+          setLumiRecordingNotice('Você disse: ' + recognized)
+          const sent = await sendChatMessage(recognized, true)
+          if (sent) setLumiRecordingNotice('Mensagem enviada. A resposta da Lumi será reproduzida pela voz do navegador.')
+        } catch (error) {
+          setLumiRecordingNotice('Não foi possível transcrever o áudio: ' + await functionErrorDetail(error))
+          setVoiceActivity('idle')
+        }
+      }
+      recorder.start(250)
+      setLumiRecording(true)
+      setVoiceActivity('listening')
+      setLumiRecordingNotice('Gravando. Fale e toque em “Parar gravação” para enviar à Lumi.')
+    } catch (error) {
+      lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+      lumiStreamRef.current = null
+      setLumiRecording(false)
+      setLumiRecordingNotice(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Permissão do microfone negada. Libere o acesso no navegador e tente novamente.'
+        : 'Não foi possível iniciar a gravação: ' + friendlyError(error))
     }
   }
 
@@ -2190,7 +2311,11 @@ export default function App() {
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
                   {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
                 </button>
-                <small>{user ? 'Acesso autenticado · sem gravação de áudio' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
+                <small>{user ? 'Voz ao vivo ou mensagem gravada; o arquivo é descartado após a transcrição.' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
+                <button className={lumiRecording ? 'button voice-stop' : 'button ghost'} onClick={() => lumiRecording ? stopLumiRecording() : void startLumiRecording()} disabled={!user || voiceStatus === 'connecting' || voiceStatus === 'connected' || (!lumiRecording && chatBusy)}>
+                  {lumiRecording ? <><X size={16}/> Parar gravação</> : <><Mic size={16}/> Gravar mensagem para a Lumi</>}
+                </button>
+                {lumiRecordingNotice && <small className="lumi-recording-notice">{lumiRecordingNotice}</small>}
               </div>
             </section>
             <div className="lumi-mode-selector" role="group" aria-label="Modo de tutoria">
