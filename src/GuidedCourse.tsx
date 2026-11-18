@@ -1235,12 +1235,26 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
 
   useEffect(() => {
     if (!initialProgress) return
-    setProgress({
+    const normalized: SavedProgress = {
       ...initialProgress,
       completedLessonIds: Array.isArray(initialProgress.completedLessonIds) ? initialProgress.completedLessonIds : [],
+      activeLessonId: initialProgress.activeLessonId ?? null,
+      streakDays: initialProgress.streakDays ?? 0,
+      lastStudyDate: initialProgress.lastStudyDate ?? null,
+    }
+    setProgress(current => {
+      const sameLessons = current.completedLessonIds.length === normalized.completedLessonIds.length
+        && current.completedLessonIds.every((id, index) => id === normalized.completedLessonIds[index])
+      const unchanged = sameLessons
+        && current.xp === normalized.xp
+        && current.introDone === normalized.introDone
+        && current.activeLessonId === normalized.activeLessonId
+        && (current.streakDays ?? 0) === normalized.streakDays
+        && (current.lastStudyDate ?? null) === normalized.lastStudyDate
+      return unchanged ? current : normalized
     })
-    setActiveLessonId(initialProgress.activeLessonId ?? null)
-    setIntroShown(!initialProgress.introDone)
+    setActiveLessonId(current => current === normalized.activeLessonId ? current : normalized.activeLessonId)
+    setIntroShown(current => current === !normalized.introDone ? current : !normalized.introDone)
   }, [initialProgress])
 
   useEffect(() => () => {
