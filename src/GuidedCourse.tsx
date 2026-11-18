@@ -64,6 +64,8 @@ type Props = {
   initialProgress?: SavedProgress | null
   onProgressChange?: (progress: SavedProgress) => void
   onExerciseAttempt?: (attempt: CourseAttemptPayload) => void
+  autoStartLessonId?: string | null
+  onAutoStartComplete?: () => void
 }
 
 const STORAGE_KEY = 'fala-course-progress-v1'
@@ -1171,7 +1173,7 @@ function speakEnglish(text: string, accent: 'us' | 'uk', rate = 1) {
   return true
 }
 
-export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt }: Props) {
+export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt, autoStartLessonId, onAutoStartComplete }: Props) {
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
@@ -1251,6 +1253,21 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setProgress(current => ({ ...current, introDone: true }))
     setIntroShown(false)
   }
+
+  useEffect(() => {
+    if (!autoStartLessonId) return
+    setIntroShown(false)
+    setStep(0)
+    setLessonPhase('learn')
+    setShowHint(false)
+    setMistakes(0)
+    setRetryQueue([])
+    setFreeSpeechTranscript('')
+    setActiveLessonId(autoStartLessonId)
+    setProgress(current => ({ ...current, introDone: true, activeLessonId: autoStartLessonId }))
+    resetExercise()
+    onAutoStartComplete?.()
+  }, [autoStartLessonId])
   const currentAnswer = () => {
     if (!currentExercise) return ''
     if (currentExercise.kind === 'choice') return selectedChoice
