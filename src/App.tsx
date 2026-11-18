@@ -137,6 +137,28 @@ async function functionErrorDetail(error: unknown) {
   }
   return friendlyError(error)
 }
+
+type AuthenticatedFunctionOptions = {
+  body?: object | FormData | Blob | ArrayBuffer | string | null
+  headers?: Record<string, string>
+}
+
+async function invokeAuthenticatedFunction<T = Record<string, unknown>>(
+  functionName: string,
+  options: AuthenticatedFunctionOptions = {},
+) {
+  const client = supabase
+  if (!client) throw new Error('O serviço de aprendizagem não está configurado neste dispositivo.')
+  const { data, error } = await client.auth.getSession()
+  if (error) throw error
+  const accessToken = data.session?.access_token
+  if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente para continuar usando os recursos de IA e áudio.')
+  return client.functions.invoke<T>(functionName, {
+    ...options,
+    headers: { ...options.headers, Authorization: 'Bearer ' + accessToken },
+  })
+}
+
 function demoAnswer(message: string, profile: Profile) {
   const text = message.toLowerCase()
   const topic = profile.customInterest || profile.interests[0] || 'your daily life'
@@ -878,7 +900,7 @@ export default function App() {
     try {
       if (supabase && user) {
         const [writingResult, speakingResult] = await Promise.all([
-          supabase.functions.invoke('tutor', {
+          invokeAuthenticatedFunction('tutor', {
             body: {
               mode: 'evaluate', message: writingText, profile,
               activity: {
@@ -891,7 +913,7 @@ export default function App() {
               },
             },
           }),
-          supabase.functions.invoke('tutor', {
+          invokeAuthenticatedFunction('tutor', {
             body: {
               mode: 'evaluate', message: speechText, profile,
               activity: {
@@ -1079,7 +1101,7 @@ export default function App() {
     try {
       const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       permissionStream.getTracks().forEach(track => track.stop())
-      const { data, error } = await supabase.functions.invoke('lumi-session', { body: {} })
+      const { data, error } = await invokeAuthenticatedFunction('lumi-session', { body: {} })
       if (error) throw error
       if (typeof data?.conversation_token !== 'string' || !data.conversation_token) {
         throw new Error('O servidor não retornou um token válido. Verifique ELEVENLABS_API_KEY nos secrets do Supabase.')
@@ -1136,7 +1158,7 @@ export default function App() {
       const name = error instanceof DOMException ? error.name : ''
       setVoiceMessage(name === 'NotAllowedError'
         ? 'O acesso ao microfone foi negado. Libere a permissão do microfone no navegador e tente novamente.'
-        : 'Não foi possível iniciar a Lumi por voz: ' + friendlyError(error))
+        : 'Não foi possível iniciar a Lumi por voz: ' + await functionErrorDetail(error))
     }
   }
 
@@ -1158,7 +1180,7 @@ export default function App() {
     setVoiceActivity('thinking')
     try {
       if (supabase && user) {
-        const { data, error } = await supabase.functions.invoke('tutor', {
+        const { data, error } = await invokeAuthenticatedFunction('tutor', {
           body: {
             mode: 'conversation', message: tutorMessage, history, profile,
             learningEvidence,
@@ -1265,7 +1287,7 @@ export default function App() {
         setTrackBusy(true)
         setTrackFeedback('A Lumi está avaliando sua resposta…')
         try {
-          const { data, error } = await supabase.functions.invoke('tutor', {
+          const { data, error } = await invokeAuthenticatedFunction('tutor', {
             body: {
               mode: 'evaluate',
               message: answer,
@@ -1375,7 +1397,7 @@ export default function App() {
       bitmap.close()
       const imageDataUrl = canvas.toDataURL('image/jpeg', 0.82)
       if (imageDataUrl.length > 5_800_000) throw new Error('A foto continua muito grande após a compressão. Tente uma imagem menor.')
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'writing_image', imageDataUrl, profile, message: writingText.trim() },
       })
       if (error) throw error
@@ -1400,7 +1422,7 @@ export default function App() {
     setPlanBusy(true)
     setPlanNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'plan', profile, learningEvidence },
       })
       if (error) throw error
@@ -1463,7 +1485,7 @@ export default function App() {
     setMusicAnalysisBusy(true)
     setMusicAnalysisNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'music', message: excerpt, profile, track: selectedMusic ? { title: selectedMusic.title, artist: selectedMusic.artist } : null },
       })
       if (error) throw error
@@ -1622,7 +1644,7 @@ export default function App() {
     setWritingFeedback('')
     try {
       if (supabase && user) {
-        const { data, error } = await supabase.functions.invoke('tutor', {
+        const { data, error } = await invokeAuthenticatedFunction('tutor', {
           body: { mode: 'writing', message: writingText.trim(), profile },
         })
         if (error) throw error
@@ -1640,6 +1662,20 @@ export default function App() {
     }
   }
 
+  const transcribeCourseAudio = async (blob: Blob) => {
+    if (!supabase || !user) throw new Error('Entre na sua conta para transcrever a gravação da aula.')
+    if (!blob.size) throw new Error('O áudio ficou vazio. Grave novamente.')
+    const audioType = blob.type || 'audio/webm'
+    const extension = audioType.includes('mp4') ? 'm4a' : audioType.includes('ogg') ? 'ogg' : audioType.includes('wav') ? 'wav' : 'webm'
+    const form = new FormData()
+    form.append('file', new File([blob], 'fala-course.' + extension, { type: audioType }))
+    const { data, error } = await invokeAuthenticatedFunction<{ text?: string }>('transcribe', { body: form })
+    if (error) throw error
+    const recognized = typeof data?.text === 'string' ? data.text.trim() : ''
+    if (!recognized) throw new Error('Não identificamos palavras. Grave novamente em um ambiente silencioso.')
+    return recognized
+  }
+
   const startRecording = async () => {
     if (recording) return
     if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
@@ -1647,12 +1683,15 @@ export default function App() {
       return
     }
     try {
+      if (typeof MediaRecorder === 'undefined') throw new Error('Este navegador não oferece gravação de áudio. Use um navegador atualizado.')
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
       streamRef.current = stream
       chunksRef.current = []
-      const recorder = new MediaRecorder(stream)
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
       recorderRef.current = recorder
       recorder.ondataavailable = event => { if (event.data.size) chunksRef.current.push(event.data) }
       recorder.onerror = () => {
@@ -1663,7 +1702,8 @@ export default function App() {
       recorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop())
         streamRef.current = null
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        const audioType = recorder.mimeType || chunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(chunksRef.current, { type: audioType })
         const url = URL.createObjectURL(blob)
         setAudioUrl(previous => {
           if (previous) URL.revokeObjectURL(previous)
@@ -1681,9 +1721,10 @@ export default function App() {
         }
         setRecordingNotice('Enviando o áudio para transcrição...')
         try {
+          const extension = audioType.includes('mp4') ? 'm4a' : audioType.includes('ogg') ? 'ogg' : audioType.includes('wav') ? 'wav' : 'webm'
           const form = new FormData()
-          form.append('file', new File([blob], 'fala-practice.webm', { type: blob.type || 'audio/webm' }))
-          const { data, error } = await supabase.functions.invoke('transcribe', { body: form })
+          form.append('file', new File([blob], 'fala-practice.' + extension, { type: audioType }))
+          const { data, error } = await invokeAuthenticatedFunction<{ text?: string }>('transcribe', { body: form })
           if (error) throw error
           const text = typeof data?.text === 'string' ? data.text.trim() : ''
           if (!text) {
@@ -1695,7 +1736,7 @@ export default function App() {
           setRecordingNotice('Transcrição concluída. A análise a seguir avalia o texto reconhecido, não os sons da sua voz.')
           let textScore: number | null = null
           try {
-            const { data: evaluationData, error: evaluationError } = await supabase.functions.invoke('tutor', {
+            const { data: evaluationData, error: evaluationError } = await invokeAuthenticatedFunction('tutor', {
               body: {
                 mode: 'evaluate',
                 message: text,
@@ -1722,7 +1763,7 @@ export default function App() {
           }
           await recordSession('speaking', studyTimer.finish(), textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
         } catch (error) {
-          setRecordingNotice('A transcrição falhou: ' + friendlyError(error))
+          setRecordingNotice('A transcrição falhou: ' + await functionErrorDetail(error))
         }
       }
       recorder.start(500)
