@@ -805,3 +805,108 @@
   .guided-course .understand-audio-row > div { display:grid; grid-template-columns:1fr 1fr; }
   .guided-course .understand-audio-row > div button { min-width:0; padding-inline:8px; }
 }
+
+
+/* Contextual Lumi drawer inside the guided lesson. */
+.course-lumi-context-button {
+  display:inline-flex;
+  min-height:40px;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:0 11px;
+  border:1px solid #cbddec;
+  border-radius:11px;
+  color:#1d567b;
+  background:#f3f8fc;
+  font-size:12px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.course-lumi-context-button:hover { background:#e8f2f9; }
+.course-lumi-drawer-backdrop {
+  position:fixed;
+  inset:0;
+  z-index:80;
+  display:flex;
+  justify-content:flex-end;
+  background:rgba(9,25,40,.42);
+  backdrop-filter:blur(3px);
+}
+.course-lumi-drawer {
+  width:min(440px,100%);
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:15px;
+  padding:clamp(20px,4vw,30px);
+  overflow-y:auto;
+  border-left:1px solid var(--line);
+  color:var(--ink);
+  background:var(--paper);
+  box-shadow:-18px 0 48px rgba(12,34,52,.16);
+  animation:course-drawer-in .2s ease-out both;
+}
+.course-lumi-drawer-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.course-lumi-drawer-heading h2 {
+  margin:5px 0 0;
+  color:var(--ink);
+  font:800 24px/1.2 Manrope,sans-serif;
+}
+.course-lumi-drawer > p {
+  margin:0;
+  color:var(--muted);
+  font-size:14px;
+  line-height:1.6;
+}
+.course-lumi-drawer textarea {
+  width:100%;
+  min-height:150px;
+  padding:13px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  color:var(--ink);
+  background:var(--canvas);
+  font:500 14px/1.6 Manrope,sans-serif;
+  resize:vertical;
+}
+.course-lumi-drawer-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px;
+  margin-top:auto;
+}
+.course-lumi-drawer-actions button { flex:1 1 150px; }
+:root[data-theme="dark"] .course-lumi-context-button {
+  border-color:#3b566c;
+  color:#d5eafa;
+  background:#1d3447;
+}
+:root[data-theme="dark"] .course-lumi-drawer textarea {
+  border-color:#40576a;
+  color:#edf5fb;
+  background:#0f1e2b;
+}
+@keyframes course-drawer-in {
+  from { opacity:.7; transform:translateX(18px); }
+  to { opacity:1; transform:translateX(0); }
+}
+@media (max-width:767px) {
+  .lesson-topbar { flex-wrap:wrap; }
+  .lesson-topbar .course-lumi-context-button {
+    width:100%;
+    min-height:44px;
+    order:4;
+  }
+  .course-lumi-drawer { width:100%; border-left:0; }
+  .course-lumi-drawer-actions { flex-direction:column-reverse; }
+  .course-lumi-drawer-actions button { width:100%; min-height:46px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .course-lumi-drawer { animation:none; }
+}
