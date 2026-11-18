@@ -39,6 +39,20 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
+type DiagnosticSpeechRecognition = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: { results: ArrayLike<{ 0?: { transcript: string } }> }) => void) | null
+  onerror: ((event: { error?: string }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type DiagnosticSpeechWindow = Window & {
+  SpeechRecognition?: new () => DiagnosticSpeechRecognition
+  webkitSpeechRecognition?: new () => DiagnosticSpeechRecognition
+}
 type LearningReviewItem = {
   id: string
   item_type: 'vocabulary' | 'grammar' | 'phrase' | 'error'
@@ -158,6 +172,11 @@ export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
   const [diagnosticResult, setDiagnosticResult] = useState<{ score: number; level: Level } | null>(null)
+  const [diagnosticWritingSample, setDiagnosticWritingSample] = useState('')
+  const [diagnosticSpeechSample, setDiagnosticSpeechSample] = useState('')
+  const [diagnosticRecording, setDiagnosticRecording] = useState(false)
+  const [diagnosticNotice, setDiagnosticNotice] = useState('')
+  const diagnosticRecognitionRef = useRef<DiagnosticSpeechRecognition | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => readLocal(THEME_KEY, 'light'))
   const [profilePhoto, setProfilePhoto] = useState<string>(() => readLocal(PROFILE_PHOTO_KEY, ''))
   const [user, setUser] = useState<User | null>(null)
@@ -501,6 +520,7 @@ export default function App() {
       if (audioUrl) URL.revokeObjectURL(audioUrl)
       streamRef.current?.getTracks().forEach(track => track.stop())
       if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
+      diagnosticRecognitionRef.current?.stop()
       window.speechSynthesis?.cancel()
     }
   }, [audioUrl])
@@ -772,6 +792,40 @@ export default function App() {
     setReviewRevealed(false)
     setReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
     setToast(mastered ? 'Estrutura marcada como dominada após cinco revisões.' : grade === 'again' ? 'Esse item volta amanhã.' : 'Próxima revisão em ' + nextInterval + ' dias.')
+  }
+
+  const startDiagnosticSpeechCapture = () => {
+    const browserWindow = window as DiagnosticSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setDiagnosticNotice('Este navegador não oferece reconhecimento de fala. Para validar a etapa oral, abra o FALA em uma versão recente do Chrome ou Edge.')
+      return
+    }
+    try {
+      diagnosticRecognitionRef.current?.stop()
+      const recognition = new Recognition()
+      recognition.lang = profile.accent === 'uk' ? 'en-GB' : 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+      recognition.onresult = event => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+        setDiagnosticSpeechSample(transcript)
+        setDiagnosticNotice(transcript ? 'Transcrição oral capturada pelo navegador. A amostra será anexada ao resultado indicativo.' : 'Nenhuma fala foi reconhecida. Tente novamente em um ambiente silencioso.')
+      }
+      recognition.onerror = event => setDiagnosticNotice('Não foi possível capturar a fala (' + (event.error || 'erro') + '). Verifique a permissão do microfone.')
+      recognition.onend = () => {
+        setDiagnosticRecording(false)
+        diagnosticRecognitionRef.current = null
+      }
+      diagnosticRecognitionRef.current = recognition
+      setDiagnosticSpeechSample('')
+      setDiagnosticNotice('Ouvindo sua resposta em inglês…')
+      setDiagnosticRecording(true)
+      recognition.start()
+    } catch {
+      setDiagnosticRecording(false)
+      setDiagnosticNotice('Não foi possível iniciar o microfone. Verifique a permissão e tente novamente.')
+    }
   }
 
   const saveExpressionFromChat = async (term: string, explanation = '') => {
@@ -1998,10 +2052,10 @@ export default function App() {
           </section>}
 
           {page === 'diagnostic' && <section className="diagnostic-layout">
-            <div className="page-heading"><span className="eyebrow">PONTO DE PARTIDA · 5 QUESTÕES</span><h1>Descubra seu <em>nível inicial.</em></h1><p>Uma avaliação breve para sugerir por onde começar. Responda sem consultar materiais; não é uma certificação oficial de proficiência.</p></div>
+            <div className="page-heading"><span className="eyebrow">DIAGNÓSTICO PRÁTICO · EVIDÊNCIAS DE 3 HABILIDADES</span><h1>Mostre o que já <em>consegue fazer.</em></h1><p>Responda às questões, escreva uma amostra e fale em inglês. O resultado é uma estimativa inicial para orientar o curso, não um certificado CEFR oficial.</p></div>
             <div className="diagnostic-intro-card">
               <div className="diagnostic-intro-icon"><Target size={22}/></div>
-              <div><strong>Como funciona</strong><p>São cinco questões de dificuldade crescente. O resultado é uma estimativa inicial e pode ser ajustado conforme você pratica leitura, escuta, escrita e conversação.</p></div>
+              <div><strong>Como funciona</strong><p>O diagnóstico exige evidência objetiva de conhecimento, escrita e produção oral. Uma amostra curta não certifica proficiência; apenas ajuda a recomendar um ponto de partida que será validado em atividades reais.</p></div>
             </div>
             <div className="diagnostic-question-list">
               {diagnosticQuestions.map((question,index) => <article className="diagnostic-question-card" key={question.question}>
@@ -2013,23 +2067,43 @@ export default function App() {
                 {diagnosticResult && <p className={diagnosticAnswers[index] === question.answer ? 'diagnostic-explanation correct' : 'diagnostic-explanation'}><strong>{diagnosticAnswers[index] === question.answer ? 'Correto. ' : 'Resposta para revisar: '}</strong>{question.explanation}</p>}
               </article>)}
             </div>
+            <section className="diagnostic-evidence-grid">
+              <article className="diagnostic-evidence-card">
+                <span className="eyebrow">EVIDÊNCIA 2/3 · ESCRITA</span>
+                <h2>Escreva em inglês sobre um objetivo seu.</h2>
+                <p>Produza ao menos 20 palavras em 3 ou mais frases. Explique algo que deseja aprender, por que isso importa e como pretende praticar.</p>
+                <textarea value={diagnosticWritingSample} onChange={event => { setDiagnosticWritingSample(event.target.value); setDiagnosticResult(null) }} rows={5} placeholder="I want to improve my English because…"/>
+                <small>{diagnosticWritingSample.trim() ? diagnosticWritingSample.trim().split(/\s+/).length : 0} palavras · mínimo de 20</small>
+              </article>
+              <article className="diagnostic-evidence-card">
+                <span className="eyebrow">EVIDÊNCIA 3/3 · FALA</span>
+                <h2>Responda sem ler.</h2>
+                <p>Fale por alguns segundos em inglês: quem você é, por que está estudando e uma situação em que quer usar o idioma. A transcrição é coletada pelo navegador.</p>
+                <div className="diagnostic-speaking-control">
+                  <button className={diagnosticRecording ? 'button voice-stop' : 'button primary'} onClick={startDiagnosticSpeechCapture} disabled={diagnosticRecording}>{diagnosticRecording ? 'Ouvindo…' : <><Mic size={16}/> Capturar amostra oral</>}</button>
+                  {diagnosticSpeechSample && <span className="diagnostic-speaking-confirm"><CheckCircle2 size={15}/> Amostra capturada</span>}
+                </div>
+                <textarea value={diagnosticSpeechSample} readOnly rows={4} placeholder="A transcrição da sua resposta aparecerá aqui após a gravação."/>
+                {diagnosticNotice && <p className="inline-notice">{diagnosticNotice}</p>}
+                <small>{diagnosticSpeechSample.trim() ? diagnosticSpeechSample.trim().split(/\s+/).length + ' palavras transcritas' : 'A etapa oral exige captura pelo microfone.'}</small>
+              </article>
+            </section>
             <div className="diagnostic-submit-row">
-              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões respondidas</span>
-              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length} onClick={() => {
+              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões · {diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length >= 20 ? 'escrita pronta' : 'escrita pendente'} · {diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length >= 5 ? 'fala capturada' : 'fala pendente'}</span>
+              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length || diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length < 20 || diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => {
                 const score = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
                 const level: Level = score <= 1 ? 'beginner' : score === 2 ? 'basic' : score === 3 ? 'intermediate' : 'advanced'
                 setDiagnosticResult({ score, level })
                 setProfile(current => ({ ...current, level }))
-              }}>Ver meu resultado <ArrowRight size={16}/></button>
+              }}>Validar evidências e ver sugestão <ArrowRight size={16}/></button>
             </div>
             {diagnosticResult && <article className="diagnostic-result-card">
-              <span className="eyebrow">SUGESTÃO DE PONTO DE PARTIDA</span>
-              <strong>{diagnosticResult.level === 'beginner' ? 'Iniciante' : diagnosticResult.level === 'basic' ? 'Básico' : diagnosticResult.level === 'intermediate' ? 'Intermediário' : 'Avançado'}</strong>
-              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões. O perfil foi atualizado com essa estimativa. Ela não representa um nível CEFR certificado; o FALA deve confirmar seu progresso em atividades reais.</p>
-              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => setPage('learn')}>Ir para o curso <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null) }}>Refazer avaliação</button></div>
+              <span className="eyebrow">ESTIMATIVA DE PONTO DE PARTIDA · NÃO É CERTIFICADO</span>
+              <strong>{diagnosticResult.level === 'beginner' ? 'A0–A1 · Iniciante' : diagnosticResult.level === 'basic' ? 'A2 · Básico' : diagnosticResult.level === 'intermediate' ? 'B1–B2 · Intermediário' : 'C1 · Avançado'}</strong>
+              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões e forneceu amostras de escrita e fala ({diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length} palavras escritas; {diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length} transcritas). A sugestão foi registrada no perfil. A passagem definitiva entre níveis precisa ser confirmada com avaliação de qualidade das respostas e uso consistente em atividades reais; esta etapa não emite certificado CEFR.</p>
+              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Ir para a próxima aula <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice('') }}>Refazer diagnóstico</button></div>
             </article>}
           </section>}
-
           {page === 'profile' && <section className="profile-page">
             <div className="page-heading"><span className="eyebrow">SEU ESPAÇO</span><h1>Seu perfil. <em>Seu plano.</em></h1><p>Personalize como você aprende e acompanhe seu espaço de estudo.</p></div>
             <article className="profile-hero-card"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Sua foto de perfil"/> : <CircleUserRound size={46}/>}</div><div><span className="eyebrow">PERFIL DO ESTUDANTE</span><h2>{profile.name || 'Estudante FALA'}</h2><p>{profile.goal === 'work' ? 'Trabalho e carreira' : profile.goal === 'travel' ? 'Viagens' : profile.goal === 'study' ? 'Estudos' : 'Conversação e vida diária'} · {profile.level === 'unsure' ? 'Nível a descobrir' : profile.level}</p><div className="profile-page-actions"><label className="button ghost profile-photo-picker">Alterar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label><button className="button primary" onClick={beginProfileEdit}>Editar preferências <ArrowRight size={15}/></button></div></div></article>
