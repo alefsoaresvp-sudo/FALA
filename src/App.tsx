@@ -2028,6 +2028,7 @@ export default function App() {
             initialProgress={courseProgress}
             onProgressChange={handleCourseProgressChange}
             onExerciseAttempt={handleCourseExerciseAttempt}
+            onTranscribeAudio={transcribeCourseAudio}
             autoStartLessonId={nextLessonStartId}
             onAutoStartComplete={() => setNextLessonStartId(null)}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
