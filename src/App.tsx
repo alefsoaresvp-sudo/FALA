@@ -681,7 +681,7 @@ export default function App() {
     answer: string
     expected: string
     explanation: string
-    correct: boolean
+    correct: boolean | null
   }) => {
     const correction = { expected: attempt.expected, explanation: attempt.explanation, correct: attempt.correct, source: 'guided-course-v10' }
     const attemptPayload = {
@@ -691,7 +691,7 @@ export default function App() {
       prompt: attempt.prompt,
       learner_answer: attempt.answer || null,
       correction,
-      score: attempt.correct ? 100 : 0,
+      score: attempt.correct === null ? null : attempt.correct ? 100 : 0,
     }
     let sourceAttemptId: string | null = null
     if (supabase && user) {
@@ -712,7 +712,7 @@ export default function App() {
       } as ActivityAttempt, ...current].slice(0, 40))
     }
 
-    if (attempt.correct) return
+    if (attempt.correct !== false) return
     const itemType: LearningReviewItem['item_type'] = attempt.skill === 'grammar' ? 'grammar'
       : attempt.skill === 'speaking' || attempt.skill === 'writing' ? 'phrase' : 'error'
     const reviewPayload = {
