@@ -2989,3 +2989,96 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .page-content > section,.lumi-live-state.listening .lumi-wave i,
   .lumi-live-state.speaking .lumi-wave i { animation:none !important; }
 }
+
+
+/* V10 mobile QA: preserve the existing brand artwork without changing its identity. */
+@media (max-width: 767px) {
+  .mobile-brand-lockup {
+    display:flex;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    min-height:28px;
+    height:28px;
+    max-height:32px;
+    aspect-ratio:660 / 174;
+    align-items:center;
+    justify-content:flex-start;
+    overflow:visible;
+    flex:0 0 auto;
+    margin:0 0 14px;
+  }
+  .mobile-brand-lockup .mobile-brand-logo {
+    display:block;
+    width:min(100%, 184px);
+    min-width:0;
+    height:28px;
+    max-height:32px;
+    aspect-ratio:660 / 174;
+    object-fit:contain;
+    object-position:left center;
+    flex:0 0 auto;
+    flex-shrink:0;
+  }
+  .mobile-brand-lockup .brand-logo-light { display:block; }
+  .mobile-brand-lockup .brand-logo-dark { display:none; }
+  :root[data-theme="dark"] .mobile-brand-lockup .brand-logo-light { display:none; }
+  :root[data-theme="dark"] .mobile-brand-lockup .brand-logo-dark { display:block; }
+
+  /* Keep supporting copy and status labels readable on narrow screens. */
+  .metric-card small,
+  .metric-card div > span,
+  .dashboard-card-heading,
+  .dashboard-goal-card p,
+  .dashboard-review-card p,
+  .dashboard-text-action,
+  .dashboard-practice-card small,
+  .skill-progress-card span,
+  .skills-progress-note,
+  .voice-state,
+  .connection-pill,
+  .app-footer,
+  .achievement-card p,
+  .achievement-status,
+  .course-eyebrow,
+  .course-intro-note,
+  .course-intro-steps small,
+  .course-storage-note {
+    font-size:12px !important;
+    line-height:1.45;
+  }
+  .mobile-dock button {
+    min-width:44px;
+    min-height:48px;
+    flex-shrink:0;
+  }
+  .mobile-dock button span {
+    font-size:12px !important;
+    line-height:1.2;
+  }
+  .mobile-more-sheet button,
+  .nav-link,
+  .activity-card,
+  .course-primary-button,
+  .course-secondary-button {
+    min-height:44px;
+  }
+}
+
+/* Standalone PWA: account for device safe areas and prevent logo clipping. */
+@media (display-mode: standalone) and (max-width: 767px) {
+  .page-content {
+    padding-top:max(14px, env(safe-area-inset-top, 0px));
+  }
+  .mobile-brand-lockup,
+  .mobile-brand-logo {
+    overflow:visible;
+    flex-shrink:0;
+  }
+}
+
+@media (max-width: 360px) {
+  .mobile-brand-lockup .mobile-brand-logo {
+    width:min(100%, 160px);
+  }
+}
