@@ -57,6 +57,26 @@ try {
     }
     Object.defineProperty(window, 'SpeechRecognition', { value: FakeSpeechRecognition })
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: FakeSpeechRecognition })
+    class FakeMediaRecorder {
+      state = 'inactive'
+      mimeType = 'audio/webm;codecs=opus'
+      ondataavailable = null
+      onstop = null
+      onerror = null
+      static isTypeSupported(type) { return type.includes('audio/webm') }
+      start() { this.state = 'recording' }
+      stop() {
+        if (this.state !== 'recording') return
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['mock audio data'], { type: this.mimeType }) })
+        this.onstop?.()
+      }
+    }
+    Object.defineProperty(window, 'MediaRecorder', { value: FakeMediaRecorder })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) },
+    })
   })
   await page.route('https://fonts.googleapis.com/**', route => route.abort())
   await page.route('https://fonts.gstatic.com/**', route => route.abort())
@@ -134,6 +154,25 @@ try {
   assert.match(await page.getByRole('textbox', { name: 'Dúvida para a Lumi' }).inputValue(), /estrutura esperada/i)
   await page.getByRole('button', { name: 'Continuar aula' }).click()
 
+  for (const word of ['My', 'name', 'is', 'Ana.']) {
+    await page.getByRole('button', { name: word, exact: true }).click()
+  }
+  await page.getByRole('button', { name: 'Conferir resposta' }).click()
+  await page.locator('.course-feedback.correct').waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click()
+  await page.locator('.course-answer-input').fill('I am Pedro.')
+  await page.getByRole('button', { name: 'Conferir resposta' }).click()
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click()
+  await page.locator('.course-answer-input').fill('Good morning.')
+  await page.getByRole('button', { name: 'Conferir resposta' }).click()
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click()
+  await page.getByRole('button', { name: 'Gravar voz' }).click()
+  await page.getByRole('button', { name: 'Parar gravação' }).waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Parar gravação' }).click()
+  await page.getByText(/a transcrição falhou: entre na sua conta/i).waitFor({ state: 'visible' })
+  await page.getByRole('button', { name: 'Marcar como praticado sem gravação' }).click()
+  await page.getByRole('button', { name: 'Continuar', exact: true }).click()
+
   await page.locator('.sidebar').getByRole('button', { name: 'Lumi IA', exact: true }).click()
   await page.getByRole('button', { name: 'Praticar conversa', exact: true }).click()
   const chatInput = page.getByRole('textbox', { name: 'Mensagem para a Lumi' })
@@ -181,7 +220,7 @@ try {
   assert.match(await page.locator('.diagnostic-result-card').innerText(), /Resultado composto/)
   assert.equal(pageErrors.length, 0, 'No unhandled browser errors should occur during desktop/tablet/mobile smoke tests.')
 
-  console.log('UI smoke tests passed: desktop, tablet, mobile, light/dark logo, navigation, Lumi prompt and diagnostic.')
+  console.log('UI smoke tests passed: responsive layouts, navigation, course lesson, MediaRecorder start/stop fallback, Lumi prompt and diagnostic.')
 } finally {
   await browser?.close()
   server.kill('SIGTERM')
