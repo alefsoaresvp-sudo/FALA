@@ -62,6 +62,14 @@ try {
   await page.route('https://fonts.gstatic.com/**', route => route.abort())
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   await page.getByRole('dialog', { name: /Seu próximo passo/ }).waitFor({ state: 'visible' })
+  await page.keyboard.press('Tab')
+  const tourKeyboardFocus = await page.evaluate(() => {
+    const active = document.activeElement
+    return active instanceof HTMLElement && active.matches(':focus-visible') &&
+      getComputedStyle(active).outlineStyle !== 'none' &&
+      getComputedStyle(active).outlineWidth === '3px'
+  })
+  assert.ok(tourKeyboardFocus, 'The initial tour must receive keyboard focus and show a visible focus indicator.')
   await page.getByRole('button', { name: 'Pular tour' }).click()
   await page.locator('.sidebar .brand-logo-light').waitFor({ state: 'visible' })
   const logoLoaded = await page.locator('.sidebar .brand-logo-light').evaluate(img => img.complete && img.naturalWidth > 0)
@@ -69,15 +77,7 @@ try {
   assert.match(await page.locator('.sidebar .brand-logo-light').getAttribute('alt'), /FALA English/)
   const activeNav = page.locator('.sidebar .nav-link[aria-current="page"]')
   assert.equal(await activeNav.innerText(), 'Início', 'The active navigation item must be announced.')
-  await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).focus()
-  await page.keyboard.press('Tab')
-  const keyboardFocus = await page.evaluate(() => {
-    const active = document.activeElement
-    return active instanceof HTMLElement && active.matches(':focus-visible') &&
-      getComputedStyle(active).outlineStyle !== 'none' &&
-      getComputedStyle(active).outlineWidth === '3px'
-  })
-  assert.ok(keyboardFocus, 'Keyboard navigation must show a visible focus indicator.')
+  await page.locator('.sidebar').getByRole('button', { name: 'Início', exact: true }).waitFor({ state: 'visible' })
   const practiceCards = page.locator('.dashboard-practice-grid .activity-card')
   assert.equal(await practiceCards.count(), 5, 'The dashboard must show all five quick-practice tools.')
   await practiceCards.filter({ hasText: 'Lumi IA' }).click()

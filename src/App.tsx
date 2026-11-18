@@ -40,7 +40,7 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
-type DiagnosticResult = { score: number; level: Level; quizScore: number; writingScore: number; speakingScore: number; writingEvaluation?: TrackEvaluation; speakingEvaluation?: TrackEvaluation; method: 'ai' | 'heuristic' }
+type DiagnosticResult = { score: number; level: Level; quizScore: number; writingScore: number; speakingScore: number; writingEvaluation?: TrackEvaluation; speakingEvaluation?: TrackEvaluation; method: 'ai' | 'heuristic' | 'mixed' }
 type DiagnosticSpeechRecognition = {
   lang: string
   interimResults: boolean
@@ -548,6 +548,12 @@ export default function App() {
   }, [audioUrl])
 
   useEffect(() => {
+    if (appTourStep === null) return
+    const firstAction = document.querySelector<HTMLButtonElement>('.app-tour-dialog button')
+    firstAction?.focus()
+  }, [appTourStep])
+
+  useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(''), 4200)
     return () => window.clearTimeout(timer)
@@ -870,6 +876,7 @@ export default function App() {
           speakingScore = Math.max(0, Math.min(100, Math.round(speaking.score)))
         }
         if (writingEvaluation && speakingEvaluation) method = 'ai'
+        else if (writingEvaluation || speakingEvaluation) method = 'mixed'
         setDiagnosticNotice(method === 'ai'
           ? 'A Lumi avaliou as duas amostras. A fala foi analisada somente a partir da transcrição.'
           : 'A avaliação por IA não ficou totalmente disponível; as amostras sem avaliação receberam apenas indicadores estruturais provisórios.')
@@ -2224,6 +2231,7 @@ export default function App() {
               {diagnosticResult.writingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback de escrita</strong><p>{diagnosticResult.writingEvaluation.correction}</p><small>Versão sugerida: {diagnosticResult.writingEvaluation.improved_answer}</small></div>}
               {diagnosticResult.speakingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback da fala transcrita</strong><p>{diagnosticResult.speakingEvaluation.correction}</p><small>{diagnosticResult.speakingEvaluation.next_step}</small></div>}
               {diagnosticResult.method === 'heuristic' && <p className="diagnostic-method-note">Modo sem IA: escrita e fala receberam uma pontuação estrutural provisória baseada em extensão, organização das frases e variedade de palavras. Entre na conta para a Lumi avaliar conteúdo, gramática e adequação ao nível.</p>}
+              {diagnosticResult.method === 'mixed' && <p className="diagnostic-method-note">Uma das amostras recebeu avaliação da Lumi; a outra recebeu apenas indicadores estruturais provisórios. A transcrição oral não mede pronúncia ou qualidade fonética.</p>}
               <p>A sugestão foi registrada no perfil. Use este resultado como ponto de partida, não como certificação CEFR; a progressão definitiva depende de desempenho consistente em tarefas novas.</p>
               <div className="diagnostic-result-actions"><button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Ir para a próxima aula <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice('') }}>Refazer diagnóstico</button></div>
             </article>}
