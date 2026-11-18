@@ -31,6 +31,7 @@ type Exercise = {
   answer: string
   explanation: string
   hint?: string
+  isRetry?: boolean
 }
 type Lesson = {
   id: string
@@ -45,16 +46,31 @@ type Lesson = {
   isCheckpoint?: boolean
 }
 type Unit = { id: string; title: string; subtitle: string; level: string; lessons: Lesson[] }
-type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null }
+export type SavedProgress = { completedLessonIds: string[]; xp: number; introDone: boolean; activeLessonId: string | null; streakDays?: number; lastStudyDate?: string | null; lessonScores?: Record<string, number> }
+type CourseAttemptPayload = {
+  activityType: string
+  skill: 'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'
+  prompt: string
+  answer: string
+  expected: string
+  explanation: string
+  correct: boolean | null
+}
 type Props = {
   accent?: 'us' | 'uk'
   goalLabel?: string
   onAskTutor: (question: string) => void
-  onLessonComplete: (score: number) => void
+  onLessonComplete: (score: number, lessonId?: string, coveredSkills?: Array<'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'>) => void
+  initialProgress?: SavedProgress | null
+  onProgressChange?: (progress: SavedProgress) => void
+  onExerciseAttempt?: (attempt: CourseAttemptPayload) => void
+  onTranscribeAudio?: (blob: Blob) => Promise<string>
+  autoStartLessonId?: string | null
+  onAutoStartComplete?: () => void
 }
 
 const STORAGE_KEY = 'fala-course-progress-v1'
-const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null, streakDays: 0, lastStudyDate: null }
+const initialProgress: SavedProgress = { completedLessonIds: [], xp: 0, introDone: false, activeLessonId: null, streakDays: 0, lastStudyDate: null, lessonScores: {} }
 
 const units: Unit[] = [
   {
@@ -76,11 +92,14 @@ const units: Unit[] = [
           { term: 'I am...', meaning: 'Eu sou / estou...', example: 'I am Pedro.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como se diz “Olá” em inglês?', options: ['Goodbye', 'Hello', 'Please'], answer: 'Hello', explanation: 'Hello significa “olá”. Hi também significa “oi” e é mais informal.' },
+          { kind: 'type', prompt: 'Escreva em inglês “Olá” em inglês?', options: ['Goodbye', 'Hello', 'Please'], answer: 'Hello', explanation: 'Hello significa “olá”. Hi também significa “oi” e é mais informal.' },
           { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'is', 'My', 'name'], answer: 'My name is Ana.', explanation: 'A ordem é My + name + is + nome. Em inglês, não dizemos “My is name”.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu sou Pedro.”', answer: 'I am Pedro.', explanation: 'I significa “eu” e am é a forma do verbo be usada com I.' },
           { kind: 'listen', prompt: 'Ouça e escreva exatamente o que escutar.', answer: 'Good morning.', explanation: 'Good morning significa “bom dia”. Ouça o som das duas palavras juntas.' },
           { kind: 'repeat', prompt: 'Ouça e repita em voz alta: “Nice to meet you.”', answer: 'Nice to meet you.', explanation: 'A expressão significa “prazer em conhecer você”. Repita em voz alta; este exercício não mede fonética automaticamente.' },
+          { kind: 'build', prompt: 'Organize o diálogo para que a conversa faça sentido.', tokens: ['B: Hi, Ana!', 'A: I am fine, thanks.', 'B: How are you?', 'A: Hello!'], answer: 'A: Hello! B: Hi, Ana! B: How are you? A: I am fine, thanks.', explanation: 'Uma conversa natural começa com o cumprimento, segue com a pergunta e termina com a resposta.' },
+          { kind: 'type', prompt: 'Traduza ativamente: “Prazer em conhecer você.”', answer: 'Nice to meet you.', explanation: 'Nice to meet you é a expressão natural para conhecer alguém pela primeira vez.' },
+          { kind: 'type', prompt: 'Corrija o erro: “I is a student.”', answer: 'I am a student.', explanation: 'Com o pronome I, a forma correta do verbo be é am, não is.' },
         ],
       },
       {
@@ -96,11 +115,12 @@ const units: Unit[] = [
           { term: 'black / white / orange / pink / purple', meaning: 'preto / branco / laranja / rosa / roxo', example: 'A black phone = Um telefone preto' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual palavra significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
-          { kind: 'choice', prompt: 'O que significa “blue”?', options: ['Azul', 'Verde', 'Vermelho'], answer: 'Azul', explanation: 'Blue = azul. Green = verde e red = vermelho.' },
+          { kind: 'type', prompt: 'Escreva a palavra que significa “sete”?', options: ['Six', 'Seven', 'Ten'], answer: 'Seven', explanation: 'Seven = sete. Six = seis e ten = dez.' },
+          { kind: 'type', prompt: 'Escreva o significado de “blue”?', options: ['Azul', 'Verde', 'Vermelho'], answer: 'Azul', explanation: 'Blue = azul. Green = verde e red = vermelho.' },
           { kind: 'build', prompt: 'Monte: “Um livro azul.”', tokens: ['book.', 'A', 'blue'], answer: 'A blue book.', explanation: 'Em inglês, a cor vem antes do objeto: blue book.' },
           { kind: 'type', prompt: 'Escreva em inglês: “dois telefones”.', answer: 'Two phones.', explanation: 'Two significa dois. Para a maioria dos substantivos contáveis, acrescentamos -s no plural: phone → phones.' },
           { kind: 'listen', prompt: 'Ouça e escreva o número que escutar por extenso.', answer: 'Eight.', explanation: 'Eight significa oito. Não confunda eight /eɪt/ com ate /eɪt/, que é uma palavra diferente pelo contexto.' },
+          { kind: 'type', prompt: 'Traduza a ideia: “Eu tenho um livro azul.”', answer: 'I have a blue book.', explanation: 'A frase usa sujeito + have + artigo + cor + objeto. Em inglês, a cor vem antes do substantivo.' },
         ],
       },
       {
@@ -116,8 +136,8 @@ const units: Unit[] = [
           { term: 'am / are / is', meaning: 'formas do verbo ser / estar', example: 'I am, you are, he is.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “I ___ Brazilian.”', options: ['is', 'are', 'am'], answer: 'am', explanation: 'Com I, usamos am: I am Brazilian.' },
-          { kind: 'choice', prompt: 'Qual pronome significa “ela”?', options: ['He', 'She', 'You'], answer: 'She', explanation: 'She = ela. He = ele. You = você ou vocês.' },
+          { kind: 'type', prompt: 'Complete: “I ___ Brazilian.”', options: ['is', 'are', 'am'], answer: 'am', explanation: 'Com I, usamos am: I am Brazilian.' },
+          { kind: 'choice', prompt: 'Escreva o pronome que significa “ela”?', options: ['He', 'She', 'You'], answer: 'She', explanation: 'She = ela. He = ele. You = você ou vocês.' },
           { kind: 'build', prompt: 'Monte: “Ele está feliz.”', tokens: ['happy.', 'He', 'is'], answer: 'He is happy.', explanation: 'He pede is. A estrutura básica é pessoa + be + característica.' },
           { kind: 'type', prompt: 'Escreva: “Você é estudante.”', answer: 'You are a student.', explanation: 'You are = você é. Usamos a antes de student, porque é um substantivo contável no singular.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “She is my friend.”', answer: 'She is my friend.', explanation: 'She is = ela é/está. My friend = minha amiga ou meu amigo.' },
@@ -137,8 +157,8 @@ const units: Unit[] = [
           { term: 'How do you spell...?', meaning: 'Como se soletra...?', example: 'How do you spell Ana? A-N-A.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como se chama a letra A em inglês?', options: ['Ah', 'Ei', 'Ai'], answer: 'Ei', explanation: 'O nome da letra A em inglês é “ei”, como o som inicial de “ей”.' },
-          { kind: 'choice', prompt: 'Qual letra tem o nome “ai”?', options: ['E', 'I', 'A'], answer: 'I', explanation: 'I se chama “ai”. E se chama “i” e A se chama “ei”.' },
+          { kind: 'type', prompt: 'Como se chama a letra A em inglês?', options: ['Ah', 'Ei', 'Ai'], answer: 'Ei', explanation: 'O nome da letra A em inglês é “ei”, como o som inicial de “ей”.' },
+          { kind: 'type', prompt: 'Escreva a letra que tem o nome “ai”?', options: ['E', 'I', 'A'], answer: 'I', explanation: 'I se chama “ai”. E se chama “i” e A se chama “ei”.' },
           { kind: 'build', prompt: 'Monte a pergunta “Como se soletra?”', tokens: ['spell?', 'you', 'do', 'How'], answer: 'How do you spell?', explanation: 'How do you spell...? é a pergunta usada para pedir a soletração.' },
           { kind: 'type', prompt: 'Complete a soletração do nome Ana: A-N-___', answer: 'A', explanation: 'Ana é soletrado A-N-A. Diga o nome das letras em inglês: ei – en – ei.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “How do you spell your name?”', answer: 'How do you spell your name?', explanation: 'A frase significa “Como você soletra seu nome?”. Ouça, repita e depois tente soletrar seu próprio nome.' },
@@ -158,8 +178,8 @@ const units: Unit[] = [
           { term: 'this / these', meaning: 'este / estes', example: 'This is a pen. These are pens.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “___ apple” (uma maçã).', options: ['A', 'An', 'The'], answer: 'An', explanation: 'Apple começa com som de vogal; por isso usamos an: an apple.' },
-          { kind: 'choice', prompt: 'Qual é o plural de “book”?', options: ['bookes', 'books', 'book'], answer: 'books', explanation: 'Na maioria dos substantivos, acrescentamos -s: book → books.' },
+          { kind: 'type', prompt: 'Complete: “___ apple” (uma maçã).', options: ['A', 'An', 'The'], answer: 'An', explanation: 'Apple começa com som de vogal; por isso usamos an: an apple.' },
+          { kind: 'type', prompt: 'Escreva o plural de “book”?', options: ['bookes', 'books', 'book'], answer: 'books', explanation: 'Na maioria dos substantivos, acrescentamos -s: book → books.' },
           { kind: 'build', prompt: 'Monte: “Eu tenho um telefone.”', tokens: ['phone.', 'a', 'have', 'I'], answer: 'I have a phone.', explanation: 'I (eu) + have (tenho) + a (um) + phone (telefone).' },
           { kind: 'type', prompt: 'Escreva “duas maçãs” em inglês.', answer: 'Two apples.', explanation: 'Two = duas. Apple recebe -s no plural: apples.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have an apple and two books.”', answer: 'I have an apple and two books.', explanation: 'An apple está no singular; two books está no plural.' },
@@ -180,8 +200,8 @@ const units: Unit[] = [
         ],
         isReview: true,
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase significa “Eu sou estudante”?', options: ['I student.', 'I am a student.', 'I have student.'], answer: 'I am a student.', explanation: 'I am = eu sou/estou. A frase precisa do artigo a antes de student.' },
-          { kind: 'choice', prompt: 'Qual cor é “green”?', options: ['Verde', 'Vermelho', 'Roxo'], answer: 'Verde', explanation: 'Green = verde; red = vermelho; purple = roxo.' },
+          { kind: 'choice', prompt: 'Escreva a frase que significa “Eu sou estudante”?', options: ['I student.', 'I am a student.', 'I have student.'], answer: 'I am a student.', explanation: 'I am = eu sou/estou. A frase precisa do artigo a antes de student.' },
+          { kind: 'type', prompt: 'Traduza a cor: “green”?', options: ['Verde', 'Vermelho', 'Roxo'], answer: 'Verde', explanation: 'Green = verde; red = vermelho; purple = roxo.' },
           { kind: 'build', prompt: 'Monte: “Meu nome é Ana.”', tokens: ['Ana.', 'name', 'is', 'My'], answer: 'My name is Ana.', explanation: 'My name is... é a estrutura para dizer seu nome.' },
           { kind: 'type', prompt: 'Escreva o número “doze”.', answer: 'Twelve.', explanation: 'Twelve = doze. Eleven = onze e thirteen = treze.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a blue book.”', answer: 'I have a blue book.', explanation: 'I have = eu tenho; a blue book = um livro azul.' },
@@ -202,11 +222,11 @@ const units: Unit[] = [
         ],
         isCheckpoint: true,
         exercises: [
-          { kind: 'choice', prompt: 'Como se diz “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
-          { kind: 'choice', prompt: 'Qual é a tradução de “five”?', options: ['Quatro', 'Cinco', 'Seis'], answer: 'Cinco', explanation: 'Five = cinco.' },
-          { kind: 'choice', prompt: 'O que significa “purple”?', options: ['Laranja', 'Roxo', 'Preto'], answer: 'Roxo', explanation: 'Purple = roxo.' },
+          { kind: 'type', prompt: 'Escreva em inglês “bom dia”?', options: ['Good morning', 'Good night', 'Goodbye'], answer: 'Good morning', explanation: 'Good morning = bom dia.' },
+          { kind: 'type', prompt: 'Traduza a ideia: “five”?', options: ['Quatro', 'Cinco', 'Seis'], answer: 'Cinco', explanation: 'Five = cinco.' },
+          { kind: 'type', prompt: 'Escreva o significado de “purple”?', options: ['Laranja', 'Roxo', 'Preto'], answer: 'Roxo', explanation: 'Purple = roxo.' },
           { kind: 'choice', prompt: 'Complete: “She ___ happy.”', options: ['am', 'are', 'is'], answer: 'is', explanation: 'Com she (ela), usamos is: She is happy.' },
-          { kind: 'choice', prompt: 'Complete: “___ orange”.', options: ['A', 'An', 'These'], answer: 'An', explanation: 'Orange começa com som de vogal; usamos an.' },
+          { kind: 'type', prompt: 'Complete: “___ orange”.', options: ['A', 'An', 'These'], answer: 'An', explanation: 'Orange começa com som de vogal; usamos an.' },
           { kind: 'build', prompt: 'Monte: “Eu quero água.”', tokens: ['water.', 'I', 'want'], answer: 'I want water.', explanation: 'I = eu; want = quero; water = água.' },
           { kind: 'type', prompt: 'Escreva “três livros”.', answer: 'Three books.', explanation: 'Three = três; book no plural recebe -s.' },
           { kind: 'listen', prompt: 'Ouça e escreva: “Hello, my name is Ana.”', answer: 'Hello, my name is Ana.', explanation: 'Hello = olá; my name is = meu nome é.' },
@@ -233,7 +253,7 @@ const units: Unit[] = [
           { term: 'please', meaning: 'por favor', example: 'Water, please. = Água, por favor.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “I want”?', options: ['Eu tenho', 'Eu quero', 'Eu gosto'], answer: 'Eu quero', explanation: 'I = eu; want = quero. Juntas: I want = eu quero.' },
+          { kind: 'type', prompt: 'Escreva o significado de “I want”?', options: ['Eu tenho', 'Eu quero', 'Eu gosto'], answer: 'Eu quero', explanation: 'I = eu; want = quero. Juntas: I want = eu quero.' },
           { kind: 'build', prompt: 'Monte: “Eu quero suco.”', tokens: ['juice.', 'want', 'I'], answer: 'I want juice.', explanation: 'A estrutura é I + want + o que você quer. Troque juice por water, coffee ou food.' },
           { kind: 'type', prompt: 'Escreva em inglês: “Eu quero água.”', answer: 'I want water.', explanation: 'I want water = Eu quero água. Water normalmente não recebe plural quando falamos da bebida.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I want coffee.', explanation: 'I want coffee = Eu quero café. Perceba que want vem antes da coisa desejada.' },
@@ -253,10 +273,10 @@ const units: Unit[] = [
           { term: 'also', meaning: 'também', example: 'I also like coffee. = Eu também gosto de café.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como dizer “Eu tenho um carro”?', options: ['I am a car.', 'I have a car.', 'I like a car.'], answer: 'I have a car.', explanation: 'Have significa ter. I have a car = Eu tenho um carro.' },
+          { kind: 'type', prompt: 'Traduza a ideia: “Eu tenho um carro”?', options: ['I am a car.', 'I have a car.', 'I like a car.'], answer: 'I have a car.', explanation: 'Have significa ter. I have a car = Eu tenho um carro.' },
           { kind: 'build', prompt: 'Monte: “Eu gosto de música.”', tokens: ['music.', 'I', 'like'], answer: 'I like music.', explanation: 'Depois de I like, colocamos aquilo de que gostamos.' },
           { kind: 'type', prompt: 'Escreva: “Eu tenho uma maçã.”', answer: 'I have an apple.', explanation: 'Usamos an antes de apple porque começa com som de vogal.' },
-          { kind: 'choice', prompt: 'Complete: “I ___ coffee.” (Eu gosto de café.)', options: ['like', 'am', 'are'], answer: 'like', explanation: 'I like coffee = Eu gosto de café. Não usamos am antes do verbo like.' },
+          { kind: 'type', prompt: 'Complete: “I ___ coffee.” (Eu gosto de café.)', options: ['like', 'am', 'are'], answer: 'like', explanation: 'I like coffee = Eu gosto de café. Não usamos am antes do verbo like.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have a phone and I like music.”', answer: 'I have a phone and I like music.', explanation: 'A frase combina duas ideias com and = e.' },
         ],
       },
@@ -273,9 +293,9 @@ const units: Unit[] = [
           { term: 'No, I do not.', meaning: 'Não.', example: 'No, I do not. = Não, eu não gosto / faço.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual pergunta significa “Você gosta de café?”', options: ['You like coffee?', 'Do you like coffee?', 'Are you like coffee?'], answer: 'Do you like coffee?', explanation: 'No presente simples, usamos Do + you + verbo na pergunta.' },
+          { kind: 'choice', prompt: 'Escreva a pergunta que significa “Você gosta de café?”', options: ['You like coffee?', 'Do you like coffee?', 'Are you like coffee?'], answer: 'Do you like coffee?', explanation: 'No presente simples, usamos Do + you + verbo na pergunta.' },
           { kind: 'build', prompt: 'Monte a pergunta: “Você trabalha?”', tokens: ['work?', 'Do', 'you'], answer: 'Do you work?', explanation: 'Do inicia a pergunta; you é o sujeito; work é o verbo na forma base.' },
-          { kind: 'choice', prompt: 'Qual resposta curta é correta para “Yes”?', options: ['Yes, I do.', 'Yes, I am.', 'Yes, I have.'], answer: 'Yes, I do.', explanation: 'A pergunta começou com Do, então a resposta curta usa do.' },
+          { kind: 'type', prompt: 'Escreva uma resposta curta e correta para “Yes”?', options: ['Yes, I do.', 'Yes, I am.', 'Yes, I have.'], answer: 'Yes, I do.', explanation: 'A pergunta começou com Do, então a resposta curta usa do.' },
           { kind: 'type', prompt: 'Escreva: “Você gosta de música?”', answer: 'Do you like music?', explanation: 'Do you like + assunto? é uma estrutura muito útil para iniciar conversas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Do you speak English?”', answer: 'Do you speak English?', explanation: 'A frase significa “Você fala inglês?”. Speak = falar.' },
         ],
@@ -301,7 +321,7 @@ const units: Unit[] = [
           { term: 'every day', meaning: 'todos os dias', example: 'I study every day.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “I study English”?', options: ['Eu ensino inglês.', 'Eu estudo inglês.', 'Eu trabalho em inglês.'], answer: 'Eu estudo inglês.', explanation: 'Study significa estudar. I study English = Eu estudo inglês.' },
+          { kind: 'type', prompt: 'Escreva o significado de “I study English”?', options: ['Eu ensino inglês.', 'Eu estudo inglês.', 'Eu trabalho em inglês.'], answer: 'Eu estudo inglês.', explanation: 'Study significa estudar. I study English = Eu estudo inglês.' },
           { kind: 'build', prompt: 'Monte: “Eu moro no Brasil.”', tokens: ['Brazil.', 'in', 'I', 'live'], answer: 'I live in Brazil.', explanation: 'Live in + lugar significa morar em determinado lugar.' },
           { kind: 'type', prompt: 'Escreva: “Eu trabalho todos os dias.”', answer: 'I work every day.', explanation: 'Every day são duas palavras e significa “todos os dias”.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'I study at night.', explanation: 'At night = à noite. I study at night = Eu estudo à noite.' },
@@ -321,7 +341,7 @@ const units: Unit[] = [
           { term: 'the bill', meaning: 'a conta', example: 'Could we have the bill? = Poderia trazer a conta?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase é mais educada para pedir um café?', options: ['Coffee now!', 'I would like a coffee, please.', 'Give coffee.'], answer: 'I would like a coffee, please.', explanation: 'I would like... é uma forma educada de pedir algo.' },
+          { kind: 'type', prompt: 'Qual frase é mais educada para pedir um café?', options: ['Coffee now!', 'I would like a coffee, please.', 'Give coffee.'], answer: 'I would like a coffee, please.', explanation: 'I would like... é uma forma educada de pedir algo.' },
           { kind: 'build', prompt: 'Monte: “Eu gostaria de água, por favor.”', tokens: ['please.', 'water,', 'I', 'would', 'like'], answer: 'I would like water, please.', explanation: 'I would like + item + please. A vírgula é apenas pontuação; a ordem das palavras importa.' },
           { kind: 'type', prompt: 'Escreva: “Poderia me trazer o cardápio?”', answer: 'Could I have the menu?', explanation: 'Could I have...? é um pedido educado. The menu = o cardápio.' },
           { kind: 'listen', prompt: 'Ouça e escreva o pedido.', answer: 'Could I have the bill, please?', explanation: 'Bill é a conta do restaurante. Não confunda com a palavra menu.' },
@@ -349,7 +369,7 @@ const units: Unit[] = [
           { term: 'next to', meaning: 'ao lado de', example: 'It is next to the hotel.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como perguntar “Onde fica o banheiro?”', options: ['Where is the bathroom?', 'Bathroom where?', 'What bathroom is?'], answer: 'Where is the bathroom?', explanation: 'Use Where is + the + lugar para perguntar onde algo fica.' },
+          { kind: 'type', prompt: 'Como perguntar “Onde fica o banheiro?”', options: ['Where is the bathroom?', 'Bathroom where?', 'What bathroom is?'], answer: 'Where is the bathroom?', explanation: 'Use Where is + the + lugar para perguntar onde algo fica.' },
           { kind: 'build', prompt: 'Monte: “Onde fica a estação?”', tokens: ['station?', 'the', 'Where', 'is'], answer: 'Where is the station?', explanation: 'Where vem primeiro, depois is, the e o nome do lugar.' },
           { kind: 'type', prompt: 'Escreva: “O hotel fica perto.”', answer: 'The hotel is near.', explanation: 'The hotel = o hotel; is near = fica perto.' },
           { kind: 'listen', prompt: 'Ouça e escreva a pergunta.', answer: 'Where is the airport?', explanation: 'Airport = aeroporto. A pergunta pode ser reutilizada trocando apenas o lugar.' },
@@ -398,10 +418,10 @@ const units: Unit[] = [
           { term: 'his / her', meaning: 'dele / dela', example: 'Her phone = o telefone dela.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como dizer “minha irmã”?', options: ['I sister', 'My sister', 'Her sister'], answer: 'My sister', explanation: 'My indica posse ligada a quem fala: my sister = minha irmã.' },
+          { kind: 'type', prompt: 'Traduza a ideia: “minha irmã”?', options: ['I sister', 'My sister', 'Her sister'], answer: 'My sister', explanation: 'My indica posse ligada a quem fala: my sister = minha irmã.' },
           { kind: 'build', prompt: 'Monte: “O nome dela é Ana.”', tokens: ['Ana.', 'is', 'name', 'Her'], answer: 'Her name is Ana.', explanation: 'Her = dela; name = nome; is = é. A ordem é Her + name + is + nome.' },
           { kind: 'type', prompt: 'Escreva: “Meu pai é professor.”', answer: 'My father is a teacher.', explanation: 'My father = meu pai. Teacher = professor(a). Usamos a antes da profissão no singular.' },
-          { kind: 'choice', prompt: 'Complete: “Pedro loves ___ dog.” (o cachorro dele)', options: ['her', 'his', 'your'], answer: 'his', explanation: 'His indica algo pertencente a ele. Her seria dela.' },
+          { kind: 'type', prompt: 'Complete: “Pedro loves ___ dog.” (o cachorro dele)', options: ['her', 'his', 'your'], answer: 'his', explanation: 'His indica algo pertencente a ele. Her seria dela.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “My family lives in Brazil.”', answer: 'My family lives in Brazil.', explanation: 'My family = minha família. Lives recebe -s porque family é terceira pessoa do singular.' },
         ],
       },
@@ -418,8 +438,8 @@ const units: Unit[] = [
           { term: 'next to', meaning: 'ao lado de', example: 'The sofa is next to the door.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “There ___ a bathroom.”', options: ['are', 'is', 'am'], answer: 'is', explanation: 'Bathroom está no singular. Use There is para uma coisa.' },
-          { kind: 'choice', prompt: 'Complete: “There ___ three windows.”', options: ['is', 'are', 'am'], answer: 'are', explanation: 'Windows está no plural. Use There are para duas ou mais coisas.' },
+          { kind: 'type', prompt: 'Complete: “There ___ a bathroom.”', options: ['are', 'is', 'am'], answer: 'is', explanation: 'Bathroom está no singular. Use There is para uma coisa.' },
+          { kind: 'type', prompt: 'Complete: “There ___ three windows.”', options: ['is', 'are', 'am'], answer: 'are', explanation: 'Windows está no plural. Use There are para duas ou mais coisas.' },
           { kind: 'build', prompt: 'Monte: “Há dois quartos.”', tokens: ['bedrooms.', 'two', 'are', 'There'], answer: 'There are two bedrooms.', explanation: 'There are + quantidade + substantivo no plural.' },
           { kind: 'type', prompt: 'Escreva: “Há uma mesa na cozinha.”', answer: 'There is a table in the kitchen.', explanation: 'There is para uma mesa. In the kitchen = na cozinha.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'There are two chairs.', explanation: 'There are indica plural. Two chairs = duas cadeiras.' },
@@ -438,10 +458,10 @@ const units: Unit[] = [
           { term: 'Can I...?', meaning: 'Posso...?', example: 'Can I sit here? = Posso sentar aqui?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Como dizer “Eu sei nadar”?', options: ['I can swim.', 'I am swim.', 'I do swim can.'], answer: 'I can swim.', explanation: 'Can vem antes do verbo na forma base: can swim. Não usamos to depois de can.' },
+          { kind: 'choice', prompt: 'Traduza a ideia: “Eu sei nadar”?', options: ['I can swim.', 'I am swim.', 'I do swim can.'], answer: 'I can swim.', explanation: 'Can vem antes do verbo na forma base: can swim. Não usamos to depois de can.' },
           { kind: 'build', prompt: 'Monte: “Eu não posso dirigir.”', tokens: ['drive.', 'can’t', 'I'], answer: 'I can’t drive.', explanation: 'I + can’t + verbo base. Can’t é a forma curta de cannot.' },
           { kind: 'type', prompt: 'Escreva: “Você pode me ajudar?”', answer: 'Can you help me?', explanation: 'Can you + verbo + complemento? é uma pergunta comum para pedir ajuda.' },
-          { kind: 'choice', prompt: 'Qual frase pede permissão?', options: ['I can speak.', 'Can I sit here?', 'You can help.'], answer: 'Can I sit here?', explanation: 'Can I...? significa “Posso...?” e pode ser usado para pedir permissão.' },
+          { kind: 'type', prompt: 'Qual frase pede permissão?', options: ['I can speak.', 'Can I sit here?', 'You can help.'], answer: 'Can I sit here?', explanation: 'Can I...? significa “Posso...?” e pode ser usado para pedir permissão.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I can understand a little English.”', answer: 'I can understand a little English.', explanation: 'A little = um pouco. Understand = entender.' },
         ],
       },
@@ -458,10 +478,10 @@ const units: Unit[] = [
           { term: 'can / can’t', meaning: 'consegue / não consegue', example: 'I can cook.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “___ mother is a doctor.” (a mãe dela)', options: ['His', 'Her', 'My'], answer: 'Her', explanation: 'Her mother = a mãe dela. O possessivo concorda com a pessoa que possui.' },
+          { kind: 'type', prompt: 'Complete: “___ mother is a doctor.” (a mãe dela)', options: ['His', 'Her', 'My'], answer: 'Her', explanation: 'Her mother = a mãe dela. O possessivo concorda com a pessoa que possui.' },
           { kind: 'type', prompt: 'Escreva: “Há três livros na mesa.”', answer: 'There are three books on the table.', explanation: 'There are porque books está no plural. On the table = sobre a mesa.' },
           { kind: 'build', prompt: 'Monte: “Ela consegue falar inglês.”', tokens: ['English.', 'speak', 'can', 'She'], answer: 'She can speak English.', explanation: 'She + can + verbo base. O verbo speak não recebe -s depois de can.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['There is two cars.', 'There are two cars.', 'There am two cars.'], answer: 'There are two cars.', explanation: 'Two cars é plural, portanto usamos there are.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['There is two cars.', 'There are two cars.', 'There am two cars.'], answer: 'There are two cars.', explanation: 'Two cars é plural, portanto usamos there are.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Can you show me your house?”', answer: 'Can you show me your house?', explanation: 'Show me = me mostrar. Your house = sua casa.' },
         ],
       },
@@ -477,13 +497,13 @@ const units: Unit[] = [
           { term: 'Aprovação', meaning: '70% de acerto', example: 'Se precisar, revise as aulas e tente novamente.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase significa “O nome dele é Lucas”?', options: ['Her name is Lucas.', 'His name is Lucas.', 'He name is Lucas.'], answer: 'His name is Lucas.', explanation: 'His = dele. His name is Lucas = O nome dele é Lucas.' },
+          { kind: 'type', prompt: 'Escreva a frase que significa “O nome dele é Lucas”?', options: ['Her name is Lucas.', 'His name is Lucas.', 'He name is Lucas.'], answer: 'His name is Lucas.', explanation: 'His = dele. His name is Lucas = O nome dele é Lucas.' },
           { kind: 'build', prompt: 'Monte: “Há uma sala na casa.”', tokens: ['house.', 'the', 'in', 'room', 'a', 'is', 'There'], answer: 'There is a room in the house.', explanation: 'There is + a room + in the house. Room está no singular.' },
           { kind: 'type', prompt: 'Escreva: “Eu consigo cozinhar.”', answer: 'I can cook.', explanation: 'Can é seguido pelo verbo base cook.' },
           { kind: 'choice', prompt: 'Complete: “My friends ___ speak Spanish.”', options: ['can', 'cans', 'are can'], answer: 'can', explanation: 'Can não muda com he, she, we ou they.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'There is a park near my house.', explanation: 'There is a park = há um parque. Near my house = perto da minha casa.' },
           { kind: 'type', prompt: 'Escreva: “A irmã dela mora aqui.”', answer: 'Her sister lives here.', explanation: 'Her sister = a irmã dela. Lives recebe -s com she/her sister.' },
-          { kind: 'choice', prompt: 'Qual pergunta pede permissão?', options: ['Can I open the window?', 'I can open the window.', 'You can open the window.'], answer: 'Can I open the window?', explanation: 'Can I...? é uma forma de pedir permissão.' },
+          { kind: 'type', prompt: 'Qual pergunta pede permissão?', options: ['Can I open the window?', 'I can open the window.', 'You can open the window.'], answer: 'Can I open the window?', explanation: 'Can I...? é uma forma de pedir permissão.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “There are four people in my family.”', answer: 'There are four people in my family.', explanation: 'There are indica plural. People significa pessoas.' },
         ],
       },
@@ -508,10 +528,10 @@ const units: Unit[] = [
           { term: 'did / didn’t', meaning: 'auxiliar do passado', example: 'Did you work? = Você trabalhou?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual é o passado de “go”?', options: ['goed', 'went', 'gone'], answer: 'went', explanation: 'Went é o passado simples de go. Gone é o particípio usado em outros tempos.' },
+          { kind: 'type', prompt: 'Qual é o passado de “go”?', options: ['goed', 'went', 'gone'], answer: 'went', explanation: 'Went é o passado simples de go. Gone é o particípio usado em outros tempos.' },
           { kind: 'build', prompt: 'Monte: “Eu estudei ontem.”', tokens: ['yesterday.', 'studied', 'I'], answer: 'I studied yesterday.', explanation: 'Em verbos regulares, normalmente acrescentamos -ed. Study muda para studied.' },
           { kind: 'type', prompt: 'Escreva: “Ela foi ao mercado.”', answer: 'She went to the market.', explanation: 'Went é o passado de go. The market = o mercado.' },
-          { kind: 'choice', prompt: 'Complete: “Did you ___ yesterday?”', options: ['worked', 'work', 'working'], answer: 'work', explanation: 'Depois de did, usamos o verbo na forma base, sem -ed.' },
+          { kind: 'type', prompt: 'Complete: “Did you ___ yesterday?”', options: ['worked', 'work', 'working'], answer: 'work', explanation: 'Depois de did, usamos o verbo na forma base, sem -ed.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I went to the beach last weekend.”', answer: 'I went to the beach last weekend.', explanation: 'Last weekend = no fim de semana passado. Went é o passado de go.' },
         ],
       },
@@ -528,7 +548,7 @@ const units: Unit[] = [
           { term: 'plan', meaning: 'plano / planejar', example: 'My plan is to learn English.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase significa “Vou viajar amanhã”?', options: ['I going travel tomorrow.', 'I am going to travel tomorrow.', 'I went travel tomorrow.'], answer: 'I am going to travel tomorrow.', explanation: 'Use sujeito + am/is/are + going to + verbo base.' },
+          { kind: 'type', prompt: 'Escreva a frase que significa “Vou viajar amanhã”?', options: ['I going travel tomorrow.', 'I am going to travel tomorrow.', 'I went travel tomorrow.'], answer: 'I am going to travel tomorrow.', explanation: 'Use sujeito + am/is/are + going to + verbo base.' },
           { kind: 'build', prompt: 'Monte: “Nós vamos estudar hoje à noite.”', tokens: ['tonight.', 'study', 'to', 'going', 'are', 'We'], answer: 'We are going to study tonight.', explanation: 'We are + going to + study + tonight.' },
           { kind: 'type', prompt: 'Escreva: “Ela vai comprar um carro.”', answer: 'She is going to buy a car.', explanation: 'She is going to + verbo base buy.' },
           { kind: 'choice', prompt: 'Complete: “Are you going to ___?”', options: ['travel', 'travels', 'traveling'], answer: 'travel', explanation: 'Depois de going to usamos o verbo base.' },
@@ -548,10 +568,10 @@ const units: Unit[] = [
           { term: 'better / worse', meaning: 'melhor / pior', example: 'This option is better.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “A car is ___ than a bike.” (mais rápido)', options: ['faster', 'fast', 'more fast'], answer: 'faster', explanation: 'Fast é um adjetivo curto; seu comparativo é faster.' },
+          { kind: 'type', prompt: 'Complete: “A car is ___ than a bike.” (mais rápido)', options: ['faster', 'fast', 'more fast'], answer: 'faster', explanation: 'Fast é um adjetivo curto; seu comparativo é faster.' },
           { kind: 'build', prompt: 'Monte: “Este hotel é mais barato.”', tokens: ['cheaper.', 'is', 'hotel', 'This'], answer: 'This hotel is cheaper.', explanation: 'This hotel + is + cheaper. O comparativo vem depois do verbo be.' },
           { kind: 'type', prompt: 'Escreva: “O trem é mais rápido que o ônibus.”', answer: 'The train is faster than the bus.', explanation: 'Faster than = mais rápido que.' },
-          { kind: 'choice', prompt: 'Qual é o comparativo correto de “good”?', options: ['gooder', 'better', 'more good'], answer: 'better', explanation: 'Good é irregular: better = melhor.' },
+          { kind: 'type', prompt: 'Qual é o comparativo correto de “good”?', options: ['gooder', 'better', 'more good'], answer: 'better', explanation: 'Good é irregular: better = melhor.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The train is more comfortable than the bus.”', answer: 'The train is more comfortable than the bus.', explanation: 'More comfortable than = mais confortável que.' },
         ],
       },
@@ -568,10 +588,10 @@ const units: Unit[] = [
           { term: 'Comparative', meaning: 'comparação', example: 'This is cheaper.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “Last night, I ___ a movie.”', options: ['watch', 'watched', 'watching'], answer: 'watched', explanation: 'Last night indica passado; watched é o passado de watch.' },
+          { kind: 'type', prompt: 'Complete: “Last night, I ___ a movie.”', options: ['watch', 'watched', 'watching'], answer: 'watched', explanation: 'Last night indica passado; watched é o passado de watch.' },
           { kind: 'type', prompt: 'Escreva: “Nós vamos visitar Londres.”', answer: 'We are going to visit London.', explanation: 'We are going to + verbo base visit.' },
           { kind: 'build', prompt: 'Monte: “Este celular é melhor.”', tokens: ['better.', 'is', 'phone', 'This'], answer: 'This phone is better.', explanation: 'Better é o comparativo irregular de good.' },
-          { kind: 'choice', prompt: 'Depois de did, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -ing'], answer: 'verbo base', explanation: 'Did já marca o passado; o verbo principal fica na forma base.' },
+          { kind: 'type', prompt: 'Depois de did, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -ing'], answer: 'verbo base', explanation: 'Did já marca o passado; o verbo principal fica na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I went there last year, and I am going again next year.”', answer: 'I went there last year, and I am going again next year.', explanation: 'Went descreve passado; am going descreve plano futuro.' },
         ],
       },
@@ -591,10 +611,10 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual é o passado de “buy”?', options: ['buyed', 'bought', 'buys'], answer: 'bought', explanation: 'Bought é o passado irregular de buy.' },
           { kind: 'build', prompt: 'Monte: “Eu comprei um livro ontem.”', tokens: ['yesterday.', 'book', 'a', 'bought', 'I'], answer: 'I bought a book yesterday.', explanation: 'I + bought + a book + yesterday.' },
           { kind: 'type', prompt: 'Escreva: “Eles vão viajar no próximo mês.”', answer: 'They are going to travel next month.', explanation: 'They are going to + travel.' },
-          { kind: 'choice', prompt: 'Complete: “This bag is ___ than that one.” (mais caro)', options: ['expensiver', 'more expensive', 'most expensive'], answer: 'more expensive', explanation: 'Adjetivos mais longos geralmente usam more antes do adjetivo.' },
+          { kind: 'type', prompt: 'Complete: “This bag is ___ than that one.” (mais caro)', options: ['expensiver', 'more expensive', 'most expensive'], answer: 'more expensive', explanation: 'Adjetivos mais longos geralmente usam more antes do adjetivo.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'We visited our friends last weekend.', explanation: 'Visited é passado regular; last weekend indica o fim de semana passado.' },
           { kind: 'type', prompt: 'Escreva: “Você foi ao trabalho ontem?”', answer: 'Did you go to work yesterday?', explanation: 'Did + you + go (forma base) + complemento.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['She is going to studies.', 'She going to study.', 'She is going to study.'], answer: 'She is going to study.', explanation: 'Depois de going to, use o verbo base: study.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['She is going to studies.', 'She going to study.', 'She is going to study.'], answer: 'She is going to study.', explanation: 'Depois de going to, use o verbo base: study.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The new apartment is bigger but more expensive.”', answer: 'The new apartment is bigger but more expensive.', explanation: 'Bigger = maior; more expensive = mais caro.' },
         ],
       },
@@ -619,10 +639,10 @@ const units: Unit[] = [
           { term: 'already / yet', meaning: 'já / ainda', example: 'I have already eaten. / I haven’t eaten yet.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “She ___ visited Canada.”', options: ['have', 'has', 'is'], answer: 'has', explanation: 'Com he/she/it usamos has + particípio.' },
+          { kind: 'type', prompt: 'Complete: “She ___ visited Canada.”', options: ['have', 'has', 'is'], answer: 'has', explanation: 'Com he/she/it usamos has + particípio.' },
           { kind: 'build', prompt: 'Monte: “Você já visitou Londres?”', tokens: ['London?', 'visited', 'ever', 'you', 'Have'], answer: 'Have you ever visited London?', explanation: 'Have + sujeito + ever + particípio visited + lugar.' },
           { kind: 'type', prompt: 'Escreva: “Eu nunca comi sushi.”', answer: 'I have never eaten sushi.', explanation: 'Eaten é o particípio irregular de eat.' },
-          { kind: 'choice', prompt: 'Qual expressão significa “ainda não”?', options: ['already', 'yet', 'ever'], answer: 'yet', explanation: 'Yet aparece frequentemente no fim de frases negativas e perguntas.' },
+          { kind: 'type', prompt: 'Qual expressão significa “ainda não”?', options: ['already', 'yet', 'ever'], answer: 'yet', explanation: 'Yet aparece frequentemente no fim de frases negativas e perguntas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I have already finished my work.”', answer: 'I have already finished my work.', explanation: 'Already indica que algo já aconteceu.' },
         ],
       },
@@ -642,7 +662,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual palavra introduz uma razão?', options: ['because', 'however', 'although'], answer: 'because', explanation: 'Because apresenta o motivo: I study because I need it.' },
           { kind: 'build', prompt: 'Monte: “Eu acho que inglês é útil.”', tokens: ['useful.', 'is', 'English', 'think', 'I'], answer: 'I think English is useful.', explanation: 'I think + oração. Dentro dela, English is useful mantém a ordem sujeito + verbo.' },
           { kind: 'type', prompt: 'Escreva: “Estou cansado, mas vou estudar.”', answer: 'I am tired, but I am going to study.', explanation: 'But = mas. Conecta duas ideias em contraste.' },
-          { kind: 'choice', prompt: '“Although it is raining, we will go.” significa:', options: ['Porque está chovendo, iremos.', 'Embora esteja chovendo, iremos.', 'Depois que chover, iremos.'], answer: 'Embora esteja chovendo, iremos.', explanation: 'Although introduz uma concessão: algo acontece apesar de outra condição.' },
+          { kind: 'type', prompt: '“Although it is raining, we will go.” significa:', options: ['Porque está chovendo, iremos.', 'Embora esteja chovendo, iremos.', 'Depois que chover, iremos.'], answer: 'Embora esteja chovendo, iremos.', explanation: 'Although introduz uma concessão: algo acontece apesar de outra condição.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I believe practice is important because it builds confidence.”', answer: 'I believe practice is important because it builds confidence.', explanation: 'Believe = acreditar; builds confidence = desenvolve confiança.' },
         ],
       },
@@ -659,10 +679,10 @@ const units: Unit[] = [
           { term: 'shouldn’t', meaning: 'não deveria', example: 'You shouldn’t worry too much.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase dá um conselho?', options: ['You should rest.', 'You rested.', 'You are rest.'], answer: 'You should rest.', explanation: 'Should + verbo base é usado para recomendar algo.' },
+          { kind: 'type', prompt: 'Qual frase dá um conselho?', options: ['You should rest.', 'You rested.', 'You are rest.'], answer: 'You should rest.', explanation: 'Should + verbo base é usado para recomendar algo.' },
           { kind: 'build', prompt: 'Monte: “Você deveria praticar mais.”', tokens: ['more.', 'practice', 'should', 'You'], answer: 'You should practice more.', explanation: 'Sujeito + should + verbo base + complemento.' },
           { kind: 'type', prompt: 'Escreva: “Eu tenho que acordar cedo.”', answer: 'I have to wake up early.', explanation: 'Have to expressa necessidade ou obrigação. Wake up = acordar.' },
-          { kind: 'choice', prompt: 'Complete: “You must ___ your passport.”', options: ['bring', 'brings', 'bringing'], answer: 'bring', explanation: 'Depois de must, o verbo fica na forma base.' },
+          { kind: 'type', prompt: 'Complete: “You must ___ your passport.”', options: ['bring', 'brings', 'bringing'], answer: 'bring', explanation: 'Depois de must, o verbo fica na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “You should ask questions when you do not understand.”', answer: 'You should ask questions when you do not understand.', explanation: 'Ask questions = fazer perguntas. When = quando.' },
         ],
       },
@@ -679,10 +699,10 @@ const units: Unit[] = [
           { term: 'should', meaning: 'deveria', example: 'You should try again.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “I have never ___ abroad.”', options: ['be', 'been', 'was'], answer: 'been', explanation: 'Been é o particípio de be, usado com have.' },
+          { kind: 'type', prompt: 'Complete: “I have never ___ abroad.”', options: ['be', 'been', 'was'], answer: 'been', explanation: 'Been é o particípio de be, usado com have.' },
           { kind: 'type', prompt: 'Escreva: “Você já trabalhou aqui?”', answer: 'Have you ever worked here?', explanation: 'Have + you + ever + particípio worked.' },
           { kind: 'build', prompt: 'Monte: “Você deveria falar com ela.”', tokens: ['her.', 'to', 'talk', 'should', 'You'], answer: 'You should talk to her.', explanation: 'Should + verbo base talk. Talk to her = falar com ela.' },
-          { kind: 'choice', prompt: 'Qual palavra significa “no entanto”?', options: ['because', 'however', 'although'], answer: 'however', explanation: 'However introduz contraste entre ideias.' },
+          { kind: 'choice', prompt: 'Escreva a palavra que significa “no entanto”?', options: ['because', 'however', 'although'], answer: 'however', explanation: 'However introduz contraste entre ideias.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Although I have made mistakes, I have learned a lot.”', answer: 'Although I have made mistakes, I have learned a lot.', explanation: 'Made é o particípio de make. Learned = aprendido.' },
         ],
       },
@@ -699,13 +719,13 @@ const units: Unit[] = [
           { term: 'Conselho', meaning: 'Should / shouldn’t', example: 'You should practice.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “They ___ already finished.”', options: ['has', 'have', 'are'], answer: 'have', explanation: 'Com they usamos have + particípio.' },
+          { kind: 'type', prompt: 'Complete: “They ___ already finished.”', options: ['has', 'have', 'are'], answer: 'have', explanation: 'Com they usamos have + particípio.' },
           { kind: 'build', prompt: 'Monte: “Eu nunca estive em Nova York.”', tokens: ['York.', 'New', 'in', 'been', 'never', 'have', 'I'], answer: 'I have never been to New York.', explanation: 'I + have + never + been + in New York. Em muitos contextos, também se diz been to New York.' },
           { kind: 'type', prompt: 'Escreva: “Você deveria descansar porque está cansado.”', answer: 'You should rest because you are tired.', explanation: 'Should + verbo base; because introduz a razão.' },
-          { kind: 'choice', prompt: 'Qual frase expressa contraste?', options: ['I stayed because it rained.', 'Although it rained, I went out.', 'I went out to buy food.'], answer: 'Although it rained, I went out.', explanation: 'Although indica que a segunda ação ocorreu apesar da primeira condição.' },
+          { kind: 'type', prompt: 'Qual frase expressa contraste?', options: ['I stayed because it rained.', 'Although it rained, I went out.', 'I went out to buy food.'], answer: 'Although it rained, I went out.', explanation: 'Although indica que a segunda ação ocorreu apesar da primeira condição.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'Have you ever worked with an international team?', explanation: 'Have you ever + particípio forma uma pergunta sobre experiência.' },
           { kind: 'type', prompt: 'Escreva: “Eu já terminei o relatório.”', answer: 'I have already finished the report.', explanation: 'Already indica que a tarefa já foi concluída.' },
-          { kind: 'choice', prompt: 'Complete: “You must ___ the instructions.”', options: ['follow', 'follows', 'following'], answer: 'follow', explanation: 'Must é seguido do verbo na forma base.' },
+          { kind: 'type', prompt: 'Complete: “You must ___ the instructions.”', options: ['follow', 'follows', 'following'], answer: 'follow', explanation: 'Must é seguido do verbo na forma base.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I think learning a language takes time, but it is worth it.”', answer: 'I think learning a language takes time, but it is worth it.', explanation: 'Worth it = vale a pena. But conecta ideias em contraste.' },
         ],
       },
@@ -730,10 +750,10 @@ const units: Unit[] = [
           { term: 'as soon as', meaning: 'assim que', example: 'I will call as soon as I arrive.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If I study, I ___ pass.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: If + presente, will + verbo base.' },
+          { kind: 'type', prompt: 'Complete: “If I study, I ___ pass.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: If + presente, will + verbo base.' },
           { kind: 'build', prompt: 'Monte: “Se chover, ficarei em casa.”', tokens: ['home.', 'stay', 'will', 'I', 'rains,', 'it', 'If'], answer: 'If it rains, I will stay home.', explanation: 'Na condição usamos presente (rains); na consequência, will + stay.' },
           { kind: 'type', prompt: 'Escreva: “Eu te ligo assim que chegar.”', answer: 'I will call you as soon as I arrive.', explanation: 'Depois de as soon as, para falar do futuro, usamos presente simples: I arrive.' },
-          { kind: 'choice', prompt: 'O que significa “unless”?', options: ['porque', 'a menos que', 'embora'], answer: 'a menos que', explanation: 'Unless equivale a if not em muitos contextos.' },
+          { kind: 'choice', prompt: 'Escreva o significado de “unless”?', options: ['porque', 'a menos que', 'embora'], answer: 'a menos que', explanation: 'Unless equivale a if not em muitos contextos.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “If we leave early, we will avoid the traffic.”', answer: 'If we leave early, we will avoid the traffic.', explanation: 'Leave early = sair cedo. Avoid the traffic = evitar o trânsito.' },
         ],
       },
@@ -750,10 +770,10 @@ const units: Unit[] = [
           { term: 'turn on / off', meaning: 'ligar / desligar', example: 'Please turn off the light.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'O que significa “look for”?', options: ['olhar para', 'procurar', 'desligar'], answer: 'procurar', explanation: 'Look for significa procurar algo ou alguém.' },
+          { kind: 'type', prompt: 'Escreva o significado de “look for”?', options: ['olhar para', 'procurar', 'desligar'], answer: 'procurar', explanation: 'Look for significa procurar algo ou alguém.' },
           { kind: 'build', prompt: 'Monte: “Eu acordo às seis.”', tokens: ['six.', 'at', 'up', 'get', 'I'], answer: 'I get up at six.', explanation: 'Get up = levantar-se. At six = às seis.' },
           { kind: 'type', prompt: 'Escreva: “Estou procurando meu telefone.”', answer: 'I am looking for my phone.', explanation: 'Look for no presente contínuo vira am looking for.' },
-          { kind: 'choice', prompt: 'Complete: “Please turn ___ the TV.” (desligue)', options: ['on', 'off', 'up'], answer: 'off', explanation: 'Turn off = desligar. Turn on = ligar.' },
+          { kind: 'type', prompt: 'Complete: “Please turn ___ the TV.” (desligue)', options: ['on', 'off', 'up'], answer: 'off', explanation: 'Turn off = desligar. Turn on = ligar.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I need to find out what time the store closes.”', answer: 'I need to find out what time the store closes.', explanation: 'Find out = descobrir. Closes recebe -s porque store é terceira pessoa do singular.' },
         ],
       },
@@ -770,10 +790,10 @@ const units: Unit[] = [
           { term: 'by Friday', meaning: 'até sexta-feira', example: 'I will finish it by Friday.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual pedido é mais educado?', options: ['Send me the file now.', 'Could you send me the file, please?', 'You send file.'], answer: 'Could you send me the file, please?', explanation: 'Could you...? é uma forma educada de fazer pedidos.' },
+          { kind: 'type', prompt: 'Qual pedido é mais educado?', options: ['Send me the file now.', 'Could you send me the file, please?', 'You send file.'], answer: 'Could you send me the file, please?', explanation: 'Could you...? é uma forma educada de fazer pedidos.' },
           { kind: 'build', prompt: 'Monte: “Estou trabalhando no relatório.”', tokens: ['report.', 'the', 'on', 'working', 'am', 'I'], answer: 'I am working on the report.', explanation: 'Present continuous: I am + working. Work on = trabalhar em.' },
           { kind: 'type', prompt: 'Escreva: “Vou enviar até sexta-feira.”', answer: 'I will send it by Friday.', explanation: 'Will + verbo base. By Friday indica prazo limite: até sexta.' },
-          { kind: 'choice', prompt: 'O que significa “deadline”?', options: ['reunião', 'prazo final', 'arquivo'], answer: 'prazo final', explanation: 'Deadline é a data ou hora limite para concluir algo.' },
+          { kind: 'type', prompt: 'Escreva o significado de “deadline”?', options: ['reunião', 'prazo final', 'arquivo'], answer: 'prazo final', explanation: 'Deadline é a data ou hora limite para concluir algo.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “I’m finishing the task and I’ll send an update this afternoon.”', answer: 'I’m finishing the task and I’ll send an update this afternoon.', explanation: 'Update = atualização. This afternoon = hoje à tarde.' },
         ],
       },
@@ -793,7 +813,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Complete: “If she calls, I ___ answer.”', options: ['will', 'would', 'am'], answer: 'will', explanation: 'First conditional: condição no presente e resultado com will.' },
           { kind: 'type', prompt: 'Escreva: “Preciso procurar minhas chaves.”', answer: 'I need to look for my keys.', explanation: 'Need to = precisar. Look for = procurar.' },
           { kind: 'build', prompt: 'Monte: “Você poderia verificar o arquivo?”', tokens: ['file?', 'the', 'check', 'you', 'Could'], answer: 'Could you check the file?', explanation: 'Could + sujeito + verbo base + complemento.' },
-          { kind: 'choice', prompt: 'Qual expressão indica prazo limite?', options: ['by Monday', 'on Monday morning only', 'from Monday'], answer: 'by Monday', explanation: 'By Monday significa até segunda-feira, como prazo final.' },
+          { kind: 'type', prompt: 'Qual expressão indica prazo limite?', options: ['by Monday', 'on Monday morning only', 'from Monday'], answer: 'by Monday', explanation: 'By Monday significa até segunda-feira, como prazo final.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “If I finish early, I will send you the update.”', answer: 'If I finish early, I will send you the update.', explanation: 'Finish early = terminar cedo. Send you = enviar para você.' },
         ],
       },
@@ -810,13 +830,13 @@ const units: Unit[] = [
           { term: 'Trabalho', meaning: 'Pedidos e prazos', example: 'Could you send it by Friday?' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If they arrive late, we ___ start without them.”', options: ['will', 'would', 'are'], answer: 'will', explanation: 'First conditional usa will para o resultado provável.' },
+          { kind: 'type', prompt: 'Complete: “If they arrive late, we ___ start without them.”', options: ['will', 'would', 'are'], answer: 'will', explanation: 'First conditional usa will para o resultado provável.' },
           { kind: 'build', prompt: 'Monte: “Vou descobrir a resposta.”', tokens: ['answer.', 'the', 'out', 'find', 'will', 'I'], answer: 'I will find out the answer.', explanation: 'Will + find out + the answer.' },
           { kind: 'type', prompt: 'Escreva: “Você poderia me enviar o relatório até amanhã?”', answer: 'Could you send me the report by tomorrow?', explanation: 'Could you + verbo base. By tomorrow indica o prazo.' },
-          { kind: 'choice', prompt: '“Turn on the computer” significa:', options: ['Desligue o computador.', 'Ligue o computador.', 'Procure o computador.'], answer: 'Ligue o computador.', explanation: 'Turn on = ligar; turn off = desligar.' },
+          { kind: 'type', prompt: '“Turn on the computer” significa:', options: ['Desligue o computador.', 'Ligue o computador.', 'Procure o computador.'], answer: 'Ligue o computador.', explanation: 'Turn on = ligar; turn off = desligar.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'If we leave now, we will get there on time.', explanation: 'On time = no horário. If + presente, will + verbo base.' },
           { kind: 'type', prompt: 'Escreva: “Estou trabalhando em uma nova ideia.”', answer: 'I am working on a new idea.', explanation: 'Am working on = estou trabalhando em.' },
-          { kind: 'choice', prompt: 'Qual frase está correta?', options: ['If it will rain, I stay home.', 'If it rains, I will stay home.', 'If it raining, I will stay home.'], answer: 'If it rains, I will stay home.', explanation: 'Na oração com if do first conditional, usamos presente simples, não will.' },
+          { kind: 'type', prompt: 'Qual frase está correta?', options: ['If it will rain, I stay home.', 'If it rains, I will stay home.', 'If it raining, I will stay home.'], answer: 'If it rains, I will stay home.', explanation: 'Na oração com if do first conditional, usamos presente simples, não will.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Could you let me know if the meeting time changes?”', answer: 'Could you let me know if the meeting time changes?', explanation: 'Let me know = me avise. Meeting time = horário da reunião.' },
         ],
       },
@@ -845,7 +865,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Complete: “The emails ___ every morning.”', options: ['are sent', 'send', 'is sending'], answer: 'are sent', explanation: 'Emails está no plural. A voz passiva usa be + particípio: are sent.' },
           { kind: 'build', prompt: 'Monte: “O prédio foi construído em 2005.”', tokens: ['2005.', 'in', 'built', 'was', 'building', 'The'], answer: 'The building was built in 2005.', explanation: 'Was built é a voz passiva no passado. Building aqui é o substantivo “prédio”.' },
           { kind: 'type', prompt: 'Escreva: “Este aplicativo é usado por milhões de pessoas.”', answer: 'This app is used by millions of people.', explanation: 'Is used = é usado; by millions of people = por milhões de pessoas.' },
-          { kind: 'choice', prompt: 'Qual frase está na voz passiva?', options: ['The team finished the project.', 'The project was finished.', 'The team is finishing.'], answer: 'The project was finished.', explanation: 'O sujeito recebe a ação: the project was finished.' },
+          { kind: 'type', prompt: 'Qual frase está na voz passiva?', options: ['The team finished the project.', 'The project was finished.', 'The team is finishing.'], answer: 'The project was finished.', explanation: 'O sujeito recebe a ação: the project was finished.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The final decision was made by the manager.”', answer: 'The final decision was made by the manager.', explanation: 'Was made é o passado passivo de make. By the manager identifica quem tomou a decisão.' },
         ],
       },
@@ -862,10 +882,10 @@ const units: Unit[] = [
           { term: 'would', meaning: 'iria (recuo de will)', example: '“I will call.” → He said he would call.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: '“I am tired.” → She said she ___ tired.', options: ['is', 'was', 'will be'], answer: 'was', explanation: 'Ao relatar uma fala no passado, am geralmente recua para was.' },
+          { kind: 'type', prompt: '“I am tired.” → She said she ___ tired.', options: ['is', 'was', 'will be'], answer: 'was', explanation: 'Ao relatar uma fala no passado, am geralmente recua para was.' },
           { kind: 'build', prompt: 'Transforme: “I will call you.” → He said he...', tokens: ['call.', 'would', 'you'], answer: 'would call you.', explanation: 'Will normalmente muda para would no discurso indireto com verbo introdutor no passado.' },
           { kind: 'type', prompt: 'Relate: “I like this city.” → He said he...', answer: 'He said he liked that city.', explanation: 'Like pode recuar para liked; this pode mudar para that conforme o contexto.' },
-          { kind: 'choice', prompt: 'Qual construção está correta?', options: ['She told that she was busy.', 'She told me that she was busy.', 'She said me she was busy.'], answer: 'She told me that she was busy.', explanation: 'Tell normalmente pede objeto: told me. Say não usa objeto direto dessa forma.' },
+          { kind: 'type', prompt: 'Qual construção está correta?', options: ['She told that she was busy.', 'She told me that she was busy.', 'She said me she was busy.'], answer: 'She told me that she was busy.', explanation: 'Tell normalmente pede objeto: told me. Say não usa objeto direto dessa forma.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “They told us that the meeting had been canceled.”', answer: 'They told us that the meeting had been canceled.', explanation: 'Told us = nos disseram. Had been canceled = tinha sido cancelada.' },
         ],
       },
@@ -882,7 +902,7 @@ const units: Unit[] = [
           { term: 'could', meaning: 'poderia', example: 'If I had a car, I could drive there.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “If I ___ rich, I would travel more.”', options: ['am', 'were', 'will be'], answer: 'were', explanation: 'No second conditional, usamos passado simples na condição. Were é comum com I em hipóteses.' },
+          { kind: 'type', prompt: 'Complete: “If I ___ rich, I would travel more.”', options: ['am', 'were', 'will be'], answer: 'were', explanation: 'No second conditional, usamos passado simples na condição. Were é comum com I em hipóteses.' },
           { kind: 'build', prompt: 'Monte: “Se eu tivesse tempo, aprenderia francês.”', tokens: ['French.', 'learn', 'would', 'I', 'time,', 'had', 'If'], answer: 'If I had time, I would learn French.', explanation: 'If + passado (had), would + verbo base (learn).' },
           { kind: 'type', prompt: 'Escreva: “Se eu fosse você, aceitaria o trabalho.”', answer: 'If I were you, I would accept the job.', explanation: 'If I were you é uma expressão fixa muito comum para dar conselho.' },
           { kind: 'choice', prompt: 'Depois de would, usamos:', options: ['verbo base', 'verbo com -ed', 'verbo com -s'], answer: 'verbo base', explanation: 'Would é modal e vem seguido do verbo na forma base: would go, would do.' },
@@ -902,10 +922,10 @@ const units: Unit[] = [
           { term: 'Second conditional', meaning: 'Hipótese', example: 'If I had time, I would help.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “The documents ___ yesterday.”', options: ['were signed', 'signed', 'are sign'], answer: 'were signed', explanation: 'Documentos recebem a ação; no passado plural usamos were + particípio.' },
+          { kind: 'type', prompt: 'Complete: “The documents ___ yesterday.”', options: ['were signed', 'signed', 'are sign'], answer: 'were signed', explanation: 'Documentos recebem a ação; no passado plural usamos were + particípio.' },
           { kind: 'type', prompt: 'Relate: “I can help.” → She said she...', answer: 'She said she could help.', explanation: 'Can geralmente muda para could no discurso indireto.' },
           { kind: 'build', prompt: 'Monte: “Se eu morasse aqui, iria a pé.”', tokens: ['walk.', 'would', 'I', 'here,', 'lived', 'If'], answer: 'If I lived here, I would walk.', explanation: 'If + lived; resultado com would + walk.' },
-          { kind: 'choice', prompt: 'Qual frase é uma hipótese?', options: ['If it rains, I will stay.', 'If I had wings, I would fly.', 'I have lived here for years.'], answer: 'If I had wings, I would fly.', explanation: 'A situação é imaginária: não tenho asas.' },
+          { kind: 'type', prompt: 'Qual frase é uma hipótese?', options: ['If it rains, I will stay.', 'If I had wings, I would fly.', 'I have lived here for years.'], answer: 'If I had wings, I would fly.', explanation: 'A situação é imaginária: não tenho asas.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The new policy was announced after the manager said it would improve safety.”', answer: 'The new policy was announced after the manager said it would improve safety.', explanation: 'Was announced é passiva; said it would improve é discurso indireto.' },
         ],
       },
@@ -922,10 +942,10 @@ const units: Unit[] = [
           { term: 'Hipótese', meaning: 'If + past, would', example: 'If I knew, I would tell you.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Complete: “The office ___ every evening.”', options: ['is cleaned', 'cleans', 'is clean'], answer: 'is cleaned', explanation: 'Voz passiva no presente: is + particípio cleaned.' },
+          { kind: 'type', prompt: 'Complete: “The office ___ every evening.”', options: ['is cleaned', 'cleans', 'is clean'], answer: 'is cleaned', explanation: 'Voz passiva no presente: is + particípio cleaned.' },
           { kind: 'build', prompt: 'Monte: “O relatório foi enviado ontem.”', tokens: ['yesterday.', 'sent', 'was', 'report', 'The'], answer: 'The report was sent yesterday.', explanation: 'Was sent é a forma passiva no passado de send.' },
           { kind: 'type', prompt: 'Relate: “I will be late.” → He said he...', answer: 'He said he would be late.', explanation: 'Will muda para would no discurso indireto.' },
-          { kind: 'choice', prompt: 'Complete: “If she ___ more confident, she would apply.”', options: ['is', 'were', 'will be'], answer: 'were', explanation: 'Second conditional usa passado simples na oração com if.' },
+          { kind: 'type', prompt: 'Complete: “If she ___ more confident, she would apply.”', options: ['is', 'were', 'will be'], answer: 'were', explanation: 'Second conditional usa passado simples na oração com if.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The project was completed before the deadline.', explanation: 'Was completed = foi concluído. Before the deadline = antes do prazo.' },
           { kind: 'type', prompt: 'Escreva: “Se eu soubesse a resposta, contaria a você.”', answer: 'If I knew the answer, I would tell you.', explanation: 'If I knew + would tell: hipótese no presente.' },
           { kind: 'choice', prompt: 'Qual frase relata corretamente “I am working”?', options: ['She said she is working.', 'She said she was working.', 'She said she working.'], answer: 'She said she was working.', explanation: 'Am working normalmente recua para was working.' },
@@ -953,10 +973,10 @@ const units: Unit[] = [
           { term: 'highly likely', meaning: 'muito provável', example: 'It is highly likely to happen.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual expressão comunica possibilidade sem afirmar certeza?', options: ['It definitely proves...', 'It might indicate...', 'It is impossible that...'], answer: 'It might indicate...', explanation: 'Might indica possibilidade. É útil quando a evidência não permite uma afirmação definitiva.' },
+          { kind: 'type', prompt: 'Qual expressão comunica possibilidade sem afirmar certeza?', options: ['It definitely proves...', 'It might indicate...', 'It is impossible that...'], answer: 'It might indicate...', explanation: 'Might indica possibilidade. É útil quando a evidência não permite uma afirmação definitiva.' },
           { kind: 'build', prompt: 'Monte: “A tendência parece estar mudando.”', tokens: ['changing.', 'be', 'to', 'appears', 'trend', 'The'], answer: 'The trend appears to be changing.', explanation: 'Appears to be + -ing comunica uma observação com cautela.' },
           { kind: 'type', prompt: 'Escreva: “É provável que os custos aumentem.”', answer: 'Costs are likely to increase.', explanation: 'Be likely to + verbo base expressa probabilidade.' },
-          { kind: 'choice', prompt: '“Tends to increase” significa:', options: ['sempre aumenta', 'tende a aumentar', 'parou de aumentar'], answer: 'tende a aumentar', explanation: 'Tends to descreve uma tendência, não uma regra sem exceções.' },
+          { kind: 'type', prompt: '“Tends to increase” significa:', options: ['sempre aumenta', 'tende a aumentar', 'parou de aumentar'], answer: 'tende a aumentar', explanation: 'Tends to descreve uma tendência, não uma regra sem exceções.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The available evidence seems to support a more cautious approach.”', answer: 'The available evidence seems to support a more cautious approach.', explanation: 'Seems to support = parece apoiar. Cautious approach = abordagem cautelosa.' },
         ],
       },
@@ -973,10 +993,10 @@ const units: Unit[] = [
           { term: 'despite', meaning: 'apesar de', example: 'Despite the delay, we finished.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual palavra introduz uma consequência lógica?', options: ['therefore', 'whereas', 'despite'], answer: 'therefore', explanation: 'Therefore significa portanto e introduz uma conclusão ou consequência.' },
+          { kind: 'type', prompt: 'Qual palavra introduz uma consequência lógica?', options: ['therefore', 'whereas', 'despite'], answer: 'therefore', explanation: 'Therefore significa portanto e introduz uma conclusão ou consequência.' },
           { kind: 'build', prompt: 'Monte: “Apesar do atraso, terminamos.”', tokens: ['finished.', 'we', 'delay,', 'the', 'Despite'], answer: 'Despite the delay, we finished.', explanation: 'Despite é seguido por substantivo ou forma -ing, não por uma oração completa diretamente.' },
           { kind: 'type', prompt: 'Escreva: “As vendas aumentaram, enquanto os custos diminuíram.”', answer: 'Sales increased, whereas costs decreased.', explanation: 'Whereas contrasta duas informações.' },
-          { kind: 'choice', prompt: 'Complete: “The plan was risky. ___, it worked.”', options: ['Therefore', 'Nevertheless', 'Because'], answer: 'Nevertheless', explanation: 'Nevertheless apresenta contraste: apesar do risco, funcionou.' },
+          { kind: 'type', prompt: 'Complete: “The plan was risky. ___, it worked.”', options: ['Therefore', 'Nevertheless', 'Because'], answer: 'Nevertheless', explanation: 'Nevertheless apresenta contraste: apesar do risco, funcionou.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Despite facing several challenges, the team delivered the project on time.”', answer: 'Despite facing several challenges, the team delivered the project on time.', explanation: 'Despite facing = apesar de enfrentar. Delivered on time = entregou no prazo.' },
         ],
       },
@@ -996,7 +1016,7 @@ const units: Unit[] = [
           { kind: 'choice', prompt: 'Qual combinação é natural em inglês?', options: ['do a decision', 'make a decision', 'create a decision'], answer: 'make a decision', explanation: 'A collocation padrão é make a decision, não do a decision.' },
           { kind: 'build', prompt: 'Monte: “Precisamos cumprir o prazo.”', tokens: ['deadline.', 'the', 'meet', 'to', 'need', 'We'], answer: 'We need to meet the deadline.', explanation: 'Meet a deadline = cumprir um prazo.' },
           { kind: 'type', prompt: 'Escreva: “Ela assumiu a responsabilidade.”', answer: 'She took responsibility.', explanation: 'Take responsibility é a combinação natural; no passado, took responsibility.' },
-          { kind: 'choice', prompt: 'Complete: “The campaign aims to ___ awareness.”', options: ['raise', 'lift', 'grow'], answer: 'raise', explanation: 'Raise awareness é uma collocation comum para aumentar a conscientização.' },
+          { kind: 'type', prompt: 'Complete: “The campaign aims to ___ awareness.”', options: ['raise', 'lift', 'grow'], answer: 'raise', explanation: 'Raise awareness é uma collocation comum para aumentar a conscientização.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “We need to weigh the options before making a final decision.”', answer: 'We need to weigh the options before making a final decision.', explanation: 'Weigh the options = ponderar as opções. Final decision = decisão final.' },
         ],
       },
@@ -1013,10 +1033,10 @@ const units: Unit[] = [
           { term: 'Collocations', meaning: 'Combinações naturais', example: 'Make a decision.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual frase evita afirmar algo sem evidência suficiente?', options: ['This proves everything.', 'This may indicate a pattern.', 'This is always true.'], answer: 'This may indicate a pattern.', explanation: 'May indica possibilidade e evita transformar uma hipótese em certeza.' },
+          { kind: 'type', prompt: 'Qual frase evita afirmar algo sem evidência suficiente?', options: ['This proves everything.', 'This may indicate a pattern.', 'This is always true.'], answer: 'This may indicate a pattern.', explanation: 'May indica possibilidade e evita transformar uma hipótese em certeza.' },
           { kind: 'type', prompt: 'Escreva: “Apesar das dificuldades, cumprimos o prazo.”', answer: 'Despite the difficulties, we met the deadline.', explanation: 'Despite + substantivo; meet the deadline é a collocation correta.' },
           { kind: 'build', prompt: 'Monte: “Portanto, precisamos tomar uma decisão.”', tokens: ['decision.', 'a', 'make', 'to', 'need', 'we', 'Therefore,'], answer: 'Therefore, we need to make a decision.', explanation: 'Therefore introduz a conclusão; make a decision é a combinação natural.' },
-          { kind: 'choice', prompt: 'Complete: “The data ___ to show a gradual increase.”', options: ['appears', 'appearing', 'appear to'], answer: 'appears', explanation: 'The data appears to show... apresenta uma interpretação cautelosa.' },
+          { kind: 'type', prompt: 'Complete: “The data ___ to show a gradual increase.”', options: ['appears', 'appearing', 'appear to'], answer: 'appears', explanation: 'The data appears to show... apresenta uma interpretação cautelosa.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “The findings are likely to have significant implications for future research.”', answer: 'The findings are likely to have significant implications for future research.', explanation: 'Likely to = provável que. Implications = implicações.' },
         ],
       },
@@ -1033,19 +1053,79 @@ const units: Unit[] = [
           { term: 'Naturalidade', meaning: 'Usar combinações idiomáticas', example: 'Meet a deadline.' },
         ],
         exercises: [
-          { kind: 'choice', prompt: 'Qual expressão é mais cautelosa?', options: ['This unquestionably proves...', 'This appears to suggest...', 'This can never be questioned.'], answer: 'This appears to suggest...', explanation: 'Appears to suggest comunica interpretação sem afirmar prova definitiva.' },
+          { kind: 'type', prompt: 'Qual expressão é mais cautelosa?', options: ['This unquestionably proves...', 'This appears to suggest...', 'This can never be questioned.'], answer: 'This appears to suggest...', explanation: 'Appears to suggest comunica interpretação sem afirmar prova definitiva.' },
           { kind: 'build', prompt: 'Monte: “Ainda assim, precisamos considerar os riscos.”', tokens: ['risks.', 'the', 'consider', 'to', 'need', 'we', 'Nevertheless,'], answer: 'Nevertheless, we need to consider the risks.', explanation: 'Nevertheless introduz contraste; consider the risks = considerar os riscos.' },
           { kind: 'type', prompt: 'Escreva: “A equipe cumpriu o prazo apesar dos obstáculos.”', answer: 'The team met the deadline despite the obstacles.', explanation: 'Met the deadline é o passado de meet the deadline.' },
           { kind: 'choice', prompt: 'Qual collocation significa “assumir responsabilidade”?', options: ['make responsibility', 'take responsibility', 'do responsibility'], answer: 'take responsibility', explanation: 'Take responsibility é a combinação idiomática natural.' },
           { kind: 'listen', prompt: 'Ouça e escreva a frase.', answer: 'The evidence is limited; therefore, the conclusion should be cautious.', explanation: 'Therefore introduz consequência; cautious = cautelosa.' },
           { kind: 'type', prompt: 'Escreva: “É provável que a demanda aumente gradualmente.”', answer: 'Demand is likely to increase gradually.', explanation: 'Is likely to increase = é provável que aumente. Gradually = gradualmente.' },
-          { kind: 'choice', prompt: 'Complete: “___ the high cost, the project was successful.”', options: ['Despite', 'Whereas', 'Therefore'], answer: 'Despite', explanation: 'Despite + substantivo: despite the high cost.' },
+          { kind: 'type', prompt: 'Complete: “___ the high cost, the project was successful.”', options: ['Despite', 'Whereas', 'Therefore'], answer: 'Despite', explanation: 'Despite + substantivo: despite the high cost.' },
           { kind: 'repeat', prompt: 'Ouça e repita: “Although the proposal has limitations, it may provide a useful basis for further discussion.”', answer: 'Although the proposal has limitations, it may provide a useful basis for further discussion.', explanation: 'Although introduz concessão; may indica possibilidade; further discussion = discussão adicional.' },
         ],
       },
     ],
   },
 ]
+
+
+export type NextLessonRecommendation = {
+  id: string
+  reviewRecommended?: boolean
+  title: string
+  unitTitle: string
+  subtitle: string
+  objective: string
+  pattern: string
+  level: string
+  estimatedMinutes: number
+  skills: string[]
+}
+
+export function getNextLessonRecommendation(progress: SavedProgress | null): NextLessonRecommendation | null {
+  const completed = new Set(progress?.completedLessonIds ?? [])
+  const allLessons = units.flatMap(unit => unit.lessons.map(lesson => ({ lesson, unit })))
+  const review = allLessons.find(({ lesson }) => completed.has(lesson.id) && typeof progress?.lessonScores?.[lesson.id] === 'number' && (progress.lessonScores?.[lesson.id] ?? 100) < 75 && !lesson.isCheckpoint)
+  const next = review ?? allLessons.find(({ lesson }, index) =>
+    !completed.has(lesson.id) &&
+    (index === 0 || completed.has(allLessons[index - 1].lesson.id))
+  )
+  if (!next) return null
+  const { lesson, unit } = next
+  const content = lesson.exercises.map(exercise => exercise.kind)
+  const skills = [
+    ...(content.includes('listen') ? ['Escuta'] : []),
+    ...(content.includes('repeat') ? ['Fala'] : []),
+    ...(content.some(kind => kind === 'type' || kind === 'build') ? ['Escrita'] : []),
+    ...(content.includes('choice') ? ['Gramática'] : []),
+  ]
+  return {
+    id: lesson.id,
+    reviewRecommended: !!review,
+    title: review ? `Revisar: ${lesson.title}` : lesson.title,
+    unitTitle: unit.title,
+    subtitle: lesson.subtitle,
+    objective: lesson.objective,
+    pattern: lesson.pattern,
+    level: unit.level,
+    estimatedMinutes: Math.max(5, Math.min(12, Math.ceil(lesson.exercises.length * 1.1) + 2)),
+    skills: skills.length ? skills : ['Vocabulário', 'Compreensão'],
+  }
+}
+
+export function searchGuidedLessons(query: string) {
+  const normalized = query.trim().toLocaleLowerCase('pt-BR')
+  if (!normalized) return []
+  return units.flatMap(unit => unit.lessons.map(lesson => ({
+    id: lesson.id,
+    title: lesson.title,
+    subtitle: lesson.subtitle,
+    unitTitle: unit.title,
+    objective: lesson.objective,
+    searchable: [lesson.title, lesson.subtitle, lesson.objective, lesson.pattern, ...lesson.teach.flatMap(item => [item.term, item.meaning, item.example])].join(' ').toLocaleLowerCase('pt-BR'),
+  }))).filter(lesson => lesson.searchable.includes(normalized))
+    .slice(0, 6)
+    .map(({ searchable: _searchable, ...lesson }) => lesson)
+}
 
 function loadProgress(): SavedProgress {
   try {
@@ -1068,14 +1148,64 @@ function previousLocalDateKey() {
   return localDateKey(date)
 }
 function normalize(value: string) {
-  return value.toLowerCase().trim().replace(/[.!?,]/g, '').replace(/\s+/g, ' ')
+  return value.toLowerCase().normalize('NFKD').replace(/[’‘]/g, "'")
+    .replace(/\b(i'm|im)\b/g, 'i am').replace(/\b(you're|youre)\b/g, 'you are')
+    .replace(/\b(he's|hes)\b/g, 'he is').replace(/\b(she's|shes)\b/g, 'she is')
+    .replace(/\b(we're|were)\b/g, 'we are').replace(/\b(they're|theyre)\b/g, 'they are')
+    .replace(/\b(i've|ive)\b/g, 'i have').replace(/\b(you've|youve)\b/g, 'you have')
+    .replace(/\b(we've|weve)\b/g, 'we have').replace(/\b(they've|theyve)\b/g, 'they have')
+    .replace(/\b(it's|its)\b/g, 'it is').replace(/\b(that's|thats)\b/g, 'that is')
+    .replace(/\b(there's|theres)\b/g, 'there is').replace(/\b(what's|whats)\b/g, 'what is')
+    .replace(/\b(isn't|isnt)\b/g, 'is not').replace(/\b(aren't|arent)\b/g, 'are not')
+    .replace(/\b(don't|dont)\b/g, 'do not').replace(/\b(doesn't|doesnt)\b/g, 'does not')
+    .replace(/\b(didn't|didnt)\b/g, 'did not').replace(/\b(can't|cant)\b/g, 'cannot')
+    .replace(/\b(won't|wont)\b/g, 'will not').replace(/\b(shouldn't|shouldnt)\b/g, 'should not')
+    .replace(/\b(wouldn't|wouldnt)\b/g, 'would not').replace(/\b(couldn't|couldnt)\b/g, 'could not')
+    .replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim()
 }
-function speakEnglish(text: string, accent: 'us' | 'uk') {
+function editDistance(left: string, right: string) {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= left.length; i += 1) {
+    let diagonal = row[0]
+    row[0] = i
+    for (let j = 1; j <= right.length; j += 1) {
+      const old = row[j]
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diagonal + (left[i - 1] === right[j - 1] ? 0 : 1))
+      diagonal = old
+    }
+  }
+  return row[right.length]
+}
+function speechMatches(transcript: string, expected: string) {
+  const heard = normalize(transcript).split(' ').filter(Boolean)
+  const target = normalize(expected).split(' ').filter(Boolean)
+  if (!heard.length || !target.length) return false
+  if (heard.join(' ') === target.join(' ')) return true
+
+  // Word-level edit distance tolerates one omitted/extra token from browser ASR.
+  const row = Array.from({ length: target.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= heard.length; i += 1) {
+    let diagonal = row[0]
+    row[0] = i
+    for (let j = 1; j <= target.length; j += 1) {
+      const previous = row[j]
+      const same = heard[i - 1] === target[j - 1]
+      const nearPhonetic = Math.max(heard[i - 1].length, target[j - 1].length) >= 5
+        && editDistance(heard[i - 1], target[j - 1]) <= 1
+      row[j] = Math.min(row[j] + 1, row[j - 1] + 1, diagonal + (same || nearPhonetic ? 0 : 1))
+      diagonal = previous
+    }
+  }
+  const distance = row[target.length]
+  const similarity = 1 - distance / Math.max(heard.length, target.length)
+  return distance <= 1 || (Math.max(heard.length, target.length) >= 7 && similarity >= 0.88)
+}
+function speakEnglish(text: string, accent: 'us' | 'uk', rate = 1) {
   if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return false
   window.speechSynthesis.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
   utterance.lang = accent === 'uk' ? 'en-GB' : 'en-US'
-  utterance.rate = 0.86
+  utterance.rate = Math.max(0.7, Math.min(1, rate))
   const voices = window.speechSynthesis.getVoices()
   const preferred = voices.find(voice => voice.lang.toLowerCase() === utterance.lang.toLowerCase())
   if (preferred) utterance.voice = preferred
@@ -1083,27 +1213,51 @@ function speakEnglish(text: string, accent: 'us' | 'uk') {
   return true
 }
 
-export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete }: Props) {
+export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo', onAskTutor, onLessonComplete, initialProgress, onProgressChange, onExerciseAttempt, onTranscribeAudio, autoStartLessonId, onAutoStartComplete }: Props) {
   const [progress, setProgress] = useState<SavedProgress>(loadProgress)
   const [activeLessonId, setActiveLessonId] = useState<string | null>(() => loadProgress().activeLessonId)
   const [step, setStep] = useState(0)
-  const [lessonPhase, setLessonPhase] = useState<'learn' | 'practice'>('learn')
+  const [lessonPhase, setLessonPhase] = useState<'learn' | 'understand' | 'practice' | 'speak' | 'correct' | 'review' | 'apply'>('learn')
   const [showHint, setShowHint] = useState(false)
   const [selectedChoice, setSelectedChoice] = useState('')
   const [builtWords, setBuiltWords] = useState<string[]>([])
   const [typedAnswer, setTypedAnswer] = useState('')
   const [checked, setChecked] = useState<boolean | null>(null)
   const [mistakes, setMistakes] = useState(0)
+  const [retryQueue, setRetryQueue] = useState<Exercise[]>([])
   const [checkpointNotice, setCheckpointNotice] = useState('')
   const [audioNotice, setAudioNotice] = useState('')
   const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [freeSpeechTranscript, setFreeSpeechTranscript] = useState('')
+  const [applicationDraft, setApplicationDraft] = useState('')
   const [voiceListening, setVoiceListening] = useState(false)
   const recognitionRef = useRef<CourseSpeechInstance | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const mediaChunksRef = useRef<Blob[]>([])
   const [introShown, setIntroShown] = useState(() => !loadProgress().introDone)
+  const [lumiDrawerOpen, setLumiDrawerOpen] = useState(false)
+  const [lumiQuestionDraft, setLumiQuestionDraft] = useState('')
 
   const allLessons = useMemo(() => units.flatMap(unit => unit.lessons), [])
   const currentLesson = allLessons.find(lesson => lesson.id === activeLessonId) ?? null
-  const currentExercise = currentLesson?.exercises[step] ?? null
+  const listeningModel = currentLesson?.teach
+    .map(item => item.example.split('=')[0].trim().replace(/^[“"]|[”"]$/g, ''))
+    .find(example => {
+      const wordCount = example.split(/\s+/).filter(Boolean).length
+      return wordCount >= 2 && wordCount <= 12 && /[a-z]/i.test(example)
+    }) || currentLesson?.teach[0]?.term || ''
+  const extraListeningExercise: Exercise | null = currentLesson ? {
+    kind: 'listen',
+    prompt: 'Escuta ativa: ouça o modelo sem olhar a explicação e escreva exatamente o que entendeu.',
+    answer: listeningModel,
+    explanation: 'A compreensão auditiva exige reconhecer a sequência sonora e recuperar as palavras. Compare sua resposta com o modelo e repita a escuta em velocidade reduzida.',
+    hint: 'Ouça uma vez para captar a ideia geral. Na segunda vez, preste atenção aos sons finais e às palavras pequenas.',
+  } : null
+  const activeExercises = currentLesson
+    ? [...currentLesson.exercises, ...(extraListeningExercise ? [extraListeningExercise] : []), ...retryQueue]
+    : []
+  const currentExercise = activeExercises[step] ?? null
   const completedCount = progress.completedLessonIds.length
   const percentage = Math.round(completedCount / allLessons.length * 100)
   const nextLesson = allLessons.find((lesson, index) =>
@@ -1112,17 +1266,64 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   ) ?? null
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...progress, activeLessonId })) } catch { /* Local progress remains available in this session. */ }
-  }, [progress, activeLessonId])
+    const snapshot = { ...progress, activeLessonId }
+    try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)) } catch { /* Local progress remains available in this session. */ }
+    onProgressChange?.(snapshot)
+  }, [progress, activeLessonId, onProgressChange])
+
+  useEffect(() => {
+    if (!initialProgress) return
+    const normalized: SavedProgress = {
+      ...initialProgress,
+      completedLessonIds: Array.isArray(initialProgress.completedLessonIds) ? initialProgress.completedLessonIds : [],
+      activeLessonId: initialProgress.activeLessonId ?? null,
+      streakDays: initialProgress.streakDays ?? 0,
+      lastStudyDate: initialProgress.lastStudyDate ?? null,
+    }
+    setProgress(current => {
+      const sameLessons = current.completedLessonIds.length === normalized.completedLessonIds.length
+        && current.completedLessonIds.every((id, index) => id === normalized.completedLessonIds[index])
+      const unchanged = sameLessons
+        && current.xp === normalized.xp
+        && current.introDone === normalized.introDone
+        && current.activeLessonId === normalized.activeLessonId
+        && (current.streakDays ?? 0) === normalized.streakDays
+        && (current.lastStudyDate ?? null) === normalized.lastStudyDate
+      return unchanged ? current : normalized
+    })
+    setActiveLessonId(current => current === normalized.activeLessonId ? current : normalized.activeLessonId)
+    setIntroShown(current => current === !normalized.introDone ? current : !normalized.introDone)
+  }, [initialProgress])
 
   useEffect(() => () => {
     recognitionRef.current?.stop()
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.onstop = null
+      mediaRecorderRef.current.stop()
+    }
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+    mediaStreamRef.current = null
     if ('speechSynthesis' in window) window.speechSynthesis.cancel()
   }, [])
 
+  const openLumiDrawer = () => {
+    if (!currentLesson) return
+    setLumiQuestionDraft(currentExercise
+      ? 'Estou na aula "' + currentLesson.title + '". A questão é: ' + currentExercise.prompt + ' Estrutura esperada: ' + currentExercise.answer + '. Explique o raciocínio sem apenas revelar a resposta.'
+      : 'Estou na aula "' + currentLesson.title + '". Explique a estrutura: ' + currentLesson.pattern)
+    setLumiDrawerOpen(true)
+  }
   const resetExercise = () => {
     recognitionRef.current?.stop()
     recognitionRef.current = null
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.onstop = null
+      mediaRecorderRef.current.stop()
+    }
+    mediaRecorderRef.current = null
+    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+    mediaStreamRef.current = null
+    mediaChunksRef.current = []
     setVoiceListening(false)
     setVoiceTranscript('')
     setSelectedChoice('')
@@ -1133,6 +1334,9 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setShowHint(false)
   }
   const beginLesson = (lessonId: string) => {
+    setRetryQueue([])
+    setFreeSpeechTranscript('')
+    setApplicationDraft('')
     setActiveLessonId(lessonId)
     setStep(0)
     setLessonPhase('learn')
@@ -1146,6 +1350,22 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setProgress(current => ({ ...current, introDone: true }))
     setIntroShown(false)
   }
+
+  useEffect(() => {
+    if (!autoStartLessonId) return
+    setIntroShown(false)
+    setStep(0)
+    setLessonPhase('learn')
+    setShowHint(false)
+    setMistakes(0)
+    setRetryQueue([])
+    setFreeSpeechTranscript('')
+    setApplicationDraft('')
+    setActiveLessonId(autoStartLessonId)
+    setProgress(current => ({ ...current, introDone: true, activeLessonId: autoStartLessonId }))
+    resetExercise()
+    onAutoStartComplete?.()
+  }, [autoStartLessonId])
   const currentAnswer = () => {
     if (!currentExercise) return ''
     if (currentExercise.kind === 'choice') return selectedChoice
@@ -1155,25 +1375,70 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   }
   const verify = () => {
     if (!currentExercise || checked !== null) return
-    const correct = currentExercise.kind === 'repeat' || normalize(currentAnswer()) === normalize(currentExercise.answer)
+    const answer = currentAnswer()
+    const correct = currentExercise.kind === 'repeat' || normalize(answer) === normalize(currentExercise.answer)
     setChecked(correct)
-    if (!correct) setMistakes(value => value + 1)
+    onExerciseAttempt?.({
+      activityType: currentExercise.kind === 'listen' ? 'listening' : currentExercise.kind === 'repeat' ? 'speaking' : 'course_exercise',
+      skill: currentExercise.kind === 'listen' ? 'listening' : currentExercise.kind === 'repeat' ? 'speaking' : currentExercise.kind === 'type' || currentExercise.kind === 'build' ? 'writing' : 'grammar',
+      prompt: currentExercise.prompt,
+      answer,
+      expected: currentExercise.answer,
+      explanation: currentExercise.explanation,
+      correct,
+    })
+    if (!correct) {
+      setMistakes(value => value + 1)
+      if (!currentExercise.isRetry) {
+        const retry: Exercise = {
+          ...currentExercise,
+          kind: currentExercise.kind === 'choice' || currentExercise.kind === 'build' ? 'type' : currentExercise.kind,
+          prompt: 'Revisão adaptativa: responda novamente sem consultar as opções. ' + currentExercise.prompt,
+          options: undefined,
+          tokens: undefined,
+          isRetry: true,
+          hint: 'Você errou esta estrutura antes. Relembre a explicação e formule a resposta com suas próprias palavras.',
+        }
+        setRetryQueue(current => [...current, retry])
+      }
+    }
   }
   const retry = () => {
     resetExercise()
   }
   const nextStep = () => {
     if (!currentLesson || !currentExercise) return
-    if (step < currentLesson.exercises.length - 1) {
+    if (step < activeExercises.length - 1) {
       setStep(value => value + 1)
       resetExercise()
       return
     }
-    const score = Math.max(0, Math.round((currentLesson.exercises.length - mistakes) / currentLesson.exercises.length * 100))
+    const score = Math.max(0, Math.round((activeExercises.length - mistakes) / Math.max(1, activeExercises.length) * 100))
     if (currentLesson.isCheckpoint && score < 70) {
       setCheckpointNotice('Você acertou ' + score + '%. Para concluir esta unidade, precisa de pelo menos 70%. Revise as explicações e tente novamente.')
       setStep(0)
       setMistakes(0)
+      setRetryQueue([])
+      setLessonPhase('practice')
+      resetExercise()
+      return
+    }
+    setCheckpointNotice('')
+    setLessonPhase('speak')
+    setFreeSpeechTranscript('')
+    resetExercise()
+    return
+  }
+
+  const finishLesson = () => {
+    if (!currentLesson) return
+    const score = Math.max(0, Math.round((activeExercises.length - mistakes) / Math.max(1, activeExercises.length) * 100))
+    if (currentLesson.isCheckpoint && score < 70) {
+      setCheckpointNotice('Você acertou ' + score + '%. Para concluir esta unidade, precisa de pelo menos 70%. Revise as explicações e tente novamente.')
+      setLessonPhase('practice')
+      setStep(0)
+      setMistakes(0)
+      setRetryQueue([])
       resetExercise()
       return
     }
@@ -1184,15 +1449,143 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         ? current.completedLessonIds
         : [...current.completedLessonIds, currentLesson.id],
       xp: current.xp + (current.completedLessonIds.includes(currentLesson.id) ? 0 : currentLesson.isCheckpoint ? 30 : currentLesson.isReview ? 15 : 10),
+      lessonScores: { ...(current.lessonScores ?? {}), [currentLesson.id]: score },
       streakDays: current.lastStudyDate === localDateKey() ? (current.streakDays ?? 0) : current.lastStudyDate === previousLocalDateKey() ? (current.streakDays ?? 0) + 1 : 1,
       lastStudyDate: localDateKey(),
       activeLessonId: null,
     }))
     setActiveLessonId(null)
-    onLessonComplete(score)
+    const coveredSkills = new Set<'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'>(['listening'])
+    for (const exercise of currentLesson.exercises) {
+      if (exercise.kind === 'repeat') coveredSkills.add('speaking')
+      else if (exercise.kind === 'type' || exercise.kind === 'build') coveredSkills.add('writing')
+      else if (exercise.kind === 'choice') coveredSkills.add('grammar')
+      else if (exercise.kind === 'listen') coveredSkills.add('listening')
+    }
+    onLessonComplete(score, currentLesson.id, [...coveredSkills])
   }
-  const startSpeechCapture = () => {
+  const stopCourseRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop()
+      return
+    }
+    recognitionRef.current?.stop()
+  }
+  const startMediaRecording = async (mode: 'free' | 'repeat', exercise?: Exercise): Promise<boolean> => {
+    if (!onTranscribeAudio || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return false
+    try {
+      setAudioNotice('Solicitando permissão para usar o microfone…')
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      mediaStreamRef.current = stream
+      mediaChunksRef.current = []
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      recorder.ondataavailable = event => { if (event.data.size) mediaChunksRef.current.push(event.data) }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        setVoiceListening(false)
+        setAudioNotice('O navegador interrompeu a gravação. Tente novamente ou digite sua resposta.')
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        mediaStreamRef.current = null
+        mediaRecorderRef.current = null
+        setVoiceListening(false)
+        const audioType = recorder.mimeType || mediaChunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(mediaChunksRef.current, { type: audioType })
+        mediaChunksRef.current = []
+        if (!blob.size) {
+          setAudioNotice('O áudio ficou vazio. Grave por alguns segundos e tente novamente.')
+          return
+        }
+        setAudioNotice('Gravação concluída. Enviando para transcrição…')
+        try {
+          const transcript = (await onTranscribeAudio(blob)).trim()
+          if (!transcript) throw new Error('Nenhuma palavra foi reconhecida. Tente novamente em um ambiente silencioso.')
+          setVoiceTranscript(transcript)
+          if (mode === 'free') {
+            setFreeSpeechTranscript(transcript)
+            setAudioNotice('Transcrição concluída. A análise registra as palavras reconhecidas, não a pronúncia fonética.')
+            return
+          }
+          if (!exercise) return
+          const matched = speechMatches(transcript, exercise.answer)
+          setChecked(matched)
+          onExerciseAttempt?.({
+            activityType: 'repeat_speech_check', skill: 'speaking', prompt: exercise.prompt,
+            answer: transcript, expected: exercise.answer, explanation: exercise.explanation, correct: matched,
+          })
+          if (!matched) {
+            setMistakes(value => value + 1)
+            if (!exercise.isRetry) setRetryQueue(current => [...current, {
+              ...exercise, kind: 'repeat', isRetry: true,
+              prompt: 'Repita novamente a estrutura que precisa de reforço: ' + exercise.prompt,
+            }])
+          }
+          setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
+        } catch (error) {
+          setAudioNotice('A gravação foi capturada, mas a transcrição falhou: ' + (error instanceof Error ? error.message : 'erro desconhecido') + ' Você ainda pode digitar a resposta.')
+        }
+      }
+      recorder.start(250)
+      setVoiceListening(true)
+      setAudioNotice('Gravando pelo microfone. Fale e toque em “Parar gravação” para transcrever.')
+      return true
+    } catch (error) {
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop())
+      mediaStreamRef.current = null
+      mediaRecorderRef.current = null
+      setVoiceListening(false)
+      setAudioNotice(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Permissão do microfone negada. Libere o acesso ao microfone no navegador e tente novamente.'
+        : 'Não foi possível iniciar a gravação: ' + (error instanceof Error ? error.message : 'verifique o microfone e tente novamente.'))
+      return true
+    }
+  }
+  const startFreeSpeaking = async () => {
+    setAudioNotice('')
+    setFreeSpeechTranscript('')
+    setVoiceTranscript('')
+    if (await startMediaRecording('free')) return
+    const browserWindow = window as BrowserSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setAudioNotice('A gravação por áudio não está disponível neste navegador. Digite sua resposta ou abra o FALA em um navegador atualizado.')
+      return
+    }
+    try {
+      const recognition = new Recognition()
+      recognition.lang = accent === 'uk' ? 'en-GB' : 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 3
+      recognition.onresult = event => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+        setFreeSpeechTranscript(transcript)
+        setVoiceTranscript(transcript)
+        setAudioNotice('Transcrição capturada. Ela registra as palavras reconhecidas; não é uma nota fonética.')
+      }
+      recognition.onerror = event => setAudioNotice('Não foi possível acessar o microfone (' + (event.error || 'erro') + '). Verifique a permissão.')
+      recognition.onend = () => { setVoiceListening(false); recognitionRef.current = null }
+      recognitionRef.current = recognition
+      setVoiceListening(true)
+      recognition.start()
+    } catch {
+      setVoiceListening(false)
+      setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
+    }
+  }
+  const startSpeechCapture = async () => {
     if (!currentExercise || currentExercise.kind !== 'repeat' || checked !== null) return
+    setVoiceTranscript('')
+    setAudioNotice('')
+    if (await startMediaRecording('repeat', currentExercise)) return
     const browserWindow = window as BrowserSpeechWindow
     const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
     if (!Recognition) {
@@ -1209,9 +1602,19 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       recognition.onresult = event => {
         const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
         setVoiceTranscript(transcript)
-        const matched = normalize(transcript) === normalize(currentExercise.answer)
+        const matched = speechMatches(transcript, currentExercise.answer)
         setChecked(matched)
-        if (!matched) setMistakes(value => value + 1)
+        onExerciseAttempt?.({
+          activityType: 'repeat_speech_check', skill: 'speaking', prompt: currentExercise.prompt,
+          answer: transcript, expected: currentExercise.answer, explanation: currentExercise.explanation, correct: matched,
+        })
+        if (!matched) {
+          setMistakes(value => value + 1)
+          if (!currentExercise.isRetry) setRetryQueue(current => [...current, {
+            ...currentExercise, kind: 'repeat', isRetry: true,
+            prompt: 'Repita novamente a estrutura que precisa de reforço: ' + currentExercise.prompt,
+          }])
+        }
         setAudioNotice(matched ? 'A transcrição reconheceu a frase esperada.' : 'A transcrição ficou diferente da frase-modelo. Ouça novamente e tente mais uma vez.')
       }
       recognition.onerror = event => {
@@ -1229,8 +1632,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       setAudioNotice('Não foi possível iniciar o microfone. Verifique a permissão do navegador.')
     }
   }
-  const playModel = (text: string) => {
-    const played = speakEnglish(text, accent)
+  const playModel = (text: string, rate = 1) => {
+    const played = speakEnglish(text, accent, rate)
     setAudioNotice(played ? '' : 'A leitura em voz alta não está disponível neste navegador.')
   }
   const chooseWord = (word: string) => {
@@ -1242,6 +1645,31 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
     setBuiltWords(current => current.filter((_, wordIndex) => wordIndex !== index))
   }
 
+  useEffect(() => {
+    const handleCourseShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return
+      if (currentExercise && lessonPhase === 'practice' && (event.key.toLowerCase() === 'r' || event.code === 'Space')
+        && (currentExercise.kind === 'listen' || currentExercise.kind === 'repeat')) {
+        event.preventDefault()
+        playModel(currentExercise.answer)
+        return
+      }
+      if (event.key === 'Enter' && currentExercise && lessonPhase === 'practice' && checked === null) {
+        const canConfirm = currentExercise.kind === 'choice' ? !!selectedChoice
+          : currentExercise.kind === 'build' ? builtWords.length > 0
+            : currentExercise.kind === 'repeat' ? checked === true
+              : !!typedAnswer.trim()
+        if (canConfirm) {
+          event.preventDefault()
+          verify()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleCourseShortcut)
+    return () => window.removeEventListener('keydown', handleCourseShortcut)
+  }, [currentExercise, lessonPhase, checked, selectedChoice, builtWords, typedAnswer])
+
   if (introShown) return (
     <section className="guided-course">
       <div className="course-intro-card">
@@ -1250,9 +1678,13 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <h1>Vamos começar <em>do zero.</em></h1>
         <p>Você não precisa saber nenhuma palavra. O curso vai ensinar primeiro, explicar cada parte e só depois pedir que você pratique.</p>
         <div className="course-intro-steps">
-          <article><span>01</span><div><strong>Aprenda</strong><small>Veja palavras, tradução, exemplos e a regra por trás da frase.</small></div></article>
-          <article><span>02</span><div><strong>Pratique</strong><small>Escolha, monte frases, escreva, escute e repita em voz alta.</small></div></article>
-          <article><span>03</span><div><strong>Revise e avance</strong><small>As lições são liberadas em sequência e seu progresso fica salvo.</small></div></article>
+          <article><span>01</span><div><strong>Aprender</strong><small>Entenda palavras, expressões, regras e exemplos no contexto.</small></div></article>
+          <article><span>02</span><div><strong>Entender</strong><small>Escute frases em velocidade normal e reduzida; recupere o que ouviu.</small></div></article>
+          <article><span>03</span><div><strong>Praticar</strong><small>Escolha, complete, monte e escreva respostas sem copiar o modelo.</small></div></article>
+          <article><span>04</span><div><strong>Falar</strong><small>Produza uma resposta própria e revise a transcrição quando disponível.</small></div></article>
+          <article><span>05</span><div><strong>Corrigir</strong><small>Veja os erros recorrentes e entenda o que precisa de reforço.</small></div></article>
+          <article><span>06</span><div><strong>Revisar</strong><small>Recupere as estruturas antes de esquecer e repita as que ainda não domina.</small></div></article>
+          <article><span>07</span><div><strong>Aplicar</strong><small>Use a estrutura em uma resposta original de uma situação real.</small></div></article>
         </div>
         <button className="course-primary-button" onClick={finishIntro}>Começar minha primeira aula <ArrowRight size={17}/></button>
         <small className="course-intro-note">Sem teste de entrada. A primeira lição começa com cumprimentos.</small>
@@ -1261,7 +1693,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
   )
 
   if (currentLesson && currentExercise) {
-    const progressPercent = Math.round(10 + ((step + 1) / currentLesson.exercises.length) * 90)
+    const progressPercent = Math.round(29 + ((step + 1) / Math.max(1, activeExercises.length)) * 28)
     const hintText = currentExercise.hint ?? (currentExercise.kind === 'choice'
       ? 'Traduza as opções e elimine as que não combinam com a pergunta.'
       : currentExercise.kind === 'build'
@@ -1280,8 +1712,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
       <section className="guided-course guided-lesson-view">
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })); resetExercise() }} aria-label="Sair da aula"><X size={19}/></button>
-          <div className="lesson-progress-track"><i style={{ width: '10%' }}/></div>
-          <span>ETAPA 1/2</span>
+          <div className="lesson-progress-track"><i style={{ width: '14%' }}/></div>
+          <span>ETAPA 1/7</span>
         </div>
         <div className="lesson-context">
           <span className="course-eyebrow">PRIMEIRO, APRENDA · {currentLesson.subtitle.toUpperCase()}</span>
@@ -1300,8 +1732,126 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
           {currentLesson.lessonTip && <div className="lesson-tip-box"><strong>Entenda a regra</strong><p>{currentLesson.lessonTip}</p></div>}
         </article>
         <div className="lesson-prep-actions">
-          <button className="course-primary-button" onClick={() => { setLessonPhase('practice'); setShowHint(false) }}>Começar exercícios <ArrowRight size={17}/></button>
+          <button className="course-primary-button" onClick={() => { setLessonPhase('understand'); setShowHint(false) }}>Avançar para escuta <ArrowRight size={17}/></button>
           <p>Você já viu a explicação. Agora tente lembrar e usar o inglês sem olhar para os exemplos.</p>
+        </div>
+      </section>
+    )
+
+    if (lessonPhase === 'understand') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('learn')} aria-label="Voltar para aprender"><BookOpen size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '29%' }}/></div>
+          <span>ETAPA 2/7</span>
+        </div>
+        <div className="lesson-context">
+          <span className="course-eyebrow">OUÇA E ENTENDA · SEM TRADUÇÃO IMEDIATA</span>
+          <h1>{currentLesson.title}</h1>
+          <p>Escute o exemplo completo. Primeiro em velocidade normal, depois mais devagar. Tente identificar a estrutura antes de revelar o significado.</p>
+        </div>
+        <article className="lesson-teaching-card">
+          <div className="teaching-card-heading"><span><Volume2 size={17}/> Escuta guiada</span><span className="lesson-step-chip">1.0x / 0.75x</span></div>
+          {currentLesson.teach.slice(0, 3).map(item => <div className="understand-audio-row" key={item.term}>
+            <strong>{item.example}</strong>
+            <div>
+              <button className="course-secondary-button" onClick={() => playModel(item.example, 1)}><Play size={14}/> Normal 1.0x</button>
+              <button className="course-secondary-button" onClick={() => playModel(item.example, .75)}><Play size={14}/> Lenta 0.75x</button>
+            </div>
+            <details><summary>Revelar contexto</summary><p>{item.meaning} · {item.term}</p></details>
+          </div>)}
+          <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.objective}</span></div>
+        </article>
+        <div className="lesson-prep-actions">
+          <button className="course-primary-button" onClick={() => { setLessonPhase('practice'); setStep(0); resetExercise() }}>Entendi, começar prática <ArrowRight size={17}/></button>
+          <p>A escuta é uma etapa própria. Você pode repetir os exemplos antes de responder.</p>
+        </div>
+      </section>
+    )
+
+    if (lessonPhase === 'speak') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('practice')} aria-label="Rever exercícios"><RotateCcw size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '57%' }}/></div>
+          <span>ETAPA 4/7</span>
+        </div>
+        <div className="lesson-context">
+          <span className="course-eyebrow">PRODUÇÃO ORAL · SEM LER</span>
+          <h1>Agora use o inglês.</h1>
+          <p>Responda com suas próprias palavras usando a estrutura <strong>{currentLesson.pattern}</strong>. Não precisa repetir um modelo literalmente.</p>
+        </div>
+        <article className="lesson-exercise-card">
+          <div className="exercise-card-topline"><span>FALAR SEM LER</span><span>SHADOWING / RESPOSTA LIVRE</span></div>
+          <h2>Imagine uma situação real relacionada a: {currentLesson.objective}</h2>
+          <p className="lesson-speaking-prompt">Tente dizer duas frases curtas. Use uma expressão aprendida e acrescente um detalhe sobre sua rotina.</p>
+          <div className="repeat-practice-box">
+            <Mic size={20}/><div><strong>{voiceListening ? 'Gravando sua resposta…' : 'Grave sua resposta aqui'}</strong><small>O áudio é enviado para transcrição quando a conta e o serviço estão disponíveis. A transcrição registra palavras, não mede sotaque ou qualidade fonética.</small></div>
+            <button onClick={() => voiceListening ? stopCourseRecording() : void startFreeSpeaking()}>{voiceListening ? 'Parar gravação' : 'Gravar resposta'}</button>
+          </div>
+          {freeSpeechTranscript && <div className="course-feedback correct"><strong>Resposta capturada</strong><p>{freeSpeechTranscript}</p></div>}
+          {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
+          <textarea className="course-answer-input course-speaking-textarea" value={freeSpeechTranscript} onChange={event => setFreeSpeechTranscript(event.target.value)} rows={3} placeholder="Ou digite a frase que você falou…"/>
+          <div className="lesson-action-row">
+            <button className="course-secondary-button" onClick={() => onAskTutor('Estou na etapa oral da aula "' + currentLesson.title + '". Minha estrutura-alvo é ' + currentLesson.pattern + '. Dê feedback breve sobre esta resposta: ' + freeSpeechTranscript)}>Perguntar à Lumi</button>
+            <button className="course-primary-button" disabled={freeSpeechTranscript.trim().split(/\s+/).filter(Boolean).length < 5 || voiceListening} onClick={() => { if (freeSpeechTranscript.trim()) onExerciseAttempt?.({ activityType: 'speaking_free_response', skill: 'speaking', prompt: 'Responda sem ler: apresente uma ideia em inglês e explique um detalhe.', answer: freeSpeechTranscript, expected: 'Resposta espontânea que comunica uma ideia com ao menos um detalhe.', explanation: 'A etapa registra o conteúdo transcrito. Ela não mede pronúncia ou qualidade fonética.', correct: null }); setLessonPhase('correct') }}>Ver correções <ArrowRight size={16}/></button>
+          </div>
+        </article>
+      </section>
+    )
+
+    if (lessonPhase === 'correct') return (
+      <section className="guided-course lesson-stage-screen">
+        <div className="lesson-topbar"><span>ETAPA 5/7</span><div className="lesson-progress-track"><i style={{ width: '71%' }}/></div></div>
+        <div className="lesson-stage-heading"><span className="course-eyebrow">05 · CORRIGIR</span><h1>Entenda o que precisa <em>melhorar.</em></h1><p>Reveja os pontos que exigiram uma nova tentativa antes de avançar.</p></div>
+        <div className="lesson-correction-summary">
+          <div className="lesson-correction-metric"><strong>{mistakes}</strong><span>respostas que precisaram de correção</span></div>
+          <div className="lesson-correction-metric"><strong>{retryQueue.length}</strong><span>itens adicionados à repetição adaptativa</span></div>
+          <div className="lesson-correction-metric"><strong>{freeSpeechTranscript.trim() ? 'Sim' : 'Pendente'}</strong><span>produção oral registrada nesta aula</span></div>
+        </div>
+        {retryQueue.length > 0 ? <div className="lesson-correction-list">{retryQueue.map((item,index) => <article key={index}><span>REVISÃO {index+1}</span><strong>{item.prompt.replace(/^Revisão adaptativa: /,'')}</strong><p>{item.explanation}</p><small>Resposta de referência: {item.answer}</small></article>)}</div> : <div className="lesson-correction-empty"><CheckCircle2 size={22}/><strong>Nenhum erro recorrente nesta rodada.</strong><p>Continue tentando recuperar as estruturas sem consultar o modelo.</p></div>}
+        <div className="lesson-stage-actions"><button className="course-primary-button" onClick={() => setLessonPhase('review')}>Revisar o que aprendi <ArrowRight size={16}/></button></div>
+      </section>
+    )
+    if (lessonPhase === 'apply') return (
+      <section className="guided-course lesson-stage-screen">
+        <div className="lesson-topbar"><span>ETAPA 7/7</span><div className="lesson-progress-track"><i style={{ width: '100%' }}/></div></div>
+        <div className="lesson-stage-heading"><span className="course-eyebrow">07 · APLICAR</span><h1>Use o inglês fora do <em>exercício.</em></h1><p>Crie uma resposta própria usando o padrão desta aula. Não copie a frase-modelo.</p></div>
+        <article className="lesson-application-card">
+          <span className="course-eyebrow">SITUAÇÃO REAL</span>
+          <h2>{currentLesson.objective}</h2>
+          <p className="lesson-application-pattern">Estrutura trabalhada: {currentLesson.pattern}</p>
+          <label htmlFor="lesson-application-answer">Sua resposta em inglês</label>
+          <textarea id="lesson-application-answer" value={applicationDraft} onChange={event => setApplicationDraft(event.target.value)} rows={5} placeholder="Write your own sentence or short response…"/>
+          <small>{applicationDraft.trim().split(/\s+/).filter(Boolean).length} palavras · escreva pelo menos 5 palavras para registrar sua aplicação</small>
+        </article>
+        <div className="lesson-stage-actions">
+          <button className="course-secondary-button" onClick={() => setLessonPhase('review')}>Voltar à revisão</button>
+          <button className="course-primary-button" disabled={applicationDraft.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => {
+            onExerciseAttempt?.({ activityType: 'real_life_application', skill: 'writing', prompt: 'Aplique em contexto real: ' + currentLesson.objective, answer: applicationDraft.trim(), expected: 'Resposta original usando a estrutura: ' + currentLesson.pattern, explanation: 'Aplicação livre registrada para acompanhar a capacidade de transferir a estrutura a um novo contexto.', correct: null })
+            finishLesson()
+          }}>Registrar aplicação e concluir <CheckCircle2 size={17}/></button>
+        </div>
+      </section>
+    )
+    if (lessonPhase === 'review') return (
+      <section className="guided-course guided-lesson-view">
+        <div className="lesson-topbar">
+          <button className="course-icon-button" onClick={() => setLessonPhase('speak')} aria-label="Voltar para fala"><RotateCcw size={18}/></button>
+          <div className="lesson-progress-track"><i style={{ width: '86%' }}/></div>
+          <span>ETAPA 6/7</span>
+        </div>
+        <div className="lesson-context"><span className="course-eyebrow">RESUMO DA LIÇÃO</span><h1>O que você praticou.</h1><p>Revise a estrutura e conclua para salvar seu avanço.</p></div>
+        <article className="lesson-teaching-card">
+          <div className="teaching-card-heading"><span><CheckCircle2 size={17}/> Síntese</span><span className="lesson-step-chip">{Math.max(0, activeExercises.length - mistakes)}/{activeExercises.length} acertos sem ajuda</span></div>
+          <div className="grammar-pattern"><Sparkles size={16}/><span>{currentLesson.pattern}</span></div>
+          <div className="teaching-word-grid">{currentLesson.teach.slice(0, 4).map(item => <div className="teaching-word" key={item.term}><strong>{item.term}</strong><span>{item.meaning}</span><small>{item.example}</small></div>)}</div>
+          {retryQueue.length > 0 && <p className="lesson-tip-box"><strong>Revisões adaptativas:</strong> {retryQueue.length} variação(ões) de estruturas que precisaram de mais uma tentativa foram incluídas nesta aula.</p>}
+          {freeSpeechTranscript && <p className="course-feedback correct"><strong>Sua produção oral</strong><span>{freeSpeechTranscript}</span></p>}
+        </article>
+        <div className="lesson-prep-actions">
+          <button className="course-primary-button" onClick={() => setLessonPhase('apply')}>Aplicar em contexto real <ArrowRight size={17}/></button>
+          <p>Seu avanço será sincronizado na conta quando estiver conectado; no modo visitante, fica salvo neste aparelho.</p>
         </div>
       </section>
     )
@@ -1311,10 +1861,11 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         <div className="lesson-topbar">
           <button className="course-icon-button" onClick={() => { setActiveLessonId(null); setProgress(current => ({ ...current, activeLessonId: null })) }} aria-label="Sair da aula"><X size={19}/></button>
           <div className="lesson-progress-track"><i style={{ width: progressPercent + '%' }}/></div>
-          <span>EXERCÍCIO {step + 1}/{currentLesson.exercises.length}</span>
+          <span>ETAPA 3/7 · EXERCÍCIO {step + 1}/{activeExercises.length}</span>
+          <button className="course-lumi-context-button" onClick={openLumiDrawer}><MessageCircle size={15}/> Perguntar à Lumi</button>
         </div>
         <div className="lesson-context">
-          <span className="course-eyebrow">AULA GUIADA · {currentLesson.subtitle.toUpperCase()}</span>
+          <span className="course-eyebrow">PRATIQUE · {currentLesson.subtitle.toUpperCase()}</span>
           <h1>{currentLesson.title}</h1>
           <p>{currentLesson.objective}</p>
           <button className="course-review-button" onClick={() => setLessonPhase('learn')}><BookOpen size={14}/> Rever explicação</button>
@@ -1334,8 +1885,8 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             <div className="word-bank">{currentExercise.tokens?.map((word, index) => <button key={index} disabled={checked !== null || builtWords.filter(item => item === word).length >= (currentExercise.tokens?.filter(item => item === word).length ?? 1)} onClick={() => chooseWord(word)}>{word}</button>)}</div>
           </div>}
           {(currentExercise.kind === 'type' || currentExercise.kind === 'listen') && <input className="course-answer-input" value={typedAnswer} onChange={event => setTypedAnswer(event.target.value)} disabled={checked !== null} placeholder={currentExercise.kind === 'listen' ? 'Digite o que você ouviu...' : 'Escreva sua resposta em inglês...'} onKeyDown={event => { if (event.key === 'Enter' && checked === null) verify() }}/>}
-          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição. O navegador compara a transcrição com a frase-modelo; isso verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null || voiceListening} onClick={startSpeechCapture}>{voiceListening ? 'Ouvindo...' : 'Gravar voz'}</button></div>}
-          {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
+          {currentExercise.kind === 'repeat' && <div className="repeat-practice-box"><Mic size={20}/><div><strong>Repita em voz alta</strong><small>Grave sua repetição e pare para transcrever. A comparação verifica as palavras reconhecidas, não a qualidade fonética.</small></div><button disabled={checked !== null} onClick={() => voiceListening ? stopCourseRecording() : void startSpeechCapture()}>{voiceListening ? 'Parar gravação' : 'Gravar voz'}</button></div>}
+          {currentExercise.kind === 'repeat' && <button className="manual-repeat-button" disabled={checked !== null || voiceListening} onClick={() => { setChecked(true); onExerciseAttempt?.({ activityType: 'repeat_manual', skill: 'speaking', prompt: currentExercise.prompt, answer: 'Praticado manualmente', expected: currentExercise.answer, explanation: 'Prática autodeclarada, sem avaliação da fala.', correct: null }); setAudioNotice('Prática marcada manualmente. Nenhuma avaliação de fala foi realizada.') }}>Marcar como praticado sem gravação</button>}
           {voiceTranscript && <p className="course-voice-transcript">Transcrição reconhecida: “{voiceTranscript}”</p>}
           {audioNotice && <p className="course-audio-notice">{audioNotice}</p>}
           {checked !== null && <div className={checked ? 'course-feedback correct' : 'course-feedback incorrect'}>
@@ -1344,13 +1895,21 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
             {!checked && <small>Resposta esperada: {currentExercise.answer}</small>}
           </div>}
           <div className="lesson-action-row">
-            <button className="course-secondary-button" onClick={() => onAskTutor('Estou na aula "' + currentLesson.title + '". Me explique de outra forma: ' + currentExercise.prompt + ' Minha dúvida é sobre: ' + currentExercise.answer)}><CircleHelp size={16}/> Tirar dúvida com a Lumi</button>
-            {checked === true ? <button className="course-primary-button" onClick={nextStep}>{step === currentLesson.exercises.length - 1 ? 'Concluir aula' : 'Continuar'} <ArrowRight size={16}/></button>
+            <button className="course-secondary-button" onClick={openLumiDrawer}><CircleHelp size={16}/> Tirar dúvida com a Lumi</button>
+            {checked === true ? <button className="course-primary-button" onClick={nextStep}>{step === activeExercises.length - 1 ? 'Ir para etapa oral' : 'Continuar'} <ArrowRight size={16}/></button>
               : checked === false ? <button className="course-primary-button" onClick={retry}><RotateCcw size={16}/> Tentar novamente</button>
                 : <button className="course-primary-button" disabled={!canCheck} onClick={verify}>Conferir resposta <Check size={16}/></button>}
           </div>
         </article>
-        <p className="lesson-footnote">Dica: não decore só a resposta. Entenda a ordem das palavras; depois tente criar uma frase parecida com algo da sua rotina.</p>
+        {lumiDrawerOpen && <div className="course-lumi-drawer-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setLumiDrawerOpen(false) }}>
+          <aside className="course-lumi-drawer" role="dialog" aria-modal="true" aria-labelledby="course-lumi-drawer-title">
+            <div className="course-lumi-drawer-heading"><div><span className="course-eyebrow">TUTORA CONTEXTUAL</span><h2 id="course-lumi-drawer-title">Pergunte à Lumi</h2></div><button className="course-icon-button" onClick={() => setLumiDrawerOpen(false)} aria-label="Fechar ajuda da Lumi"><X size={18}/></button></div>
+            <p>A Lumi receberá o contexto desta aula e da questão atual para explicar o ponto de dúvida.</p>
+            <textarea value={lumiQuestionDraft} onChange={event => setLumiQuestionDraft(event.target.value)} rows={5} aria-label="Dúvida para a Lumi" />
+            <div className="course-lumi-drawer-actions"><button className="course-secondary-button" onClick={() => setLumiDrawerOpen(false)}>Continuar aula</button><button className="course-primary-button" disabled={!lumiQuestionDraft.trim()} onClick={() => { const question = lumiQuestionDraft.trim(); setLumiDrawerOpen(false); onAskTutor(question) }}>Enviar à Lumi <ArrowRight size={15}/></button></div>
+          </aside>
+        </div>}
+        <p className="lesson-footnote">Atalhos: Enter confirma uma resposta; R ou Espaço repete o áudio. Dica: entenda a ordem das palavras e crie uma frase parecida com algo da sua rotina.</p>
       </section>
     )
   }
@@ -1397,7 +1956,7 @@ export default function GuidedCourse({ accent = 'us', goalLabel = 'seu objetivo'
         </article>
       })}
       <div className="course-help-panel"><MessageCircle size={20}/><div><strong>A Lumi acompanha seu aprendizado.</strong><p>Quando uma explicação não ficar clara, peça outro exemplo. A tutora deve respeitar o nível desta trilha.</p></div><button className="course-secondary-button" onClick={() => onAskTutor('Estou começando inglês do zero. Explique os conceitos com palavras simples, tradução e exemplos curtos.')}>Perguntar à Lumi <ArrowRight size={15}/></button></div>
-      <p className="course-storage-note">Seu andamento fica salvo neste aparelho. Para levar o progresso a outro dispositivo, entre na sua conta; a sincronização deste novo curso ainda será adicionada.</p>
+      <p className="course-storage-note">Seu progresso é sincronizado com sua conta quando conectado. No modo visitante, fica salvo neste aparelho.</p>
     </section>
   )
 }

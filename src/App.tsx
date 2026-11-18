@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
-  Activity, ArrowRight, AudioLines, BookOpen, Bookmark, Check, CheckCircle2,
+  Activity, ArrowRight, BookOpen, Bookmark, Check, CheckCircle2,
   ChevronRight, Clock3, Flame, Headphones, Home, LogIn, LogOut,
   Camera, Map, MessageCircle, Mic, MoreHorizontal, Music2, PenLine, Play, Plus,
   Send, Sparkles, Target, Trash2, Trophy, UserRound, Volume2, X, Search, Sun, Moon, CircleUserRound, RotateCcw, Eye,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 import { learningTracks, type TrackProgress } from './learningTracks'
-import GuidedCourse from './GuidedCourse'
+import GuidedCourse, { getNextLessonRecommendation, searchGuidedLessons, type SavedProgress } from './GuidedCourse'
+import ActivityCard from './components/ActivityCard'
+import Skeleton from './components/Skeleton'
+import { useActiveStudyTimer } from './hooks/useActiveStudyTimer'
 import { supabase } from './supabase'
 
-type Page = 'home' | 'learn' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
+type Page = 'home' | 'learn' | 'practice' | 'lumi' | 'speak' | 'write' | 'tracks' | 'music' | 'vocabulary' | 'progress' | 'diagnostic' | 'profile'
 type Goal = 'conversation' | 'work' | 'travel' | 'study' | 'life'
 type Level = 'beginner' | 'basic' | 'intermediate' | 'advanced' | 'unsure'
 type Profile = {
@@ -37,6 +40,37 @@ type VocabularySchedule = { nextReviewAt: string | null; intervalDays: number }
 type ActivityAttempt = { id?: string; activity_type: string; skill: string; interest_context?: string; prompt: string; learner_answer: string | null; correction: Record<string, unknown>; score: number | null; attempted_at?: string }
 type LearnerInsight = { skill: string; observation: string; recommendation: string; confidence?: number }
 type TrackEvaluation = { score: number; is_acceptable: boolean; improved_answer: string; correction: string; strengths: string; next_step: string }
+type DiagnosticResult = { score: number; level: Level; quizScore: number; writingScore: number; speakingScore: number; writingEvaluation?: TrackEvaluation; speakingEvaluation?: TrackEvaluation; method: 'ai' | 'heuristic' | 'mixed' }
+type DiagnosticSpeechRecognition = {
+  lang: string
+  interimResults: boolean
+  maxAlternatives: number
+  onresult: ((event: { results: ArrayLike<{ 0?: { transcript: string } }> }) => void) | null
+  onerror: ((event: { error?: string }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type DiagnosticSpeechWindow = Window & {
+  SpeechRecognition?: new () => DiagnosticSpeechRecognition
+  webkitSpeechRecognition?: new () => DiagnosticSpeechRecognition
+}
+type LearningReviewItem = {
+  id: string
+  item_type: 'vocabulary' | 'grammar' | 'phrase' | 'error'
+  prompt: string
+  expected_answer: string
+  explanation: string
+  context: string
+  skill: string
+  interval_days: number
+  repetition_count: number
+  lapse_count: number
+  next_review_at: string
+  last_reviewed_at?: string | null
+  status: 'active' | 'mastered' | 'archived'
+  metadata: Record<string, unknown>
+}
 const PROFILE_KEY = 'fala-profile-v3'
 const WORDS_KEY = 'fala-words-v3'
 const SESSIONS_KEY = 'fala-local-sessions-v1'
@@ -72,6 +106,24 @@ function readLocal<T>(key: string, fallback: T): T {
 function greeting(name: string) {
   return name.trim().split(/\s+/)[0] || 'estudante'
 }
+function estimateSampleStructure(text: string, targetWords: number, targetSentences: number) {
+  const words = text.toLowerCase().match(/[a-z]+(?:'[a-z]+)?/g) ?? []
+  const sentences = text.split(/[.!?]+/).filter(sentence => sentence.trim().split(/\s+/).filter(Boolean).length >= 2)
+  const diversity = words.length ? new Set(words).size / words.length : 0
+  const connectors = /\b(because|but|and|so|however|although|when|if|after|before|while|also|first|then)\b/i.test(text)
+  const wordScore = Math.min(55, words.length / targetWords * 55)
+  const sentenceScore = Math.min(25, sentences.length / targetSentences * 25)
+  const diversityScore = Math.min(10, diversity / 0.7 * 10)
+  const connectorScore = connectors ? 10 : words.length >= 8 ? 5 : 0
+  return Math.round(Math.min(100, wordScore + sentenceScore + diversityScore + connectorScore))
+}
+const appTourSteps = [
+  { title: 'Seu próximo passo', description: 'O Início organiza a próxima aula, a meta diária, as revisões pendentes e uma prioridade de estudo. Comece pelo cartão principal.' },
+  { title: 'Aprenda em sequência', description: 'O curso apresenta, faz você escutar, praticar, falar, corrigir, revisar e aplicar o conteúdo em uma situação nova.' },
+  { title: 'Pratique de formas diferentes', description: 'Use escuta, fala, escrita, vocabulário, trilhas e Music Lab. A busca encontra ferramentas, aulas e expressões.' },
+  { title: 'Converse com a Lumi', description: 'A Lumi pode explicar, simplificar, corrigir e conduzir simulações. A voz exige microfone, navegador compatível e conta conectada.' },
+  { title: 'Acompanhe evidências', description: 'O Progresso reúne sessões, competências, revisões, consistência e conquistas. Indicadores de aprendizagem não são certificados oficiais.' },
+]
 function friendlyError(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Não foi possível concluir esta ação. Tente novamente.'
@@ -85,6 +137,35 @@ async function functionErrorDetail(error: unknown) {
   }
   return friendlyError(error)
 }
+
+type AuthenticatedFunctionOptions = {
+  body?: object | FormData | Blob | ArrayBuffer | string
+  headers?: Record<string, string>
+}
+
+async function invokeAuthenticatedFunction<T = any>(
+  functionName: string,
+  options: AuthenticatedFunctionOptions = {},
+) {
+  const client = supabase
+  if (!client) throw new Error('O serviço de aprendizagem não está configurado neste dispositivo.')
+  const { data, error } = await client.auth.getSession()
+  if (error) throw error
+  let session = data.session
+  const expiresSoon = !session?.expires_at || session.expires_at <= Math.floor(Date.now() / 1000) + 30
+  if (!session?.access_token || expiresSoon) {
+    const refreshed = await client.auth.refreshSession()
+    if (refreshed.error) throw refreshed.error
+    session = refreshed.data.session
+  }
+  const accessToken = session?.access_token
+  if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente para continuar usando os recursos de IA e áudio.')
+  return client.functions.invoke<T>(functionName, {
+    ...options,
+    headers: { ...options.headers, Authorization: 'Bearer ' + accessToken },
+  })
+}
+
 function demoAnswer(message: string, profile: Profile) {
   const text = message.toLowerCase()
   const topic = profile.customInterest || profile.interests[0] || 'your daily life'
@@ -97,17 +178,16 @@ function demoAnswer(message: string, profile: Profile) {
 const navItems = [
   { id: 'home' as Page, label: 'Início', icon: Home },
   { id: 'learn' as Page, label: 'Aprender', icon: BookOpen },
+  { id: 'practice' as Page, label: 'Praticar', icon: RotateCcw },
   { id: 'lumi' as Page, label: 'Lumi IA', icon: MessageCircle },
-  { id: 'speak' as Page, label: 'Falar', icon: AudioLines },
-  { id: 'write' as Page, label: 'Escrever', icon: PenLine },
-  { id: 'tracks' as Page, label: 'Trilhas', icon: Map },
-  { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
-  { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
   { id: 'progress' as Page, label: 'Progresso', icon: Activity },
-  { id: 'diagnostic' as Page, label: 'Descobrir meu nível', icon: Target },
+  { id: 'vocabulary' as Page, label: 'Vocabulário', icon: Bookmark },
+  { id: 'tracks' as Page, label: 'Trilhas', icon: Map },
+  { id: 'write' as Page, label: 'Escrita', icon: PenLine },
+  { id: 'music' as Page, label: 'Music Lab', icon: Music2 },
   { id: 'profile' as Page, label: 'Meu perfil', icon: CircleUserRound },
 ]
-const primaryNavIds: Page[] = ['home', 'learn', 'lumi', 'speak', 'progress']
+const primaryNavIds: Page[] = ['home', 'learn', 'practice', 'lumi', 'progress']
 const primaryNavItems = navItems.filter(item => primaryNavIds.includes(item.id))
 const toolNavItems = navItems.filter(item => !primaryNavIds.includes(item.id))
 
@@ -140,7 +220,13 @@ function LumiPortrait() {
 export default function App() {
   const [page, setPage] = useState<Page>('home')
   const [diagnosticAnswers, setDiagnosticAnswers] = useState<Record<number, number>>({})
-  const [diagnosticResult, setDiagnosticResult] = useState<{ score: number; level: Level } | null>(null)
+  const [diagnosticResult, setDiagnosticResult] = useState<DiagnosticResult | null>(null)
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false)
+  const [diagnosticWritingSample, setDiagnosticWritingSample] = useState('')
+  const [diagnosticSpeechSample, setDiagnosticSpeechSample] = useState('')
+  const [diagnosticRecording, setDiagnosticRecording] = useState(false)
+  const [diagnosticNotice, setDiagnosticNotice] = useState('')
+  const diagnosticRecognitionRef = useRef<DiagnosticSpeechRecognition | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark'>(() => readLocal(THEME_KEY, 'light'))
   const [profilePhoto, setProfilePhoto] = useState<string>(() => readLocal(PROFILE_PHOTO_KEY, ''))
   const [user, setUser] = useState<User | null>(null)
@@ -182,6 +268,8 @@ export default function App() {
   const [voiceStatus, setVoiceStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [lumiVoiceId, setLumiVoiceId] = useState(() => readLocal('fala-lumi-voice-v1', 'MEJe6hPrI48Kt2lFuVe3'))
   const [voiceMessage, setVoiceMessage] = useState('')
+  const [lumiRecording, setLumiRecording] = useState(false)
+  const [lumiRecordingNotice, setLumiRecordingNotice] = useState('')
   const [words, setWords] = useState<string[]>(() => readLocal(WORDS_KEY, ['actually', 'figure out', 'I am looking forward to']))
   const [vocabSchedule, setVocabSchedule] = useState<Record<string, VocabularySchedule>>(() => readLocal('fala-vocab-schedule-v1', {}))
   const [wordDetails, setWordDetails] = useState<Record<string, { meaning: string; example: string }>>(() => readLocal(VOCAB_DETAILS_KEY, {}))
@@ -226,10 +314,19 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionRow[]>(() => readLocal(SESSIONS_KEY, []))
   const [recentAttempts, setRecentAttempts] = useState<ActivityAttempt[]>([])
   const [learnerInsights, setLearnerInsights] = useState<LearnerInsight[]>([])
+  const [courseProgress, setCourseProgress] = useState<SavedProgress | null>(() => readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+  const [courseProgressLoaded, setCourseProgressLoaded] = useState(false)
+  const [nextLessonStartId, setNextLessonStartId] = useState<string | null>(null)
+  const [learningReviewItems, setLearningReviewItems] = useState<LearningReviewItem[]>([])
+  const [learningReviewIndex, setLearningReviewIndex] = useState(0)
+  const [reviewRevealed, setReviewRevealed] = useState(false)
+  const [lumiMode, setLumiMode] = useState<'conversation' | 'guided' | 'roleplay'>('conversation')
+  const [voiceActivity, setVoiceActivity] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle')
   const [cloudLoading, setCloudLoading] = useState(false)
   const [mobileMore, setMobileMore] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [globalSearch, setGlobalSearch] = useState('')
+  const [appTourStep, setAppTourStep] = useState<number | null>(() => readLocal('fala-app-tour-complete-v1', false) ? null : 0)
   const [showDemoHint, setShowDemoHint] = useState(true)
   const [toast, setToast] = useState('')
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -237,6 +334,9 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const voiceConversationRef = useRef<{ endSession: () => Promise<void> } | null>(null)
+  const lumiRecorderRef = useRef<MediaRecorder | null>(null)
+  const lumiStreamRef = useRef<MediaStream | null>(null)
+  const lumiChunksRef = useRef<Blob[]>([])
 
   const isConnected = !!user
   const totalMinutes = useMemo(() => Math.round(sessions.reduce((sum, item) => sum + (item.duration_seconds || 0), 0) / 60), [sessions])
@@ -254,13 +354,23 @@ export default function App() {
     return Math.round(seconds / 60)
   }, [sessions])
   const dailyGoalProgress = Math.min(100, Math.round(todayPracticeMinutes / Math.max(1, profile.minutes) * 100))
+  const nextLesson = useMemo(() => getNextLessonRecommendation(courseProgress), [courseProgress])
+  const dueReviewItems = useMemo(() => learningReviewItems
+    .filter(item => item.status === 'active' && new Date(item.next_review_at).getTime() <= Date.now())
+    .sort((a, b) => new Date(a.next_review_at).getTime() - new Date(b.next_review_at).getTime()), [learningReviewItems])
+  const activeReviewItem = dueReviewItems.length ? dueReviewItems[learningReviewIndex % dueReviewItems.length] : null
+  const studyTimer = useActiveStudyTimer(['learn', 'practice', 'lumi', 'speak', 'write', 'tracks', 'music', 'vocabulary'].includes(page))
   const dueWords = useMemo(() => {
     const now = Date.now()
+    const sharedQueueTerms = new Set(learningReviewItems
+      .filter(item => item.item_type === 'vocabulary' && item.status === 'active')
+      .map(item => (item.expected_answer || '').toLowerCase()))
     return words.filter(term => {
+      if (sharedQueueTerms.has(term.toLowerCase())) return false
       const nextReviewAt = vocabSchedule[term]?.nextReviewAt
       return !nextReviewAt || new Date(nextReviewAt).getTime() <= now
     })
-  }, [words, vocabSchedule])
+  }, [words, vocabSchedule, learningReviewItems])
   const reviewQueue = dueWords.length ? dueWords : words
   const activeReviewTerm = reviewQueue.length ? reviewQueue[reviewIndex % reviewQueue.length] : ''
   const learningEvidence = useMemo(() => {
@@ -283,8 +393,21 @@ export default function App() {
     )
     return { skillScores, recentMistakes, previousInsights }
   }, [recentAttempts, learnerInsights])
+  const currentWeekAttempts = useMemo(() => {
+    const start = new Date()
+    const mondayOffset = (start.getDay() + 6) % 7
+    start.setDate(start.getDate() - mondayOffset)
+    start.setHours(0, 0, 0, 0)
+    const startTime = start.getTime()
+    return recentAttempts.filter(attempt => attempt.attempted_at && new Date(attempt.attempted_at).getTime() >= startTime)
+  }, [recentAttempts])
+  const weeklyChallengeProgress = Math.min(3,
+    (currentWeekAttempts.some(item => item.skill === 'listening') ? 1 : 0) +
+    (currentWeekAttempts.some(item => item.skill === 'speaking') ? 1 : 0) +
+    (currentWeekAttempts.some(item => item.activity_type === 'real_life_application') ? 1 : 0)
+  )
   const titleByPage: Record<Page, string> = {
-    home: 'Visão geral', learn: 'Curso guiado', lumi: 'Converse com a Lumi',
+    home: 'Visão geral', learn: 'Curso guiado', practice: 'Revisões e drills', lumi: 'Converse com a Lumi',
     speak: 'Treino de fala', write: 'Laboratório de escrita', tracks: 'Trilhas de aprendizagem', music: 'Music Lab', vocabulary: 'Meu vocabulário', progress: 'Meu progresso', diagnostic: 'Diagnóstico de nível', profile: 'Meu perfil',
   }
 
@@ -321,6 +444,9 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !user) {
       setCloudLoading(false)
+      setCourseProgressLoaded(true)
+      setCourseProgress(readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+      setLearningReviewItems(readLocal<LearningReviewItem[]>('fala-learning-review-v1', []))
       setSessions(readLocal(SESSIONS_KEY, []))
       setRecentAttempts([])
       setLearnerInsights([])
@@ -331,15 +457,17 @@ export default function App() {
     setCloudLoading(true)
     void (async () => {
       try {
-        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult, attemptsResult, insightsResult] = await Promise.all([
+        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult, attemptsResult, insightsResult, courseProgressResult, reviewItemsResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('vocabulary_items').select('term,meaning,example_sentence,next_review_at,review_interval_days,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
           supabase.from('chat_messages').select('role,content,metadata').eq('user_id', user.id).order('created_at', { ascending: true }).limit(40),
           supabase.from('track_progress').select('track_id,completed_lessons,exam_score,exam_passed').eq('user_id', user.id),
           supabase.from('learning_plans').select('plan').eq('user_id', user.id).maybeSingle(),
-          supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(20),
+          supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(100),
           supabase.from('learner_insights').select('skill,observation,recommendation,confidence').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+          supabase.from('course_progress').select('*').eq('user_id', user.id).eq('course_id', 'core-english').maybeSingle(),
+          supabase.from('learning_review_items').select('*').eq('user_id', user.id).eq('status', 'active').order('next_review_at', { ascending: true }).limit(100),
         ])
         if (!active) return
         if (profileResult.data) {
@@ -404,13 +532,36 @@ export default function App() {
           setTrackProgress(restored)
           try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(restored)) } catch { /* local cache is optional */ }
         }
+        if (courseProgressResult.data) {
+          const row = courseProgressResult.data
+          const restoredCourse: SavedProgress = {
+            completedLessonIds: Array.isArray(row.completed_lesson_ids) ? row.completed_lesson_ids : [],
+            xp: Number(row.xp) || 0,
+            introDone: !!row.intro_done,
+            activeLessonId: row.active_lesson_id || null,
+            streakDays: Number(row.streak_days) || 0,
+            lastStudyDate: row.last_study_date || null,
+            lessonScores: row.lesson_scores && typeof row.lesson_scores === 'object' && !Array.isArray(row.lesson_scores) ? row.lesson_scores as Record<string, number> : {},
+          }
+          setCourseProgress(restoredCourse)
+          try { window.localStorage.setItem('fala-course-progress-v1', JSON.stringify(restoredCourse)) } catch { /* cloud remains source of truth */ }
+        } else {
+          setCourseProgress(readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+        }
+        if (reviewItemsResult.data) {
+          setLearningReviewItems(reviewItemsResult.data as LearningReviewItem[])
+          try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(reviewItemsResult.data)) } catch { /* cloud remains source of truth */ }
+        }
         const savedPlan = learningPlanResult.data?.plan as LearningPlan | undefined
         setLearningPlan(savedPlan?.headline ? savedPlan : null)
       } catch (error) {
         console.error('FALA account sync failed', error)
         setToast('Não foi possível carregar todos os dados sincronizados.')
       } finally {
-        if (active) setCloudLoading(false)
+        if (active) {
+          setCloudLoading(false)
+          setCourseProgressLoaded(true)
+        }
       }
     })()
     return () => { active = false }
@@ -425,17 +576,78 @@ export default function App() {
   }, [vocabSchedule])
 
   useEffect(() => {
+    if (voiceActivity !== 'speaking') return
+    const timer = window.setTimeout(() => setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle'), 1_500)
+    return () => window.clearTimeout(timer)
+  }, [voiceActivity, voiceStatus])
+
+  useEffect(() => {
+    if (page === 'lumi' || !lumiRecorderRef.current) return
+    if (lumiRecorderRef.current.state === 'recording') {
+      lumiRecorderRef.current.onstop = null
+      lumiRecorderRef.current.stop()
+    }
+    lumiRecorderRef.current = null
+    lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+    lumiStreamRef.current = null
+    lumiChunksRef.current = []
+    setLumiRecording(false)
+  }, [page])
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [chat, chatBusy])
+
+  useEffect(() => () => {
+    if (lumiRecorderRef.current?.state === 'recording') {
+      lumiRecorderRef.current.onstop = null
+      lumiRecorderRef.current.stop()
+    }
+    lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+    lumiStreamRef.current = null
+    window.speechSynthesis?.cancel()
+  }, [])
 
   useEffect(() => {
     return () => {
       if (audioUrl) URL.revokeObjectURL(audioUrl)
       streamRef.current?.getTracks().forEach(track => track.stop())
       if (recorderRef.current?.state === 'recording') recorderRef.current.stop()
+      diagnosticRecognitionRef.current?.stop()
       window.speechSynthesis?.cancel()
     }
   }, [audioUrl])
+
+  useEffect(() => {
+    if (appTourStep === null) return
+    const dialog = document.querySelector<HTMLElement>('.app-tour-dialog')
+    if (!dialog) return
+    const getFocusables = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    ))
+    getFocusables()[0]?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAppTourStep(null)
+        try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ }
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusables = getFocusables()
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [appTourStep])
 
   useEffect(() => {
     if (!toast) return
@@ -560,8 +772,325 @@ export default function App() {
       console.error('FALA activity attempt sync failed', error)
       return
     }
-    if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current].slice(0, 20))
+    if (data) setRecentAttempts(current => [data as ActivityAttempt, ...current] .slice(0, 100))
   }
+
+  const handleCourseProgressChange = useCallback((next: SavedProgress) => {
+    if (!courseProgressLoaded) return
+    setCourseProgress(next)
+    try { window.localStorage.setItem('fala-course-progress-v1', JSON.stringify(next)) } catch { /* local snapshot is a fallback */ }
+    if (!supabase || !user) return
+    void supabase.from('course_progress').upsert({
+      user_id: user.id,
+      course_id: 'core-english',
+      completed_lesson_ids: next.completedLessonIds,
+      xp: next.xp,
+      intro_done: next.introDone,
+      active_lesson_id: next.activeLessonId,
+      streak_days: next.streakDays ?? 0,
+      last_study_date: next.lastStudyDate || null,
+      lesson_scores: next.lessonScores ?? {},
+    }, { onConflict: 'user_id,course_id' }).then(({ error }) => {
+      if (error) setToast('O progresso do curso ficou salvo neste aparelho, mas não sincronizou: ' + error.message)
+    })
+  }, [courseProgressLoaded, user?.id])
+
+  const handleCourseExerciseAttempt = useCallback(async (attempt: {
+    activityType: string
+    skill: 'listening' | 'speaking' | 'writing' | 'grammar' | 'vocabulary'
+    prompt: string
+    answer: string
+    expected: string
+    explanation: string
+    correct: boolean | null
+  }) => {
+    const correction = { expected: attempt.expected, explanation: attempt.explanation, correct: attempt.correct, source: 'guided-course-v10' }
+    const attemptPayload = {
+      activity_type: attempt.activityType,
+      skill: attempt.skill,
+      interest_context: profile.customInterest || profile.interests[0] || null,
+      prompt: attempt.prompt,
+      learner_answer: attempt.answer || null,
+      correction,
+      score: attempt.correct === null ? null : attempt.correct ? 100 : 0,
+    }
+    let sourceAttemptId: string | null = null
+    if (supabase && user) {
+      const savedAttempt = await supabase.from('activity_attempts').insert({ user_id: user.id, ...attemptPayload })
+        .select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').single()
+      if (savedAttempt.error) {
+        console.error('Guided course attempt sync failed', savedAttempt.error)
+        setToast('A tentativa foi registrada apenas localmente: ' + savedAttempt.error.message)
+      } else if (savedAttempt.data) {
+        sourceAttemptId = savedAttempt.data.id
+        setRecentAttempts(current => [savedAttempt.data as ActivityAttempt, ...current].slice(0, 100))
+      }
+    } else {
+      setRecentAttempts(current => [{
+        ...attemptPayload,
+        id: 'local-' + Date.now(),
+        attempted_at: new Date().toISOString(),
+      } as ActivityAttempt, ...current].slice(0, 100))
+    }
+
+    if (attempt.correct !== false) return
+    const itemType: LearningReviewItem['item_type'] = attempt.skill === 'grammar' ? 'grammar'
+      : attempt.skill === 'speaking' || attempt.skill === 'writing' ? 'phrase' : 'error'
+    const reviewPayload = {
+      user_id: user?.id,
+      item_type: itemType,
+      prompt: attempt.prompt.slice(0, 500),
+      expected_answer: attempt.expected.slice(0, 1000),
+      explanation: attempt.explanation.slice(0, 1200),
+      context: 'Curso guiado · estrutura que precisa de reforço',
+      skill: attempt.skill,
+      source_attempt_id: sourceAttemptId,
+      interval_days: 1,
+      repetition_count: 0,
+      lapse_count: 0,
+      next_review_at: new Date().toISOString(),
+      status: 'active' as const,
+      metadata: { learner_answer: attempt.answer, source: 'guided-course-v10' },
+    }
+    let item: LearningReviewItem = {
+      ...reviewPayload,
+      id: 'local-' + Date.now(),
+    } as LearningReviewItem
+    if (supabase && user) {
+      const savedItem = await supabase.from('learning_review_items').insert(reviewPayload)
+        .select('*').single()
+      if (savedItem.error) {
+        console.error('Review item sync failed', savedItem.error)
+        setToast('O erro entrou na revisão local, mas não sincronizou: ' + savedItem.error.message)
+      } else if (savedItem.data) {
+        item = savedItem.data as LearningReviewItem
+      }
+    }
+    setLearningReviewItems(current => {
+      const updated = [item, ...current.filter(existing => existing.id !== item.id)]
+      try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+      return updated
+    })
+  }, [user?.id, profile.customInterest, profile.interests])
+
+  const gradeLearningReviewItem = async (grade: 'again' | 'good' | 'easy') => {
+    if (!activeReviewItem) return
+    const intervals = [1, 3, 7, 15, 30]
+    const currentIndex = Math.max(0, intervals.indexOf(activeReviewItem.interval_days))
+    const nextIndex = grade === 'again' ? 0 : Math.min(intervals.length - 1, currentIndex + (grade === 'easy' ? 2 : 1))
+    const nextInterval = intervals[nextIndex]
+    const nextDate = new Date()
+    nextDate.setDate(nextDate.getDate() + nextInterval)
+    const nextReviewAt = nextDate.toISOString()
+    const nextRepetitionCount = grade === 'again' ? 0 : activeReviewItem.repetition_count + 1
+    const nextLapseCount = activeReviewItem.lapse_count + (grade === 'again' ? 1 : 0)
+    const mastered = nextRepetitionCount >= 5 && grade === 'easy'
+    const updatedFields = {
+      interval_days: nextInterval,
+      repetition_count: nextRepetitionCount,
+      lapse_count: nextLapseCount,
+      last_reviewed_at: new Date().toISOString(),
+      next_review_at: nextReviewAt,
+      status: mastered ? 'mastered' : 'active',
+    }
+    setLearningReviewItems(current => {
+      const updated = current.map(item => item.id === activeReviewItem.id ? { ...item, ...updatedFields } as LearningReviewItem : item)
+      try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+      return updated
+    })
+    if (supabase && user && !activeReviewItem.id.startsWith('local-')) {
+      const { error } = await supabase.from('learning_review_items').update(updatedFields).eq('id', activeReviewItem.id).eq('user_id', user.id)
+      if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
+      if (activeReviewItem.item_type === 'vocabulary' && activeReviewItem.expected_answer) {
+        const { error: vocabularyError } = await supabase.from('vocabulary_items').update({
+          next_review_at: nextReviewAt, review_interval_days: nextInterval,
+        }).eq('user_id', user.id).eq('term', activeReviewItem.expected_answer)
+        if (vocabularyError) console.error('Vocabulary schedule sync failed', vocabularyError)
+      }
+    }
+    if (activeReviewItem.item_type === 'vocabulary' && activeReviewItem.expected_answer) {
+      setVocabSchedule(current => ({ ...current, [activeReviewItem.expected_answer]: { nextReviewAt, intervalDays: nextInterval } }))
+    }
+    await recordSession('vocabulary', studyTimer.finish(), grade === 'again' ? 0 : grade === 'good' ? 85 : 100, {
+      source: 'shared-srs', item_type: activeReviewItem.item_type, interval_days: nextInterval, grade,
+    })
+    setReviewRevealed(false)
+    setLearningReviewIndex(index => dueReviewItems.length ? (index + 1) % dueReviewItems.length : 0)
+    setToast(mastered ? 'Estrutura marcada como dominada após cinco revisões.' : grade === 'again' ? 'Esse item volta amanhã.' : 'Próxima revisão em ' + nextInterval + ' dias.')
+  }
+
+  const submitDiagnostic = async () => {
+    if (diagnosticBusy) return
+    const answerCount = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
+    const quizScore = Math.round(answerCount / diagnosticQuestions.length * 100)
+    const writingText = diagnosticWritingSample.trim().slice(0, 1400)
+    const speechText = diagnosticSpeechSample.trim().slice(0, 1400)
+    let writingScore = estimateSampleStructure(writingText, 50, 4)
+    let speakingScore = estimateSampleStructure(speechText, 30, 3)
+    let writingEvaluation: TrackEvaluation | undefined
+    let speakingEvaluation: TrackEvaluation | undefined
+    let method: 'ai' | 'heuristic' | 'mixed' = 'heuristic'
+    setDiagnosticBusy(true)
+    setDiagnosticNotice('Calculando os indicadores de conhecimento, escrita e fala…')
+    try {
+      if (supabase && user) {
+        const [writingResult, speakingResult] = await Promise.all([
+          invokeAuthenticatedFunction('tutor', {
+            body: {
+              mode: 'evaluate', message: writingText, profile,
+              activity: {
+                activity_type: 'diagnostic_writing',
+                title: 'Diagnóstico inicial · produção escrita',
+                question: 'Write at least three connected sentences about a personal goal, why it matters and how you will practice.',
+                expected_answer: 'A coherent, relevant three-sentence response with understandable grammar, useful vocabulary and connected ideas.',
+                target_phrase: 'I want to improve… because… I plan to…',
+                context: 'Initial independent writing sample. Evaluate language production, task completion and suitability for the learner level.',
+              },
+            },
+          }),
+          invokeAuthenticatedFunction('tutor', {
+            body: {
+              mode: 'evaluate', message: speechText, profile,
+              activity: {
+                activity_type: 'diagnostic_speaking_transcript',
+                title: 'Diagnóstico inicial · fala transcrita',
+                question: 'Introduce yourself, explain why you are learning English and describe one real situation in which you want to use it.',
+                expected_answer: 'A relevant spontaneous response with connected ideas, understandable grammar and vocabulary suitable for the learner level.',
+                target_phrase: 'I am learning English because…',
+                context: 'Speech recognition transcript only. Evaluate the language in the transcript, never pronunciation, accent, fluency or acoustic quality.',
+              },
+            },
+          }),
+        ])
+        const writing = writingResult.data?.structured as TrackEvaluation | undefined
+        const speaking = speakingResult.data?.structured as TrackEvaluation | undefined
+        if (!writingResult.error && writing && typeof writing.score === 'number') {
+          writingEvaluation = writing
+          writingScore = Math.max(0, Math.min(100, Math.round(writing.score)))
+        }
+        if (!speakingResult.error && speaking && typeof speaking.score === 'number') {
+          speakingEvaluation = speaking
+          speakingScore = Math.max(0, Math.min(100, Math.round(speaking.score)))
+        }
+        if (writingEvaluation && speakingEvaluation) method = 'ai'
+        else if (writingEvaluation || speakingEvaluation) method = 'mixed'
+        setDiagnosticNotice(method === 'ai'
+          ? 'A Lumi avaliou as duas amostras. A fala foi analisada somente a partir da transcrição.'
+          : 'A avaliação por IA não ficou totalmente disponível; as amostras sem avaliação receberam apenas indicadores estruturais provisórios.')
+      } else {
+        setDiagnosticNotice('Sem conta conectada: a avaliação das amostras é estrutural e provisória, sem correção semântica ou gramatical por IA.')
+      }
+      const score = Math.round(quizScore * 0.4 + writingScore * 0.3 + speakingScore * 0.3)
+      const level: Level = score < 40 ? 'beginner' : score < 55 ? 'basic' : score < 75 ? 'intermediate' : 'advanced'
+      const result: DiagnosticResult = { score, level, quizScore, writingScore, speakingScore, writingEvaluation, speakingEvaluation, method }
+      setDiagnosticResult(result)
+      setProfile(current => {
+        const updated = { ...current, level }
+        try { window.localStorage.setItem(PROFILE_KEY, JSON.stringify(updated)) } catch { /* local profile remains in memory */ }
+        return updated
+      })
+      if (supabase && user) {
+        const { error } = await supabase.from('profiles').update({ estimated_level: level }).eq('user_id', user.id)
+        if (error) setToast('O diagnóstico foi calculado, mas o nível não sincronizou: ' + error.message)
+      }
+      void recordSession('lesson', studyTimer.finish(), score, {
+        source: 'multidimensional-diagnostic',
+        quiz_score: quizScore,
+        writing_score: writingScore,
+        speaking_transcript_score: speakingScore,
+        method,
+      })
+    } catch (error) {
+      setDiagnosticNotice('Não foi possível concluir a avaliação: ' + friendlyError(error))
+    } finally {
+      setDiagnosticBusy(false)
+    }
+  }
+
+  const startDiagnosticSpeechCapture = () => {
+    const browserWindow = window as DiagnosticSpeechWindow
+    const Recognition = browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setDiagnosticNotice('Este navegador não oferece reconhecimento de fala. Para validar a etapa oral, abra o FALA em uma versão recente do Chrome ou Edge.')
+      return
+    }
+    try {
+      diagnosticRecognitionRef.current?.stop()
+      const recognition = new Recognition()
+      recognition.lang = profile.accent === 'uk' ? 'en-GB' : 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+      recognition.onresult = event => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim() || ''
+        setDiagnosticSpeechSample(transcript)
+        setDiagnosticNotice(transcript ? 'Transcrição oral capturada pelo navegador. A amostra será anexada ao resultado indicativo.' : 'Nenhuma fala foi reconhecida. Tente novamente em um ambiente silencioso.')
+      }
+      recognition.onerror = event => setDiagnosticNotice('Não foi possível capturar a fala (' + (event.error || 'erro') + '). Verifique a permissão do microfone.')
+      recognition.onend = () => {
+        setDiagnosticRecording(false)
+        diagnosticRecognitionRef.current = null
+      }
+      diagnosticRecognitionRef.current = recognition
+      setDiagnosticSpeechSample('')
+      setDiagnosticNotice('Ouvindo sua resposta em inglês…')
+      setDiagnosticRecording(true)
+      recognition.start()
+    } catch {
+      setDiagnosticRecording(false)
+      setDiagnosticNotice('Não foi possível iniciar o microfone. Verifique a permissão e tente novamente.')
+    }
+  }
+
+  const saveExpressionFromChat = async (term: string, explanation = '') => {
+    const cleanTerm = term.replace(/^["“”' ]+|["“”' ]+$/g, '').trim().slice(0, 120)
+    if (!cleanTerm) return
+    const nextReviewAt = new Date().toISOString()
+    const detail = { meaning: explanation.slice(0, 300), example: '' }
+    setWords(current => current.some(word => word.toLowerCase() === cleanTerm.toLowerCase()) ? current : [cleanTerm, ...current].slice(0, 100))
+    setWordDetails(current => ({ ...current, [cleanTerm]: detail }))
+    if (!supabase || !user) {
+      const localItem: LearningReviewItem = {
+        id: 'local-lumi-' + Date.now(), item_type: 'phrase', prompt: 'Use a expressão: ' + cleanTerm,
+        expected_answer: cleanTerm, explanation: detail.meaning, context: 'Expressão salva da conversa com a Lumi',
+        skill: 'vocabulary', interval_days: 1, repetition_count: 0, lapse_count: 0,
+        next_review_at: nextReviewAt, status: 'active', metadata: { source: 'lumi-chat-save' },
+      }
+      setLearningReviewItems(current => {
+        const updated = [localItem, ...current]
+        try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(updated)) } catch { /* local fallback */ }
+        return updated
+      })
+    }
+    if (supabase && user) {
+      const vocab = await supabase.from('vocabulary_items').upsert({
+        user_id: user.id, term: cleanTerm, meaning: detail.meaning, example_sentence: null,
+        next_review_at: nextReviewAt, review_interval_days: 1,
+      }, { onConflict: 'user_id,term' })
+      if (vocab.error) setToast('A expressão ficou local, mas não sincronizou com o vocabulário.')
+      const item = await supabase.from('learning_review_items').insert({
+        user_id: user.id, item_type: 'phrase', prompt: 'Use a expressão: ' + cleanTerm,
+        expected_answer: cleanTerm, explanation: detail.meaning,
+        context: 'Expressão salva da conversa com a Lumi', skill: 'vocabulary',
+        interval_days: 1, next_review_at: nextReviewAt, metadata: { source: 'lumi-chat-save' },
+      }).select('*').single()
+      if (!item.error && item.data) setLearningReviewItems(current => [item.data as LearningReviewItem, ...current])
+    }
+    setToast('Expressão salva no vocabulário e na fila de revisão.')
+  }
+
+  useEffect(() => {
+    const activityType: Record<string, string> = {
+      learn: 'lesson', practice: 'vocabulary', lumi: 'conversation', speak: 'speaking',
+      write: 'writing', tracks: 'lesson', music: 'listening', vocabulary: 'vocabulary',
+    }
+    const pageAtStart = page
+    const type = activityType[pageAtStart]
+    if (!type) return
+    return () => {
+      const seconds = studyTimer.finish()
+      if (seconds >= 5) void recordSession(type, seconds, null, { source: 'active-study-timer', page: pageAtStart })
+    }
+  }, [page, user?.id])
 
   const appendVoiceLine = (role: 'user' | 'assistant', rawText: string) => {
     const text = rawText.trim()
@@ -607,7 +1136,7 @@ export default function App() {
     try {
       const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       permissionStream.getTracks().forEach(track => track.stop())
-      const { data, error } = await supabase.functions.invoke('lumi-session', { body: {} })
+      const { data, error } = await invokeAuthenticatedFunction('lumi-session', { body: {} })
       if (error) throw error
       if (typeof data?.conversation_token !== 'string' || !data.conversation_token) {
         throw new Error('O servidor não retornou um token válido. Verifique ELEVENLABS_API_KEY nos secrets do Supabase.')
@@ -620,20 +1149,25 @@ export default function App() {
         overrides: { tts: { voiceId: lumiVoiceId } },
         onConnect: () => {
           setVoiceStatus('connected')
+          setVoiceActivity('listening')
           setVoiceMessage('Lumi está ouvindo. Fale naturalmente em inglês ou peça uma explicação em português.')
         },
         onDisconnect: () => {
           voiceConversationRef.current = null
           setVoiceStatus('idle')
+          setVoiceActivity('idle')
         },
         onMessage: (event: { message?: string }) => {
+          setVoiceActivity('speaking')
           appendVoiceLine('assistant', typeof event?.message === 'string' ? event.message : '')
         },
         onUserTranscript: (event: { message?: string }) => {
+          setVoiceActivity('thinking')
           appendVoiceLine('user', typeof event?.message === 'string' ? event.message : '')
         },
         onError: (error: unknown) => {
           setVoiceStatus('error')
+          setVoiceActivity('idle')
           setVoiceMessage('A conversa por voz encontrou um erro: ' + friendlyError(error))
         },
       })
@@ -659,30 +1193,57 @@ export default function App() {
       const name = error instanceof DOMException ? error.name : ''
       setVoiceMessage(name === 'NotAllowedError'
         ? 'O acesso ao microfone foi negado. Libere a permissão do microfone no navegador e tente novamente.'
-        : 'Não foi possível iniciar a Lumi por voz: ' + friendlyError(error))
+        : 'Não foi possível iniciar a voz ao vivo: ' + await functionErrorDetail(error) + ' Use “Gravar mensagem para a Lumi” abaixo como alternativa por turnos.')
     }
   }
 
-  const sendChat = async (event: FormEvent) => {
-    event.preventDefault()
-    const message = chatInput.trim()
-    if (!message || chatBusy) return
+  const speakLumiReply = (text: string) => {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+      setLumiRecordingNotice('A resposta chegou em texto, mas este navegador não oferece reprodução de voz.')
+      setVoiceActivity('idle')
+      return
+    }
+    window.speechSynthesis.cancel()
+    const language = profile.accent === 'uk' ? 'en-GB' : 'en-US'
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = language
+    utterance.rate = 0.96
+    const voice = window.speechSynthesis.getVoices().find(item => item.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase()))
+    if (voice) utterance.voice = voice
+    utterance.onstart = () => setVoiceActivity('speaking')
+    utterance.onend = () => setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
+    utterance.onerror = () => setVoiceActivity('idle')
+    window.speechSynthesis.speak(utterance)
+  }
+
+  const sendChatMessage = async (rawMessage: string, speakReply = false): Promise<boolean> => {
+    const message = rawMessage.trim()
+    if (!message || chatBusy) return false
+    const modeInstruction = lumiMode === 'guided'
+      ? 'Modo correção guiada: corrija um padrão relevante por vez, explique brevemente em português e peça uma nova tentativa. '
+      : lumiMode === 'roleplay'
+        ? 'Modo roleplay: conduza uma situação real em inglês (trabalho, viagem ou cotidiano), faça uma pergunta por vez e permaneça no personagem. '
+        : ''
+    const tutorMessage = modeInstruction + message
     const history = chat.slice(-8)
     setChat(current => [...current, { role: 'user', text: message }])
     setChatInput('')
     setChatNotice('')
     setChatBusy(true)
+    setVoiceActivity('thinking')
+    let replyForSpeech = ''
     try {
       if (supabase && user) {
-        const { data, error } = await supabase.functions.invoke('tutor', {
+        const { data, error } = await invokeAuthenticatedFunction('tutor', {
           body: {
-            mode: 'conversation', message, history, profile,
+            mode: 'conversation', message: tutorMessage, history, profile,
             learningEvidence,
           },
         })
         if (error) throw error
         const reply = typeof data?.reply === 'string' ? data.reply : ''
         if (!reply) throw new Error('A Lumi não retornou uma resposta.')
+        replyForSpeech = reply
         setChat(current => [...current, { role: 'assistant', text: reply, note: data?.correction }])
         await supabase.from('chat_messages').insert([
           { user_id: user.id, role: 'user', content: message },
@@ -693,21 +1254,108 @@ export default function App() {
             user_id: user.id, skill: data.learning_insight.skill || 'speaking',
             observation: data.learning_insight.observation, recommendation: data.learning_insight.recommendation,
             confidence: Math.max(0, Math.min(1, Number(data.learning_insight.confidence) || 0)),
-            evidence: { source: 'conversation' },
+            evidence: { source: speakReply ? 'voice_turn' : 'conversation' },
           }).select('skill,observation,recommendation,confidence').single()
           if (!insightError && savedInsight) setLearnerInsights(current => [savedInsight as LearnerInsight, ...current].slice(0, 5))
         }
       } else {
         await new Promise(resolve => window.setTimeout(resolve, 500))
-        setChat(current => [...current, { role: 'assistant', text: demoAnswer(message, profile) }])
+        const reply = demoAnswer(message, profile)
+        replyForSpeech = reply
+        setChat(current => [...current, { role: 'assistant', text: reply }])
         setChatNotice('Modo demonstração: respostas de IA personalizadas e histórico entre dispositivos exigem uma conta conectada.')
       }
+      if (speakReply && replyForSpeech) speakLumiReply(replyForSpeech)
+      return true
     } catch (error) {
       const detail = await functionErrorDetail(error)
       setChat(current => [...current, { role: 'assistant', text: 'Não consegui responder agora. ' + detail }])
       setChatNotice('Falha ao conectar à Lumi: ' + detail)
+      setVoiceActivity('idle')
+      return false
     } finally {
       setChatBusy(false)
+      if (!speakReply) setVoiceActivity(voiceStatus === 'connected' ? 'listening' : 'idle')
+    }
+  }
+
+  const sendChat = async (event: FormEvent) => {
+    event.preventDefault()
+    await sendChatMessage(chatInput)
+  }
+
+  const stopLumiRecording = () => {
+    if (lumiRecorderRef.current?.state === 'recording') lumiRecorderRef.current.stop()
+  }
+
+  const startLumiRecording = async () => {
+    if (lumiRecording || chatBusy) return
+    if (!supabase || !user) {
+      setAuthMode('signin')
+      setAuthOpen(true)
+      setAuthMessage('Entre na sua conta para gravar uma mensagem de voz para a Lumi.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext || typeof MediaRecorder === 'undefined') {
+      setLumiRecordingNotice('Este navegador não oferece gravação de áudio nesta página. Use Safari ou Chrome atualizado em HTTPS.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
+      lumiStreamRef.current = stream
+      lumiChunksRef.current = []
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
+      lumiRecorderRef.current = recorder
+      recorder.ondataavailable = event => { if (event.data.size) lumiChunksRef.current.push(event.data) }
+      recorder.onerror = () => {
+        recorder.onstop = null
+        stream.getTracks().forEach(track => track.stop())
+        lumiStreamRef.current = null
+        lumiRecorderRef.current = null
+        setLumiRecording(false)
+        setLumiRecordingNotice('O navegador interrompeu a gravação. Tente novamente.')
+        setVoiceActivity('idle')
+      }
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop())
+        lumiStreamRef.current = null
+        lumiRecorderRef.current = null
+        setLumiRecording(false)
+        const audioType = recorder.mimeType || lumiChunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(lumiChunksRef.current, { type: audioType })
+        lumiChunksRef.current = []
+        if (!blob.size) {
+          setLumiRecordingNotice('O áudio ficou vazio. Grave por alguns segundos e tente novamente.')
+          setVoiceActivity('idle')
+          return
+        }
+        setLumiRecordingNotice('Áudio capturado. Transcrevendo sua mensagem…')
+        setVoiceActivity('thinking')
+        try {
+          const recognized = await transcribeCourseAudio(blob)
+          setLumiRecordingNotice('Você disse: ' + recognized)
+          const sent = await sendChatMessage(recognized, true)
+          if (sent) setLumiRecordingNotice('Mensagem enviada. A resposta da Lumi foi encaminhada para reprodução no navegador.')
+        } catch (error) {
+          setLumiRecordingNotice('Não foi possível transcrever o áudio: ' + await functionErrorDetail(error))
+          setVoiceActivity('idle')
+        }
+      }
+      recorder.start(250)
+      setLumiRecording(true)
+      setVoiceActivity('listening')
+      setLumiRecordingNotice('Gravando. Fale e toque em “Parar gravação” para enviar à Lumi.')
+    } catch (error) {
+      lumiStreamRef.current?.getTracks().forEach(track => track.stop())
+      lumiStreamRef.current = null
+      setLumiRecording(false)
+      setLumiRecordingNotice(error instanceof DOMException && error.name === 'NotAllowedError'
+        ? 'Permissão do microfone negada. Libere o acesso no navegador e tente novamente.'
+        : 'Não foi possível iniciar a gravação: ' + friendlyError(error))
     }
   }
 
@@ -780,7 +1428,7 @@ export default function App() {
         setTrackBusy(true)
         setTrackFeedback('A Lumi está avaliando sua resposta…')
         try {
-          const { data, error } = await supabase.functions.invoke('tutor', {
+          const { data, error } = await invokeAuthenticatedFunction('tutor', {
             body: {
               mode: 'evaluate',
               message: answer,
@@ -821,7 +1469,7 @@ export default function App() {
 
     const completed = [...new Set([...activeTrackProgress.completed_lessons, trackLessonIndex])].sort((a, b) => a - b)
     updateTrackProgress(activeTrack.id, { ...activeTrackProgress, completed_lessons: completed })
-    await recordSession('lesson', 240, score, { track_id: activeTrack.id, lesson: lesson.title })
+    await recordSession('lesson', studyTimer.finish(), score, { track_id: activeTrack.id, lesson: lesson.title })
     setTrackFeedback('')
     setTrackMode('overview')
   }
@@ -840,7 +1488,7 @@ export default function App() {
     setTrackFeedback(passed
       ? 'Módulo concluído. Você atingiu o mínimo de 70%.'
       : 'Você ainda não atingiu 70%. Revise as etapas e tente novamente.')
-    void recordSession('lesson', 300, score, { track_id: activeTrack.id, exam: true })
+    void recordSession('lesson', studyTimer.finish(), score, { track_id: activeTrack.id, exam: true })
   }
 
   const selectWritingPhoto = (file: File | null) => {
@@ -890,14 +1538,14 @@ export default function App() {
       bitmap.close()
       const imageDataUrl = canvas.toDataURL('image/jpeg', 0.82)
       if (imageDataUrl.length > 5_800_000) throw new Error('A foto continua muito grande após a compressão. Tente uma imagem menor.')
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'writing_image', imageDataUrl, profile, message: writingText.trim() },
       })
       if (error) throw error
       const reply = typeof data?.reply === 'string' ? data.reply.trim() : ''
       if (!reply) throw new Error('A Lumi não retornou uma análise.')
       setWritingPhotoFeedback(reply)
-      await recordSession('writing', 300, null, { source: 'photo' })
+      await recordSession('writing', studyTimer.finish(), null, { source: 'photo' })
     } catch (error) {
       setWritingPhotoFeedback('Não foi possível analisar a foto: ' + friendlyError(error))
     } finally {
@@ -915,7 +1563,7 @@ export default function App() {
     setPlanBusy(true)
     setPlanNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'plan', profile, learningEvidence },
       })
       if (error) throw error
@@ -978,14 +1626,14 @@ export default function App() {
     setMusicAnalysisBusy(true)
     setMusicAnalysisNotice('')
     try {
-      const { data, error } = await supabase.functions.invoke('tutor', {
+      const { data, error } = await invokeAuthenticatedFunction('tutor', {
         body: { mode: 'music', message: excerpt, profile, track: selectedMusic ? { title: selectedMusic.title, artist: selectedMusic.artist } : null },
       })
       if (error) throw error
       const result = data?.structured as MusicAnalysis | undefined
       if (!result || !Array.isArray(result.lines) || !Array.isArray(result.vocabulary)) throw new Error('A análise veio incompleta. Tente novamente com um trecho menor.')
       setMusicAnalysis(result)
-      await recordSession('listening', 180, null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
+      await recordSession('listening', studyTimer.finish(), null, { track: selectedMusic?.title || 'Song study', lines: result.lines.length })
     } catch (error) {
       setMusicAnalysisNotice('Não foi possível analisar o trecho: ' + await functionErrorDetail(error))
     } finally {
@@ -1035,14 +1683,60 @@ export default function App() {
     if (!term) return
     const updated = [term, ...words.filter(word => word.toLowerCase() !== term.toLowerCase())].slice(0, 100)
     const nextReviewAt = new Date().toISOString()
+    const meaning = wordDetails[term]?.meaning || ''
+    const example = wordDetails[term]?.example || ''
     setWords(updated)
     setVocabSchedule(current => ({ ...current, [term]: { nextReviewAt, intervalDays: 1 } }))
     setNewWord('')
     try { window.localStorage.setItem(WORDS_KEY, JSON.stringify(updated)) } catch { /* local cache is optional */ }
-    if (supabase && user) {
-      const { error } = await supabase.from('vocabulary_items').upsert({ user_id: user.id, term, meaning: wordDetails[term]?.meaning || '', example_sentence: wordDetails[term]?.example || null, next_review_at: nextReviewAt, review_interval_days: 1 }, { onConflict: 'user_id,term' })
-      if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
+    const localItem: LearningReviewItem = {
+      id: 'local-vocab-' + term.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      item_type: 'vocabulary',
+      prompt: 'Recupere o significado e use: ' + term,
+      expected_answer: term,
+      explanation: meaning,
+      context: example || 'Expressão salva no vocabulário',
+      skill: 'vocabulary',
+      interval_days: 1,
+      repetition_count: 0,
+      lapse_count: 0,
+      next_review_at: nextReviewAt,
+      status: 'active',
+      metadata: { term, example_sentence: example, source: 'vocabulary-library' },
     }
+    if (supabase && user) {
+      const { error } = await supabase.from('vocabulary_items').upsert({
+        user_id: user.id, term, meaning, example_sentence: example || null,
+        next_review_at: nextReviewAt, review_interval_days: 1,
+      }, { onConflict: 'user_id,term' })
+      if (error) setToast('A palavra foi salva localmente, mas não sincronizou: ' + error.message)
+      const existing = await supabase.from('learning_review_items').select('id')
+        .eq('user_id', user.id).eq('item_type', 'vocabulary').eq('expected_answer', term).eq('status', 'active').limit(1).maybeSingle()
+      if (existing.data?.id) {
+        const existingId = existing.data.id
+        const updatedItem = await supabase.from('learning_review_items').update({
+          prompt: localItem.prompt, explanation: meaning, context: example || 'Expressão salva no vocabulário',
+          interval_days: 1, repetition_count: 0, lapse_count: 0, next_review_at: nextReviewAt, metadata: localItem.metadata,
+        }).eq('id', existingId).select('*').single()
+        if (!updatedItem.error && updatedItem.data) {
+          setLearningReviewItems(current => [updatedItem.data as LearningReviewItem, ...current.filter(item => item.id !== existingId)])
+        }
+      } else {
+        const savedItem = await supabase.from('learning_review_items').insert({
+          user_id: user.id, item_type: 'vocabulary', prompt: localItem.prompt, expected_answer: term,
+          explanation: meaning, context: localItem.context, skill: 'vocabulary',
+          interval_days: 1, next_review_at: nextReviewAt, metadata: localItem.metadata,
+        }).select('*').single()
+        if (!savedItem.error && savedItem.data) setLearningReviewItems(current => [savedItem.data as LearningReviewItem, ...current])
+      }
+    } else {
+      setLearningReviewItems(current => {
+        const next = [localItem, ...current.filter(item => item.expected_answer.toLowerCase() !== term.toLowerCase())]
+        try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(next)) } catch { /* local fallback */ }
+        return next
+      })
+    }
+    setToast('Expressão salva e adicionada à fila de revisão espaçada.')
   }
 
   const deleteWord = async (term: string) => {
@@ -1059,10 +1753,11 @@ export default function App() {
   const gradeVocabularyReview = async (grade: 'again' | 'good' | 'easy') => {
     const term = activeReviewTerm
     if (!term) return
+    const schedule = [1, 3, 7, 15, 30]
     const currentInterval = Math.max(1, vocabSchedule[term]?.intervalDays || 1)
-    const nextInterval = grade === 'again' ? 1 : grade === 'good'
-      ? Math.min(365, Math.max(2, currentInterval * 2))
-      : Math.min(365, Math.max(4, currentInterval * 3))
+    const currentIndex = Math.max(0, schedule.indexOf(currentInterval))
+    const nextIndex = grade === 'again' ? 0 : Math.min(schedule.length - 1, currentIndex + (grade === 'easy' ? 2 : 1))
+    const nextInterval = schedule[nextIndex]
     const nextDate = new Date()
     nextDate.setDate(nextDate.getDate() + nextInterval)
     const nextReviewAt = nextDate.toISOString()
@@ -1074,7 +1769,7 @@ export default function App() {
       if (error) setToast('A revisão foi atualizada neste aparelho, mas não sincronizou: ' + error.message)
     }
     const score = grade === 'again' ? 0 : grade === 'good' ? 85 : 100
-    await recordSession('vocabulary', 45, score, { term, recall: grade, next_review_days: nextInterval })
+    await recordSession('vocabulary', studyTimer.finish(), score, { term, recall: grade, next_review_days: nextInterval })
     if (dueWords.length === 1) setReviewComplete(true)
     else {
       setReviewIndex(dueWords.length > 0 ? 0 : (reviewIndex + 1) % Math.max(1, words.length))
@@ -1090,7 +1785,7 @@ export default function App() {
     setWritingFeedback('')
     try {
       if (supabase && user) {
-        const { data, error } = await supabase.functions.invoke('tutor', {
+        const { data, error } = await invokeAuthenticatedFunction('tutor', {
           body: { mode: 'writing', message: writingText.trim(), profile },
         })
         if (error) throw error
@@ -1100,12 +1795,26 @@ export default function App() {
         const count = writingText.trim().split(/\s+/).filter(Boolean).length
         setWritingFeedback('Você escreveu ' + count + ' palavras. Revise se cada frase tem sujeito, verbo e pontuação. No modo demonstração, esta tela não atribui nota nem inventa correções; entre para receber a análise da Lumi.')
       }
-      await recordSession('writing', 240, null, { word_count: writingText.trim().split(/\s+/).length })
+      await recordSession('writing', studyTimer.finish(), null, { word_count: writingText.trim().split(/\s+/).length })
     } catch (error) {
       setWritingFeedback('Não foi possível analisar: ' + friendlyError(error))
     } finally {
       setWritingBusy(false)
     }
+  }
+
+  const transcribeCourseAudio = async (blob: Blob) => {
+    if (!supabase || !user) throw new Error('Entre na sua conta para transcrever a gravação da aula.')
+    if (!blob.size) throw new Error('O áudio ficou vazio. Grave novamente.')
+    const audioType = blob.type || 'audio/webm'
+    const extension = audioType.includes('mp4') ? 'm4a' : audioType.includes('ogg') ? 'ogg' : audioType.includes('wav') ? 'wav' : 'webm'
+    const form = new FormData()
+    form.append('file', new File([blob], 'fala-course.' + extension, { type: audioType }))
+    const { data, error } = await invokeAuthenticatedFunction<{ text?: string }>('transcribe', { body: form })
+    if (error) throw error
+    const recognized = typeof data?.text === 'string' ? data.text.trim() : ''
+    if (!recognized) throw new Error('Não identificamos palavras. Grave novamente em um ambiente silencioso.')
+    return recognized
   }
 
   const startRecording = async () => {
@@ -1115,12 +1824,15 @@ export default function App() {
       return
     }
     try {
+      if (typeof MediaRecorder === 'undefined') throw new Error('Este navegador não oferece gravação de áudio. Use um navegador atualizado.')
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       })
       streamRef.current = stream
       chunksRef.current = []
-      const recorder = new MediaRecorder(stream)
+      const supportedMime = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus']
+        .find(type => MediaRecorder.isTypeSupported?.(type))
+      const recorder = supportedMime ? new MediaRecorder(stream, { mimeType: supportedMime }) : new MediaRecorder(stream)
       recorderRef.current = recorder
       recorder.ondataavailable = event => { if (event.data.size) chunksRef.current.push(event.data) }
       recorder.onerror = () => {
@@ -1131,7 +1843,8 @@ export default function App() {
       recorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop())
         streamRef.current = null
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        const audioType = recorder.mimeType || chunksRef.current.find(chunk => chunk.type)?.type || 'audio/webm'
+        const blob = new Blob(chunksRef.current, { type: audioType })
         const url = URL.createObjectURL(blob)
         setAudioUrl(previous => {
           if (previous) URL.revokeObjectURL(previous)
@@ -1144,14 +1857,15 @@ export default function App() {
         }
         if (!supabase || !user) {
           setRecordingNotice('Gravação disponível neste aparelho. Entre na conta para solicitar a transcrição com a Lumi.')
-          await recordSession('speaking', 30, null, { source: 'local_recording' })
+          await recordSession('speaking', studyTimer.finish(), null, { source: 'local_recording' })
           return
         }
         setRecordingNotice('Enviando o áudio para transcrição...')
         try {
+          const extension = audioType.includes('mp4') ? 'm4a' : audioType.includes('ogg') ? 'ogg' : audioType.includes('wav') ? 'wav' : 'webm'
           const form = new FormData()
-          form.append('file', new File([blob], 'fala-practice.webm', { type: blob.type || 'audio/webm' }))
-          const { data, error } = await supabase.functions.invoke('transcribe', { body: form })
+          form.append('file', new File([blob], 'fala-practice.' + extension, { type: audioType }))
+          const { data, error } = await invokeAuthenticatedFunction<{ text?: string }>('transcribe', { body: form })
           if (error) throw error
           const text = typeof data?.text === 'string' ? data.text.trim() : ''
           if (!text) {
@@ -1163,7 +1877,7 @@ export default function App() {
           setRecordingNotice('Transcrição concluída. A análise a seguir avalia o texto reconhecido, não os sons da sua voz.')
           let textScore: number | null = null
           try {
-            const { data: evaluationData, error: evaluationError } = await supabase.functions.invoke('tutor', {
+            const { data: evaluationData, error: evaluationError } = await invokeAuthenticatedFunction('tutor', {
               body: {
                 mode: 'evaluate',
                 message: text,
@@ -1188,9 +1902,9 @@ export default function App() {
           } catch (evaluationError) {
             setRecordingNotice('Transcrição concluída. A avaliação textual da Lumi não ficou disponível: ' + friendlyError(evaluationError))
           }
-          await recordSession('speaking', 30, textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
+          await recordSession('speaking', studyTimer.finish(), textScore, { transcript: text, source: 'media_recorder', scoring: 'transcript_text_only' })
         } catch (error) {
-          setRecordingNotice('A transcrição falhou: ' + friendlyError(error))
+          setRecordingNotice('A transcrição falhou: ' + await functionErrorDetail(error))
         }
       }
       recorder.start(500)
@@ -1297,8 +2011,12 @@ export default function App() {
               const query = globalSearch.trim().toLocaleLowerCase('pt-BR')
               const navMatch = navItems.find(item => item.label.toLocaleLowerCase('pt-BR').includes(query))
               const trackMatch = learningTracks.find(track => track.title.toLocaleLowerCase('pt-BR').includes(query))
+              const lessonMatch = searchGuidedLessons(query)[0]
+              const wordMatch = words.find(word => word.toLocaleLowerCase('pt-BR').includes(query))
               if (navMatch) setPage(navMatch.id)
               else if (trackMatch) { openTrack(trackMatch.id); setPage('tracks') }
+              else if (lessonMatch) { setNextLessonStartId(lessonMatch.id); setPage('learn') }
+              else if (wordMatch) { setVocabSearch(wordMatch); setPage('vocabulary') }
               setGlobalSearch('')
             }}/>
             {globalSearch.trim() && <div className="global-search-results">
@@ -1307,7 +2025,9 @@ export default function App() {
                 return <button key={item.id} onClick={() => { setPage(item.id); setGlobalSearch('') }}><Icon size={16}/><span>{item.label}</span><ChevronRight size={14}/></button>
               })}
               {learningTracks.filter(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(track => <button key={track.id} onClick={() => { openTrack(track.id); setPage('tracks'); setGlobalSearch('') }}><Map size={16}/><span>{track.title}</span><ChevronRight size={14}/></button>)}
-              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhuma ferramenta ou trilha encontrada.</p>}
+              {searchGuidedLessons(globalSearch).map(lesson => <button key={lesson.id} onClick={() => { setNextLessonStartId(lesson.id); setPage('learn'); setGlobalSearch('') }}><BookOpen size={16}/><span>{lesson.title}<small>{lesson.unitTitle} · {lesson.objective}</small></span><ChevronRight size={14}/></button>)}
+              {words.filter(word => word.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))).slice(0,4).map(word => <button key={word} onClick={() => { setVocabSearch(word); setPage('vocabulary'); setGlobalSearch('') }}><Bookmark size={16}/><span>{word}<small>Expressão salva no vocabulário</small></span><ChevronRight size={14}/></button>)}
+              {!navItems.some(item => item.label.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !learningTracks.some(track => track.title.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && !searchGuidedLessons(globalSearch).length && !words.some(word => word.toLocaleLowerCase('pt-BR').includes(globalSearch.trim().toLocaleLowerCase('pt-BR'))) && <p>Nenhum conteúdo encontrado. Pesquise por ferramenta, aula, expressão ou trilha.</p>}
             </div>}
           </div>
           <div className="topbar-actions">
@@ -1329,10 +2049,15 @@ export default function App() {
             <section className="welcome-strip">
               <div>
                 <span className="eyebrow">SEU INGLÊS, NO SEU RITMO</span>
+                <div className="dashboard-welcome-meta">
+                  <span className="dashboard-level-chip">{profile.level === 'beginner' ? 'A0–A1' : profile.level === 'basic' ? 'A2' : profile.level === 'intermediate' ? 'B1–B2' : profile.level === 'advanced' ? 'Avançado · estimado' : 'Nível a descobrir'}</span>
+                  <span>{todayPracticeMinutes}/{profile.minutes} min da meta diária</span>
+                </div>
+                <div className="dashboard-welcome-progress"><i style={{ width: dailyGoalProgress + '%' }}/></div>
                 <h1>{profile.name ? 'Olá, ' + greeting(profile.name) + '.' : 'Inglês que acompanha sua vida.'}<br/><em>Aprenda para usar.</em></h1>
                 <p>Um curso guiado que ensina desde a primeira palavra, explica cada frase e faz você praticar até conseguir usar o inglês.</p>
                 <div className="welcome-actions">
-                  <button className="button primary" onClick={() => setPage('learn')}>Começar a estudar <ArrowRight size={16}/></button>
+                  <button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Continuar aprendendo <ArrowRight size={16}/></button>
                   <button className="button ghost" onClick={() => setPage('lumi')}><MessageCircle size={16}/> Conversar com a Lumi</button>
                 </div>
               </div>
@@ -1350,6 +2075,7 @@ export default function App() {
             </section>}
 
             {showDemoHint && !user && <div className="demo-banner"><Sparkles size={17}/><span>Você está explorando gratuitamente. Suas atividades básicas funcionam sem cadastro; a Lumi com IA e a sincronização exigem uma conta.</span><button onClick={() => setShowDemoHint(false)} aria-label="Fechar aviso"><X size={15}/></button></div>}
+            {cloudLoading && <Skeleton rows={2} compact className="dashboard-sync-skeleton" label="Sincronizando suas informações"/>}
 
             <div className="metrics-row">
               <article className="metric-card"><span className="metric-icon green"><Clock3 size={18}/></span><div><small>TEMPO DE PRÁTICA</small><strong>{totalMinutes} <i>min</i></strong><span>no seu histórico</span></div></article>
@@ -1357,46 +2083,65 @@ export default function App() {
               <article className="metric-card"><span className="metric-icon lilac"><Trophy size={18}/></span><div><small>APROVEITAMENTO</small><strong>{averageScore === null ? '—' : averageScore + '%'}</strong><span>{averageScore === null ? 'ainda sem dados suficientes' : 'média das tentativas'}</span></div></article>
             </div>
 
-            <section className="dashboard-command-grid" aria-label="Plano de aprendizagem de hoje">
-              <article className="dashboard-next-card">
-                <div className="dashboard-next-topline">
-                  <span className="dashboard-live-label"><i/> SUA PRÓXIMA AÇÃO</span>
-                  <span className="dashboard-level-chip">{profile.level === 'unsure' ? 'NÍVEL A DESCOBRIR' : profile.level.toUpperCase()}</span>
+            <section className="dashboard-priority-block">
+              <div className="section-heading">
+                <div><span className="eyebrow">SEU PRÓXIMO PASSO</span><h2>Uma prioridade de cada vez.</h2></div>
+                <span className="muted-caption">{todayPracticeMinutes}/{profile.minutes} min hoje</span>
+              </div>
+              <div className="dashboard-activity-grid">
+                <ActivityCard
+                  title={nextLesson?.title || 'Trilha concluída'}
+                  benefit={nextLesson ? nextLesson.objective : 'Você concluiu todas as aulas atualmente desbloqueadas.'}
+                  progress={nextLesson ? `${nextLesson.estimatedMinutes} min · ${nextLesson.skills.join(' / ')}` : 'Parabéns pelo progresso'}
+                  cta={nextLesson ? 'Continuar aprendendo' : 'Revisar curso'}
+                  icon={<BookOpen size={19}/>}
+                  onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}
+                  tone="primary"
+                />
+                <ActivityCard
+                  title="Revisão inteligente"
+                  benefit={dueReviewItems.length + dueWords.length ? 'Recupere estruturas, frases e palavras antes de esquecer.' : 'Sua fila está em dia. Salve expressões e erros para revisar depois.'}
+                  progress={`${dueReviewItems.length + dueWords.length} itens pendentes`}
+                  cta="Abrir revisões"
+                  icon={<RotateCcw size={19}/>}
+                  onClick={() => setPage('practice')}
+                  tone="success"
+                />
+                <ActivityCard
+                  title="Missão do dia"
+                  benefit={courseProgress?.streakDays ? 'Mantenha sua sequência com uma sessão focada hoje.' : 'Comece uma sequência curta de prática diária.'}
+                  progress={`${courseProgress?.streakDays ?? 0} dias de sequência · meta ${dailyGoalProgress}%`}
+                  cta="Fazer missão"
+                  icon={<Flame size={19}/>}
+                  onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}
+                  tone="success"
+                />
+              </div>
+              <section className="dashboard-skills-snapshot">
+                <div className="section-heading"><div><span className="eyebrow">EVOLUÇÃO</span><h2>Suas habilidades</h2></div><button className="text-button" onClick={() => setPage('progress')}>Ver progresso <ArrowRight size={14}/></button></div>
+                <div className="dashboard-skill-grid">
+                  {[
+                    ['listening', 'Escuta'], ['speaking', 'Fala'], ['reading', 'Leitura'],
+                    ['writing', 'Escrita'], ['grammar', 'Gramática'], ['vocabulary', 'Vocabulário'],
+                  ].map(([skill, label]) => {
+                    const score = learningEvidence.skillScores[skill]
+                    return <div className="dashboard-skill-item" key={skill}>
+                      <div><strong>{label}</strong><span>{typeof score === 'number' ? score + '%' : 'Sem dados'}</span></div>
+                      <div className="dashboard-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
+                    </div>
+                  })}
                 </div>
-                <div className="dashboard-next-copy">
-                  <span className="eyebrow">{dueWords.length ? 'REVISÃO INTELIGENTE' : 'CURSO PRINCIPAL'}</span>
-                  <h2>{dueWords.length ? 'Vamos recuperar o que você aprendeu.' : 'Continue de onde você parou.'}</h2>
-                  <p>{dueWords.length ? dueWords.length + ' expressões estão prontas para revisão. Tente lembrar antes de revelar a resposta.' : 'Uma aula curta agora vale mais do que esperar pelo momento perfeito. Aprenda, pratique e use uma nova estrutura em inglês.'}</p>
-                </div>
-                <div className="dashboard-next-footer">
-                  <div className="dashboard-next-meta"><span><Clock3 size={14}/>{profile.minutes} min por dia</span><span><BookOpen size={14}/>Aulas guiadas</span></div>
-                  <button className="button primary" onClick={dueWords.length ? startVocabularyReview : () => setPage('learn')}>{dueWords.length ? 'Revisar agora' : 'Continuar aprendendo'} <ArrowRight size={16}/></button>
-                </div>
-              </article>
-              <aside className="dashboard-side-stack">
-                <article className="dashboard-goal-card">
-                  <div className="dashboard-card-heading"><span className="dashboard-icon goal"><Target size={17}/></span><span>META DE HOJE</span></div>
-                  <strong>{todayPracticeMinutes} <small>/ {profile.minutes} min</small></strong>
-                  <div className="dashboard-progress-track"><i style={{ width: dailyGoalProgress + '%' }}/></div>
-                  <p>{dailyGoalProgress >= 100 ? 'Meta diária atingida.' : 'Faltam ' + Math.max(0, profile.minutes - todayPracticeMinutes) + ' minutos para sua meta.'}</p>
-                </article>
-                <article className="dashboard-review-card">
-                  <div className="dashboard-card-heading"><span className="dashboard-icon review"><Bookmark size={17}/></span><span>REVISÃO PENDENTE</span></div>
-                  <strong>{dueWords.length ? dueWords.length + ' expressões' : 'Tudo em dia'}</strong>
-                  <p>{dueWords.length ? 'Recupere o significado sem olhar a resposta.' : 'Suas palavras salvas não têm revisão vencida.'}</p>
-                  <button className="dashboard-text-action" onClick={() => dueWords.length ? startVocabularyReview() : setPage('vocabulary')}>{dueWords.length ? 'Começar revisão' : 'Abrir vocabulário'} <ChevronRight size={15}/></button>
-                </article>
-              </aside>
+              </section>
             </section>
 
             <section className="dashboard-quick-practice">
-              <div className="section-heading"><div><span className="eyebrow">ESCOLHA UMA HABILIDADE</span><h2>Pratique do seu jeito</h2></div><span className="muted-caption">Atalhos para treinar</span></div>
+              <div className="section-heading"><div><span className="eyebrow">FERRAMENTAS DE PRÁTICA</span><h2>Escolha uma ferramenta.</h2></div></div>
               <div className="dashboard-practice-grid">
-                <button className="dashboard-practice-card" onClick={() => setPage('speak')}><span className="dashboard-practice-icon speaking"><Mic size={19}/></span><span><strong>Falar</strong><small>Treine sua resposta em voz alta</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('write')}><span className="dashboard-practice-icon writing"><PenLine size={19}/></span><span><strong>Escrever</strong><small>Transforme ideias em frases</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('lumi')}><span className="dashboard-practice-icon conversation"><MessageCircle size={19}/></span><span><strong>Conversar com a Lumi</strong><small>Pratique um diálogo no seu nível</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => setPage('tracks')}><span className="dashboard-practice-icon missions"><Map size={19}/></span><span><strong>Situações reais</strong><small>Resolva uma missão em inglês</small></span><ArrowRight size={16}/></button>
-                <button className="dashboard-practice-card" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setPage('diagnostic') }}><span className="dashboard-practice-icon diagnosis"><Target size={19}/></span><span><strong>Descobrir meu nível</strong><small>Faça uma avaliação inicial rápida</small></span><ArrowRight size={16}/></button>
+                <ActivityCard title="Lumi IA" benefit="Treine uma conversa com correções contextuais." progress="Conversa livre · 5–10 min" cta="Conversar" icon={<MessageCircle size={19}/>} onClick={() => setPage('lumi')} />
+                <ActivityCard title="Trilhas reais" benefit="Pratique inglês em situações do cotidiano." progress={`${learningTracks.length} trilhas · prática guiada`} cta="Explorar trilhas" icon={<Map size={19}/>} onClick={() => setPage('tracks')} />
+                <ActivityCard title="Vocabulário" benefit="Guarde expressões que deseja usar naturalmente." progress={`${words.length} expressões salvas`} cta="Abrir caderno" icon={<Bookmark size={19}/>} onClick={() => setPage('vocabulary')} />
+                <ActivityCard title="Escrita" benefit="Construa respostas e melhore a clareza das frases." progress="Writing Lab · 5–10 min" cta="Praticar escrita" icon={<PenLine size={19}/>} onClick={() => setPage('write')} />
+                <ActivityCard title="Music Lab" benefit="Aprenda inglês com trechos que você escolheu." progress="Listening · 5–10 min" cta="Abrir laboratório" icon={<Music2 size={19}/>} onClick={() => setPage('music')} />
               </div>
             </section>
 
@@ -1408,21 +2153,27 @@ export default function App() {
               {!user && <small className="photo-privacy-note">A geração de plano personalizado com IA exige conta conectada e pode consumir a cota de IA do projeto.</small>}
             </section>
             <div className="section-heading"><div><span className="eyebrow">SUAS FERRAMENTAS</span><h2>Escolha como praticar</h2></div></div>
-            <div className="tool-grid">
-              <button className="tool-card" onClick={() => setPage('tracks')}><span className="tool-icon blue"><Map size={20}/></span><strong>Trilhas práticas</strong><small>Missões em etapas e mini provas com aprovação.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('music')}><span className="tool-icon peach"><Music2 size={20}/></span><strong>Music Lab</strong><small>Versos originais, vocabulário e repetição guiada.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('lumi')}><span className="tool-icon violet"><MessageCircle size={20}/></span><strong>Conversa com a Lumi</strong><small>Pratique diálogos e receba correções pontuais.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('speak')}><span className="tool-icon mint"><Mic size={20}/></span><strong>Treino de fala</strong><small>Grave uma resposta e veja a transcrição.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('write')}><span className="tool-icon peach"><PenLine size={20}/></span><strong>Laboratório de escrita</strong><small>Construa frases e melhore seus textos.</small><ArrowRight size={16}/></button>
-              <button className="tool-card" onClick={() => setPage('vocabulary')}><span className="tool-icon blue"><Bookmark size={20}/></span><strong>Meu vocabulário</strong><small>Guarde expressões que quer usar de verdade.</small><ArrowRight size={16}/></button>
+            <div className="tool-grid activity-card-grid">
+              <ActivityCard title="Trilhas práticas" benefit="Missões guiadas em situações reais." progress={`${learningTracks.length} trilhas disponíveis`} cta="Explorar" icon={<Map size={19}/>} onClick={() => setPage('tracks')} />
+              <ActivityCard title="Music Lab" benefit="Escute, entenda e pratique por trechos." progress="Listening · aprox. 5 min" cta="Abrir laboratório" icon={<Music2 size={19}/>} onClick={() => setPage('music')} />
+              <ActivityCard title="Conversa com Lumi" benefit="Pratique diálogos e receba correções." progress="Speaking · aprox. 5 min" cta="Conversar" icon={<MessageCircle size={19}/>} onClick={() => setPage('lumi')} />
+              <ActivityCard title="Treino de fala" benefit="Grave uma resposta e revise sua transcrição." progress="Speaking · aprox. 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
+              <ActivityCard title="Laboratório de escrita" benefit="Transforme ideias em frases claras." progress="Writing · aprox. 5 min" cta="Escrever" icon={<PenLine size={19}/>} onClick={() => setPage('write')} />
+              <ActivityCard title="Meu vocabulário" benefit="Construa um banco de expressões úteis." progress={`${words.length} itens salvos`} cta="Abrir caderno" icon={<Bookmark size={19}/>} onClick={() => setPage('vocabulary')} />
             </div>
           </>}
 
           {page === 'learn' && <GuidedCourse
             accent={profile.accent}
             goalLabel={profile.goal === 'travel' ? 'viagens' : profile.goal === 'work' ? 'trabalho' : profile.goal === 'study' ? 'estudos' : 'conversação e vida diária'}
+            initialProgress={courseProgress}
+            onProgressChange={handleCourseProgressChange}
+            onExerciseAttempt={handleCourseExerciseAttempt}
+            onTranscribeAudio={transcribeCourseAudio}
+            autoStartLessonId={nextLessonStartId}
+            onAutoStartComplete={() => setNextLessonStartId(null)}
             onAskTutor={question => { setChatInput(question); setPage('lumi') }}
-            onLessonComplete={score => void recordSession('lesson', 300, score, { source: 'guided-course-v6' })}
+            onLessonComplete={(score, lessonId, coveredSkills = []) => void recordSession('lesson', studyTimer.finish(), score, { source: 'guided-course-v10', lesson_id: lessonId, covered_skills: coveredSkills })}
           />}
 
           {page === 'tracks' && <section className="tracks-layout">
@@ -1510,9 +2261,49 @@ export default function App() {
             <section className="music-how-it-works"><div><span>01</span><strong>Encontre</strong><small>Busca por faixa e artista.</small></div><div><span>02</span><strong>Escute</strong><small>Prévia do catálogo ou plataforma oficial.</small></div><div><span>03</span><strong>Estude</strong><small>Trecho curto, tradução e expressões.</small></div><div><span>04</span><strong>Pratique</strong><small>Repita, revise e salve vocabulário.</small></div></section>
           </section>}
 
+          {page === 'practice' && <section className="practice-hub-layout">
+            <div className="page-heading"><span className="eyebrow">REVISÕES · DRILLS · RECUPERAÇÃO ATIVA</span><h1>Pratique o que <em>precisa ficar.</em></h1><p>Revisões de vocabulário, estruturas gramaticais, frases e erros recorrentes. Os intervalos avançam por 1, 3, 7, 15 e 30 dias.</p></div>
+            <div className="practice-hub-summary">
+              <article><span>ITENS DEVIDOS</span><strong>{dueReviewItems.length + dueWords.length}</strong><small>Fila de revisão</small></article>
+              <article><span>ESTRUTURAS</span><strong>{learningReviewItems.filter(item => item.item_type === 'grammar' || item.item_type === 'error').length}</strong><small>Gramática e erros</small></article>
+              <article><span>VOCABULÁRIO</span><strong>{words.length}</strong><small>Expressões salvas</small></article>
+            </div>
+            {activeReviewItem ? <article className="practice-review-card">
+              <div className="practice-review-meta">
+                <span className="eyebrow">{activeReviewItem.item_type === 'grammar' ? 'GRAMÁTICA' : activeReviewItem.item_type === 'error' ? 'ERRO RECORRENTE' : activeReviewItem.item_type === 'phrase' ? 'FRASE' : 'VOCABULÁRIO'}</span>
+                <span>{activeReviewItem.interval_days} dia(s) · {activeReviewItem.repetition_count} revisões</span>
+              </div>
+              <h2>{activeReviewItem.prompt}</h2>
+              <p className="practice-review-context">{activeReviewItem.context || 'Responda sem consultar as anotações.'}</p>
+              {!reviewRevealed ? <button className="button primary" onClick={() => setReviewRevealed(true)}>Revelar resposta <Eye size={15}/></button> : <>
+                <div className="practice-review-answer"><span>RESPOSTA / MODELO</span><strong>{activeReviewItem.expected_answer}</strong>{activeReviewItem.explanation && <p>{activeReviewItem.explanation}</p>}</div>
+                <div className="practice-review-ratings">
+                  <button onClick={() => void gradeLearningReviewItem('again')}>Não lembrei<small>Volta em 1 dia</small></button>
+                  <button onClick={() => void gradeLearningReviewItem('good')}>Lembrei<small>Próximo intervalo</small></button>
+                  <button onClick={() => void gradeLearningReviewItem('easy')}>Muito fácil<small>Pular um intervalo</small></button>
+                </div>
+              </>}
+            </article> : dueWords.length ? <article className="practice-review-card">
+              <div className="practice-review-meta"><span className="eyebrow">VOCABULÁRIO LEGADO</span><span>{dueWords.length} expressões pendentes</span></div>
+              <h2>Há expressões salvas no caderno antigo para revisar.</h2>
+              <p className="practice-review-context">Estas expressões serão integradas à fila unificada conforme você as revisar.</p>
+              <strong className="practice-legacy-term">{dueWords[reviewIndex % dueWords.length]}</strong>
+              <button className="button primary" onClick={() => startVocabularyReview()}>Abrir cartões de vocabulário <ArrowRight size={16}/></button>
+            </article> : <div className="practice-empty-state">
+              <div><CheckCircle2 size={30}/></div><strong>Sua fila está em dia.</strong><p>Quando você salvar uma expressão ou errar uma estrutura no curso, ela aparecerá aqui para revisão.</p>
+              <button className="button primary" onClick={() => setPage('learn')}>Continuar aprendendo <ArrowRight size={16}/></button>
+            </div>}
+            <div className="section-heading"><div><span className="eyebrow">DRILLS RÁPIDOS</span><h2>Treine uma habilidade.</h2></div></div>
+            <div className="dashboard-practice-grid">
+              <ActivityCard title="Escuta ativa" benefit="Identifique estruturas sem ver a tradução." progress="Listening · aprox. 5 min" cta="Treinar escuta" icon={<Headphones size={19}/>} onClick={() => setPage('learn')} />
+              <ActivityCard title="Resposta oral" benefit="Responda sem ler e reveja sua transcrição." progress="Speaking · aprox. 5 min" cta="Treinar fala" icon={<Mic size={19}/>} onClick={() => setPage('speak')} />
+              <ActivityCard title="Transformar frases" benefit="Pratique gramática com construção ativa." progress="Grammar · aprox. 5 min" cta="Praticar estrutura" icon={<BookOpen size={19}/>} onClick={() => setPage('learn')} />
+            </div>
+          </section>}
+
           {page === 'lumi' && <section className="lumi-layout">
             <div className="page-heading"><span className="eyebrow">TUTORA DE INGLÊS · LUMI</span><h1>Converse para evoluir.</h1><p>Use o inglês no seu nível. A Lumi prioriza comunicação e corrige um ponto importante por vez.</p></div>
-            <section className="voice-session-card">
+            <section className="voice-session-card lumi-integrated-tutor">
               <div className={'voice-lumi-orb ' + voiceStatus}><LumiPortrait/><i/></div>
               <div className="voice-session-copy">
                 <span className="eyebrow">PERSONAGEM DE VOZ · ELEVENLABS</span>
@@ -1533,9 +2324,26 @@ export default function App() {
                 <button className={voiceStatus === 'connected' ? 'button voice-stop' : 'button primary'} onClick={() => void startLumiVoice()} disabled={voiceStatus === 'connecting'}>
                   {voiceStatus === 'connected' ? <><X size={16}/> Encerrar</> : <><Mic size={16}/> {voiceStatus === 'connecting' ? 'Conectando…' : user ? 'Conversar por voz' : 'Entrar para falar'}</>}
                 </button>
-                <small>{user ? 'Acesso autenticado · sem gravação de áudio' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
+                <small>{user ? 'Voz ao vivo ou mensagem gravada; o arquivo é descartado após a transcrição.' : 'A voz exige uma conta; o chat de texto funciona em demonstração.'}</small>
+                <button className={lumiRecording ? 'button voice-stop' : 'button ghost'} onClick={() => lumiRecording ? stopLumiRecording() : void startLumiRecording()} disabled={voiceStatus === 'connecting' || voiceStatus === 'connected' || (!lumiRecording && chatBusy)}>
+                  {lumiRecording ? <><X size={16}/> Parar gravação</> : <><Mic size={16}/> {user ? 'Gravar mensagem para a Lumi' : 'Entrar para gravar mensagem'}</>}
+                </button>
+                {lumiRecordingNotice && <small className="lumi-recording-notice">{lumiRecordingNotice}</small>}
               </div>
             </section>
+            <div className="lumi-mode-selector" role="group" aria-label="Modo de tutoria">
+              <label>Modo de prática
+                <select value={lumiMode} onChange={event => setLumiMode(event.target.value as typeof lumiMode)}>
+                  <option value="conversation">Conversa livre</option>
+                  <option value="guided">Correção guiada</option>
+                  <option value="roleplay">Roleplay de situação real</option>
+                </select>
+              </label>
+              <div className={'lumi-live-state ' + voiceActivity}>
+                <span className="lumi-wave"><i/><i/><i/><i/></span>
+                {voiceActivity === 'listening' ? 'Ouvindo…' : voiceActivity === 'thinking' ? 'Pensando…' : voiceActivity === 'speaking' ? 'Falando…' : voiceStatus === 'connected' ? 'Conectada' : 'Pronta'}
+              </div>
+            </div>
             {voiceMessage && <p className={'voice-session-notice ' + voiceStatus}>{voiceMessage}</p>}
             <div className="lumi-quick-start">
               <div><span className="eyebrow">COMECE POR AQUI</span><strong>Escolha como a Lumi pode ajudar</strong></div>
@@ -1548,9 +2356,15 @@ export default function App() {
             <div className="chat-panel">
               <div className="chat-header"><div className="lumi-avatar"><LumiPortrait/><span/></div><div><strong>Lumi</strong><small>{user ? 'Tutora conectada · perfil personalizado' : 'Parceira de prática · modo demonstração'}</small></div><span className={user ? 'online-state' : 'demo-state'}>{user ? 'ONLINE' : 'DEMO'}</span></div>
               <div className="chat-body">
-                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? <LumiPortrait/> : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <small className="correction-note">{item.note}</small>}</div></div>)}
+                {chat.map((item,index) => <div key={index} className={'chat-row ' + item.role}><div className="chat-avatar">{item.role === 'assistant' ? <LumiPortrait/> : (profile.name || 'V').slice(0,1).toUpperCase()}</div><div className="chat-bubble"><p>{item.text}</p>{item.note && <div className="lumi-inline-correction"><span>Correção sugerida</span><p>{item.note}</p><button type="button" onClick={() => void saveExpressionFromChat(item.text.slice(0, 120), item.note)}>Salvar expressão <Bookmark size={13}/></button></div>}</div></div>)}
                 {chatBusy && <div className="chat-row assistant"><div className="chat-avatar">L</div><div className="chat-bubble typing"><i/><i/><i/></div></div>}
                 <div ref={chatEndRef}/>
+              </div>
+              <div className="lumi-action-chips">
+                <button type="button" onClick={() => setChatInput('Explain the grammar rule behind this sentence in simple Portuguese: ')}>Explicar regra</button>
+                <button type="button" onClick={() => setChatInput('Please simplify your last explanation and give me one short example.')}>Simplificar</button>
+                <button type="button" onClick={() => setChatInput('Give me another example using the same structure in a different real-life situation.')}>Dar outro exemplo</button>
+                <button type="button" onClick={() => setChatInput('Help me practice pronunciation. Give me a short phrase, syllable groups and a repeat prompt.')}>Praticar pronúncia</button>
               </div>
               <form className="chat-compose" onSubmit={sendChat}><input value={chatInput} onChange={event => setChatInput(event.target.value)} placeholder="Escreva em inglês ou peça ajuda em português…" aria-label="Mensagem para a Lumi"/><button type="submit" disabled={!chatInput.trim() || chatBusy} aria-label="Enviar mensagem"><Send size={18}/></button></form>
               {chatNotice && <p className="inline-notice">{chatNotice}</p>}
@@ -1589,10 +2403,10 @@ export default function App() {
           </section>}
 
           {page === 'diagnostic' && <section className="diagnostic-layout">
-            <div className="page-heading"><span className="eyebrow">PONTO DE PARTIDA · 5 QUESTÕES</span><h1>Descubra seu <em>nível inicial.</em></h1><p>Uma avaliação breve para sugerir por onde começar. Responda sem consultar materiais; não é uma certificação oficial de proficiência.</p></div>
+            <div className="page-heading"><span className="eyebrow">DIAGNÓSTICO PRÁTICO · EVIDÊNCIAS DE 3 HABILIDADES</span><h1>Mostre o que já <em>consegue fazer.</em></h1><p>Responda às questões, escreva uma amostra e fale em inglês. O resultado é uma estimativa inicial para orientar o curso, não um certificado CEFR oficial.</p></div>
             <div className="diagnostic-intro-card">
               <div className="diagnostic-intro-icon"><Target size={22}/></div>
-              <div><strong>Como funciona</strong><p>São cinco questões de dificuldade crescente. O resultado é uma estimativa inicial e pode ser ajustado conforme você pratica leitura, escuta, escrita e conversação.</p></div>
+              <div><strong>Como funciona</strong><p>O diagnóstico exige evidência objetiva de conhecimento, escrita e produção oral. Uma amostra curta não certifica proficiência; apenas ajuda a recomendar um ponto de partida que será validado em atividades reais.</p></div>
             </div>
             <div className="diagnostic-question-list">
               {diagnosticQuestions.map((question,index) => <article className="diagnostic-question-card" key={question.question}>
@@ -1604,23 +2418,51 @@ export default function App() {
                 {diagnosticResult && <p className={diagnosticAnswers[index] === question.answer ? 'diagnostic-explanation correct' : 'diagnostic-explanation'}><strong>{diagnosticAnswers[index] === question.answer ? 'Correto. ' : 'Resposta para revisar: '}</strong>{question.explanation}</p>}
               </article>)}
             </div>
+            <section className="diagnostic-evidence-grid">
+              <article className="diagnostic-evidence-card">
+                <span className="eyebrow">EVIDÊNCIA 2/3 · ESCRITA</span>
+                <h2>Escreva em inglês sobre um objetivo seu.</h2>
+                <p>Produza ao menos 20 palavras em 3 ou mais frases. Explique algo que deseja aprender, por que isso importa e como pretende praticar.</p>
+                <textarea value={diagnosticWritingSample} onChange={event => { setDiagnosticWritingSample(event.target.value); setDiagnosticResult(null) }} rows={5} placeholder="I want to improve my English because…"/>
+                <small>{diagnosticWritingSample.trim() ? diagnosticWritingSample.trim().split(/\s+/).length : 0} palavras · mínimo de 20</small>
+              </article>
+              <article className="diagnostic-evidence-card">
+                <span className="eyebrow">EVIDÊNCIA 3/3 · FALA</span>
+                <h2>Responda sem ler.</h2>
+                <p>Fale por alguns segundos em inglês: quem você é, por que está estudando e uma situação em que quer usar o idioma. A transcrição é coletada pelo navegador.</p>
+                <div className="diagnostic-speaking-control">
+                  <button className={diagnosticRecording ? 'button voice-stop' : 'button primary'} onClick={startDiagnosticSpeechCapture} disabled={diagnosticRecording}>{diagnosticRecording ? 'Ouvindo…' : <><Mic size={16}/> Capturar amostra oral</>}</button>
+                  {diagnosticSpeechSample && <span className="diagnostic-speaking-confirm"><CheckCircle2 size={15}/> Amostra capturada</span>}
+                </div>
+                <textarea value={diagnosticSpeechSample} readOnly rows={4} placeholder="A transcrição da sua resposta aparecerá aqui após a gravação."/>
+                {diagnosticNotice && <p className="inline-notice">{diagnosticNotice}</p>}
+                <small>{diagnosticSpeechSample.trim() ? diagnosticSpeechSample.trim().split(/\s+/).length + ' palavras transcritas' : 'A etapa oral exige captura pelo microfone.'}</small>
+              </article>
+            </section>
             <div className="diagnostic-submit-row">
-              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões respondidas</span>
-              <button className="button primary" disabled={Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length} onClick={() => {
-                const score = diagnosticQuestions.filter((question,index) => diagnosticAnswers[index] === question.answer).length
-                const level: Level = score <= 1 ? 'beginner' : score === 2 ? 'basic' : score === 3 ? 'intermediate' : 'advanced'
-                setDiagnosticResult({ score, level })
-                setProfile(current => ({ ...current, level }))
-              }}>Ver meu resultado <ArrowRight size={16}/></button>
+              <span>{Object.keys(diagnosticAnswers).length}/{diagnosticQuestions.length} questões · {diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length >= 20 ? 'escrita pronta' : 'escrita pendente'} · {diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length >= 5 ? 'fala capturada' : 'fala pendente'}</span>
+              <button className="button primary" disabled={diagnosticBusy || Object.keys(diagnosticAnswers).length !== diagnosticQuestions.length || diagnosticWritingSample.trim().split(/\s+/).filter(Boolean).length < 20 || diagnosticSpeechSample.trim().split(/\s+/).filter(Boolean).length < 5} onClick={() => void submitDiagnostic()}>
+                {diagnosticBusy ? 'Avaliando escrita e fala…' : 'Avaliar as três evidências'} <ArrowRight size={16}/>
+              </button>
             </div>
+            {diagnosticNotice && <p className="inline-notice diagnostic-analysis-notice">{diagnosticNotice}</p>}
             {diagnosticResult && <article className="diagnostic-result-card">
-              <span className="eyebrow">SUGESTÃO DE PONTO DE PARTIDA</span>
-              <strong>{diagnosticResult.level === 'beginner' ? 'Iniciante' : diagnosticResult.level === 'basic' ? 'Básico' : diagnosticResult.level === 'intermediate' ? 'Intermediário' : 'Avançado'}</strong>
-              <p>Você acertou {diagnosticResult.score} de {diagnosticQuestions.length} questões. O perfil foi atualizado com essa estimativa. Ela não representa um nível CEFR certificado; o FALA deve confirmar seu progresso em atividades reais.</p>
-              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => setPage('learn')}>Ir para o curso <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null) }}>Refazer avaliação</button></div>
+              <span className="eyebrow">ESTIMATIVA MULTICRITÉRIO · NÃO É CERTIFICADO</span>
+              <strong>{diagnosticResult.level === 'beginner' ? 'A0–A1 · Iniciante' : diagnosticResult.level === 'basic' ? 'A2 · Básico' : diagnosticResult.level === 'intermediate' ? 'B1–B2 · Intermediário' : 'Avançado · validar'}</strong>
+              <p>Resultado composto: <b>{diagnosticResult.score}/100</b>. Você acertou {Math.round(diagnosticResult.quizScore / 100 * diagnosticQuestions.length)} de {diagnosticQuestions.length} questões. A escrita e a transcrição oral participam do cálculo com pesos próprios; a etapa oral avalia o texto reconhecido, não pronúncia, sotaque ou fonética.</p>
+              <div className="diagnostic-score-grid">
+                <article><span>Conhecimento objetivo · 40%</span><strong>{diagnosticResult.quizScore}%</strong><div><i style={{width: diagnosticResult.quizScore + '%'}}/></div></article>
+                <article><span>Escrita · 30%</span><strong>{diagnosticResult.writingScore}%</strong><div><i style={{width: diagnosticResult.writingScore + '%'}}/></div></article>
+                <article><span>Fala transcrita · 30%</span><strong>{diagnosticResult.speakingScore}%</strong><div><i style={{width: diagnosticResult.speakingScore + '%'}}/></div></article>
+              </div>
+              {diagnosticResult.writingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback de escrita</strong><p>{diagnosticResult.writingEvaluation.correction}</p><small>Versão sugerida: {diagnosticResult.writingEvaluation.improved_answer}</small></div>}
+              {diagnosticResult.speakingEvaluation && <div className="diagnostic-ai-feedback"><strong>Feedback da fala transcrita</strong><p>{diagnosticResult.speakingEvaluation.correction}</p><small>{diagnosticResult.speakingEvaluation.next_step}</small></div>}
+              {diagnosticResult.method === 'heuristic' && <p className="diagnostic-method-note">Modo sem IA: escrita e fala receberam uma pontuação estrutural provisória baseada em extensão, organização das frases e variedade de palavras. Entre na conta para a Lumi avaliar conteúdo, gramática e adequação ao nível.</p>}
+              {diagnosticResult.method === 'mixed' && <p className="diagnostic-method-note">Uma das amostras recebeu avaliação da Lumi; a outra recebeu apenas indicadores estruturais provisórios. A transcrição oral não mede pronúncia ou qualidade fonética.</p>}
+              <p>A sugestão foi registrada no perfil. Use este resultado como ponto de partida, não como certificação CEFR; a progressão definitiva depende de desempenho consistente em tarefas novas.</p>
+              <div className="diagnostic-result-actions"><button className="button primary" onClick={() => { setNextLessonStartId(nextLesson?.id ?? null); setPage('learn') }}>Ir para a próxima aula <ArrowRight size={15}/></button><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice('') }}>Refazer diagnóstico</button></div>
             </article>}
           </section>}
-
           {page === 'profile' && <section className="profile-page">
             <div className="page-heading"><span className="eyebrow">SEU ESPAÇO</span><h1>Seu perfil. <em>Seu plano.</em></h1><p>Personalize como você aprende e acompanhe seu espaço de estudo.</p></div>
             <article className="profile-hero-card"><div className="profile-avatar-large">{profilePhoto ? <img src={profilePhoto} alt="Sua foto de perfil"/> : <CircleUserRound size={46}/>}</div><div><span className="eyebrow">PERFIL DO ESTUDANTE</span><h2>{profile.name || 'Estudante FALA'}</h2><p>{profile.goal === 'work' ? 'Trabalho e carreira' : profile.goal === 'travel' ? 'Viagens' : profile.goal === 'study' ? 'Estudos' : 'Conversação e vida diária'} · {profile.level === 'unsure' ? 'Nível a descobrir' : profile.level}</p><div className="profile-page-actions"><label className="button ghost profile-photo-picker">Alterar foto<input type="file" accept="image/*" onChange={event => void selectProfilePhoto(event.target.files?.[0] ?? null)}/></label><button className="button primary" onClick={beginProfileEdit}>Editar preferências <ArrowRight size={15}/></button></div></div></article>
@@ -1628,14 +2470,14 @@ export default function App() {
             <article className="profile-settings-card"><div><span className="eyebrow">APARÊNCIA</span><h3>Escolha seu tema</h3><p>O tema fica salvo neste aparelho.</p></div><div className="theme-choice-buttons"><button className={theme==='light'?'active':''} onClick={() => setTheme('light')}><Sun size={17}/> Claro</button><button className={theme==='dark'?'active':''} onClick={() => setTheme('dark')}><Moon size={17}/> Escuro</button></div></article>
           </section>}
           {page === 'progress' && <section className="progress-layout">
-            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p></div>
+            <div className="page-heading"><span className="eyebrow">SEU HISTÓRICO</span><h1>Progresso baseado em prática.</h1><p>Os indicadores refletem sessões e tentativas registradas. Não são uma certificação de proficiência.</p><button className="button ghost" onClick={() => { setDiagnosticAnswers({}); setDiagnosticResult(null); setDiagnosticWritingSample(''); setDiagnosticSpeechSample(''); setDiagnosticNotice(''); setPage('diagnostic') }}>Fazer diagnóstico prático <Target size={15}/></button></div>
             <div className="progress-summary"><article className="progress-stat"><Clock3 size={20}/><span>Tempo registrado</span><strong>{totalMinutes} min</strong></article><article className="progress-stat"><Activity size={20}/><span>Sessões concluídas</span><strong>{completedSessions}</strong></article><article className="progress-stat"><Trophy size={20}/><span>Média das tentativas</span><strong>{averageScore === null ? '—' : averageScore + '%'}</strong></article></div>
             <section className="skills-progress-panel">
               <div className="section-heading"><div><span className="eyebrow">VISÃO POR HABILIDADE</span><h2>O que você está desenvolvendo</h2></div></div>
               <div className="skills-progress-grid">
-                {['speaking', 'listening', 'writing', 'grammar', 'vocabulary'].map(skill => {
+                {['listening', 'speaking', 'reading', 'writing', 'grammar', 'vocabulary'].map(skill => {
                   const score = learningEvidence.skillScores[skill]
-                  const labels: Record<string, string> = { speaking: 'Conversação', listening: 'Compreensão auditiva', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
+                  const labels: Record<string, string> = { listening: 'Escuta', speaking: 'Fala', reading: 'Leitura', writing: 'Escrita', grammar: 'Gramática', vocabulary: 'Vocabulário' }
                   return <article className="skill-progress-card" key={skill}>
                     <div><strong>{labels[skill]}</strong><span>{typeof score === 'number' ? score + '% nas tentativas registradas' : 'Aguardando dados suficientes'}</span></div>
                     <div className="skill-progress-track"><i style={{ width: (typeof score === 'number' ? score : 0) + '%' }}/></div>
@@ -1644,22 +2486,24 @@ export default function App() {
               </div>
               <p className="skills-progress-note">As barras mostram médias das tentativas registradas por habilidade. Uma área sem dados ainda não foi avaliada; isso não significa desempenho zero.</p>
             </section>
-            <section className="learning-rhythm-panel">
-              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 7 dias</h2></div><span className="muted-caption">Dias com sessões registradas</span></div>
-              <div className="learning-week-grid">
-                {Array.from({ length: 7 }, (_, index) => {
+            <section className="learning-rhythm-panel learning-heatmap-panel">
+              <div className="section-heading"><div><span className="eyebrow">CONSISTÊNCIA</span><h2>Seu ritmo nos últimos 30 dias</h2></div><span className="muted-caption">Minutos ativos e revisões registradas</span></div>
+              <div className="learning-heatmap-grid" role="group" aria-label="Calendário de estudo dos últimos 30 dias">
+                {Array.from({ length: 30 }, (_, index) => {
                   const date = new Date()
                   date.setHours(0, 0, 0, 0)
-                  date.setDate(date.getDate() - (6 - index))
-                  const active = sessions.some(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
-                  return <div className={active ? 'learning-day active' : 'learning-day'} key={date.toISOString()}>
-                    <small>{date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</small>
-                    <strong>{date.getDate()}</strong>
-                    <i>{active ? <Check size={13}/> : null}</i>
+                  date.setDate(date.getDate() - (29 - index))
+                  const daySessions = sessions.filter(session => session.completed_at && new Date(session.completed_at).toDateString() === date.toDateString())
+                  const minutes = Math.round(daySessions.reduce((sum, session) => sum + (session.duration_seconds || 0), 0) / 60)
+                  const reviews = learningReviewItems.filter(item => item.last_reviewed_at && new Date(item.last_reviewed_at).toDateString() === date.toDateString()).length
+                  const intensity = minutes >= 30 ? 4 : minutes >= 15 ? 3 : minutes >= 5 ? 2 : minutes > 0 ? 1 : 0
+                  return <div className={`learning-heatmap-day intensity-${intensity}`} key={date.toISOString()} title={`${date.toLocaleDateString('pt-BR')}: ${minutes} min ativos, ${reviews} revisões`} aria-label={`${date.toLocaleDateString('pt-BR')}: ${minutes} minutos e ${reviews} revisões`}>
+                    <span>{minutes > 0 ? minutes + 'm' : ''}</span>
                   </div>
                 })}
               </div>
-              <p className="learning-rhythm-note">O calendário usa sessões com data registrada. Um dia sem marcação significa que não há sessão registrada, não que você necessariamente deixou de estudar.</p>
+              <div className="learning-heatmap-legend"><span>Menos</span>{[0,1,2,3,4].map(level=><i key={level} className={`intensity-${level}`}/>)}<span>Mais</span></div>
+              <p className="learning-rhythm-note">Cada quadrado usa os segundos ativos registrados, sem estimar tempo em abas ocultas ou períodos de inatividade. Revisões contam quando o aluno avalia um item da fila SRS.</p>
             </section>
             <section className="achievement-center">
               <div className="section-heading"><div><span className="eyebrow">CONQUISTAS</span><h2>Marcos da sua aprendizagem</h2></div><span className="muted-caption">Competências e consistência</span></div>
@@ -1669,6 +2513,10 @@ export default function App() {
                   { icon: Flame, title: 'Criando ritmo', detail: 'Registre 5 sessões de estudo', unlocked: completedSessions >= 5, current: Math.min(completedSessions, 5), target: 5 },
                   { icon: Bookmark, title: 'Caderno vivo', detail: 'Salve 5 palavras ou expressões', unlocked: words.length >= 5, current: Math.min(words.length, 5), target: 5 },
                   { icon: Trophy, title: 'Consistência', detail: 'Alcance média de 70% nas tentativas', unlocked: averageScore !== null && averageScore >= 70, current: averageScore ?? 0, target: 70 },
+                  { icon: Headphones, title: 'Ouvido atento', detail: 'Conclua 10 exercícios de escuta', unlocked: recentAttempts.filter(item => item.skill === 'listening').length >= 10, current: recentAttempts.filter(item => item.skill === 'listening').length, target: 10 },
+                  { icon: Mic, title: 'Voz ativa', detail: 'Registre 10 respostas em inglês', unlocked: recentAttempts.filter(item => item.skill === 'speaking').length >= 10, current: recentAttempts.filter(item => item.skill === 'speaking').length, target: 10 },
+                  { icon: RotateCcw, title: 'Memória em dia', detail: 'Conclua 10 revisões espaçadas', unlocked: sessions.filter(item => item.activity_type === 'vocabulary').length >= 10, current: sessions.filter(item => item.activity_type === 'vocabulary').length, target: 10 },
+                  { icon: Target, title: 'Aplicação real', detail: 'Crie 5 respostas originais nas aulas', unlocked: recentAttempts.filter(item => item.activity_type === 'real_life_application').length >= 5, current: recentAttempts.filter(item => item.activity_type === 'real_life_application').length, target: 5 },
                 ].map(achievement => {
                   const Icon = achievement.icon
                   const progress = Math.min(100, Math.round(achievement.current / achievement.target * 100))
@@ -1682,18 +2530,38 @@ export default function App() {
               </div>
               <p className="achievement-note">As conquistas usam somente sessões, palavras e notas registradas no aplicativo. Elas não equivalem a certificados de proficiência.</p>
             </section>
+            <section className="weekly-challenge-panel">
+              <div><span className="eyebrow">DESAFIO DA SEMANA</span><h2>Escute, responda e aplique.</h2><p>Complete uma atividade de escuta, uma resposta falada e uma aplicação escrita. O objetivo é transferir o conteúdo para uma situação real.</p></div>
+              <div className="weekly-challenge-progress"><span>{weeklyChallengeProgress}/3 etapas concluídas</span><div><i style={{width: (weeklyChallengeProgress / 3 * 100) + '%'}}/></div></div>
+              <button className="button primary" onClick={() => setPage('learn')}>Continuar desafio <ArrowRight size={15}/></button>
+            </section>
             <article className="history-card"><div className="section-heading"><div><span className="eyebrow">ATIVIDADE RECENTE</span><h2>Seu histórico</h2></div>{cloudLoading && <span className="muted-caption">Sincronizando…</span>}</div>{sessions.length ? sessions.slice(0,12).map((session,index) => <div className="history-row" key={session.id || index}><span className="history-icon"><CheckCircle2 size={17}/></span><div><strong>{session.activity_type === 'speaking' ? 'Prática de fala' : session.activity_type === 'writing' ? 'Prática de escrita' : session.activity_type === 'lesson' ? 'Atividade guiada' : 'Sessão de estudo'}</strong><small>{session.completed_at ? new Date(session.completed_at).toLocaleDateString('pt-BR') : 'Registrada nesta sessão'}</small></div><span>{Math.round(session.duration_seconds / 60)} min</span>{session.score !== null && <b>{Math.round(session.score)}%</b>}</div>) : <div className="empty-state"><Activity size={26}/><strong>Seu histórico começa com a prática.</strong><p>Conclua uma atividade para começar a construir seu histórico neste aparelho.</p><button className="button primary" onClick={() => setPage('learn')}>Fazer primeira atividade <ArrowRight size={15}/></button></div>}</article>
           </section>}
         </main>
 
-        <footer className="app-footer"><span>FALA ENGLISH</span><span>Prática com intenção. Progresso com evidência.</span></footer>
+        <footer className="app-footer"><span>FALA ENGLISH</span><span>Prática com intenção. Progresso com evidência.</span><button className="tour-replay-button" onClick={() => setAppTourStep(0)}>Conhecer o FALA</button></footer>
       </div>
 
-      <nav className="mobile-dock" aria-label="Navegação no celular">
-        {primaryNavItems.slice(0,4).map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.id === 'home' ? 'Início' : item.id === 'learn' ? 'Aprender' : item.id === 'lumi' ? 'Lumi' : 'Falar'}</span></button> })}
-        <button className={mobileMore ? 'active' : ''} onClick={() => setMobileMore(value => !value)}><MoreHorizontal size={19}/><span>Mais</span></button>
+      {appTourStep !== null && <div className="app-tour-backdrop">
+        <section className="app-tour-dialog" role="dialog" aria-modal="true" aria-labelledby="app-tour-title">
+          <div className="app-tour-progress"><span>CONHEÇA O FALA · {appTourStep + 1}/{appTourSteps.length}</span><div>{appTourSteps.map((step,index) => <i key={step.title} className={index <= appTourStep ? 'active' : ''}/>)}</div></div>
+          <span className="eyebrow">GUIA RÁPIDO</span><h2 id="app-tour-title">{appTourSteps[appTourStep].title}</h2><p>{appTourSteps[appTourStep].description}</p>
+          <div className="app-tour-actions">
+            <button className="button ghost" onClick={() => { setAppTourStep(null); try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ } }}>Pular tour</button>
+            <button className="button primary" onClick={() => {
+              if (appTourStep >= appTourSteps.length - 1) {
+                setAppTourStep(null)
+                try { window.localStorage.setItem('fala-app-tour-complete-v1', 'true') } catch { /* tour is optional */ }
+              } else setAppTourStep(step => (step ?? 0) + 1)
+            }}>{appTourStep >= appTourSteps.length - 1 ? 'Concluir tour' : 'Próximo'} <ArrowRight size={15}/></button>
+          </div>
+        </section>
+      </div>}
+      <nav className="mobile-dock" aria-label="Navegação principal no celular">
+        {primaryNavItems.map(item => { const Icon = item.icon; return <button key={item.id} className={page === item.id ? 'active' : ''} aria-current={page === item.id ? 'page' : undefined} onClick={() => setPage(item.id)}><Icon size={19}/><span>{item.label}</span></button> })}
+        <button className={mobileMore ? 'active' : ''} aria-expanded={mobileMore} onClick={() => setMobileMore(value => !value)}><MoreHorizontal size={19}/><span>Mais</span></button>
       </nav>
-      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{toolNavItems.concat(primaryNavItems.slice(4)).map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
+      {mobileMore && <div className="mobile-more-backdrop" onClick={() => setMobileMore(false)}><div className="mobile-more-sheet" onClick={event => event.stopPropagation()}><div className="sheet-heading"><strong>Mais ferramentas</strong><button onClick={() => setMobileMore(false)}><X size={18}/></button></div>{toolNavItems.map(item => <button key={item.id} onClick={() => { setPage(item.id); setMobileMore(false) }}>{item.label}<ChevronRight size={16}/></button>)}<div className="mobile-more-divider"/><div className="mobile-more-actions"><button className="mobile-more-action" onClick={() => setTheme(value => value === 'light' ? 'dark' : 'light')}><span className="mobile-more-action-icon">{theme === 'light' ? <Moon size={18}/> : <Sun size={18}/>}</span><span>{theme === 'light' ? 'Ativar tema escuro' : 'Ativar tema claro'}</span></button><button className="mobile-more-action" onClick={() => { setPage('profile'); setMobileMore(false) }}><span className="mobile-more-action-icon">{profilePhoto ? <img src={profilePhoto} alt=""/> : <CircleUserRound size={18}/>}</span><span>Meu perfil</span></button>{user ? <button className="mobile-more-action" onClick={() => { setMobileMore(false); void signOut() }}><span className="mobile-more-action-icon"><LogOut size={18}/></span><span>Sair da conta</span></button> : <button className="mobile-more-action" onClick={() => { setAuthMode('signin'); setAuthOpen(true); setAuthMessage(''); setMobileMore(false) }}><span className="mobile-more-action-icon"><LogIn size={18}/></span><span>Entrar na conta</span></button>}</div></div></div>}
 
       {authOpen && <div className="modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) setAuthOpen(false) }}><section className="dialog-card auth-dialog"><button className="dialog-close" onClick={() => setAuthOpen(false)} aria-label="Fechar"><X size={18}/></button><div className="dialog-brand"><img className="dialog-brand-icon" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" aria-hidden="true" /><strong>FALA <span>ENGLISH</span></strong></div><span className="eyebrow">SUA CONTA</span><h2>{authMode === 'signup' ? 'Crie sua conta.' : authMode === 'reset' ? 'Recuperar acesso.' : 'Continue sua jornada.'}</h2><p>{authMode === 'signup' ? 'Salve seu progresso e tenha seu espaço disponível em outros dispositivos.' : authMode === 'reset' ? 'Informe seu e-mail para receber o link de recuperação.' : 'Entre para sincronizar seus dados e usar a Lumi com IA.'}</p><form onSubmit={submitAuth}><label>E-mail<input type="email" value={authEmail} onChange={event => setAuthEmail(event.target.value)} placeholder="voce@email.com" required autoComplete="email"/></label>{authMode !== 'reset' && <label>Senha<input type="password" value={authPassword} onChange={event => setAuthPassword(event.target.value)} placeholder="Mínimo de 8 caracteres" minLength={8} required autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}/></label>}<button className="button primary dialog-submit" type="submit" disabled={authBusy}>{authBusy ? 'Processando…' : authMode === 'signup' ? 'Criar conta' : authMode === 'reset' ? 'Enviar link de recuperação' : 'Entrar'} <ArrowRight size={16}/></button></form>{authMessage && <p className="dialog-message">{authMessage}</p>}<div className="auth-switch">{authMode === 'signin' ? <><button onClick={() => { setAuthMode('signup'); setAuthMessage('') }}>Criar uma conta</button><button onClick={() => { setAuthMode('reset'); setAuthMessage('') }}>Esqueci minha senha</button></> : <button onClick={() => { setAuthMode('signin'); setAuthMessage('') }}>Voltar para entrar</button>}</div><small className="privacy-note"><span><CheckCircle2 size={14}/></span> O modo de demonstração continua disponível sem cadastro. Seus dados sincronizados ficam protegidos pela conta e pelas políticas do Supabase.</small></section></div>}
 
