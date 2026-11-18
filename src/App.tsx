@@ -352,6 +352,9 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !user) {
       setCloudLoading(false)
+      setCourseProgressLoaded(true)
+      setCourseProgress(readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+      setLearningReviewItems(readLocal<LearningReviewItem[]>('fala-learning-review-v1', []))
       setSessions(readLocal(SESSIONS_KEY, []))
       setRecentAttempts([])
       setLearnerInsights([])
@@ -362,7 +365,7 @@ export default function App() {
     setCloudLoading(true)
     void (async () => {
       try {
-        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult, attemptsResult, insightsResult] = await Promise.all([
+        const [profileResult, vocabularyResult, sessionsResult, messagesResult, trackProgressResult, learningPlanResult, attemptsResult, insightsResult, courseProgressResult, reviewItemsResult] = await Promise.all([
           supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('vocabulary_items').select('term,meaning,example_sentence,next_review_at,review_interval_days,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
           supabase.from('learning_sessions').select('id,activity_type,duration_seconds,score,completed_at').eq('user_id', user.id).order('completed_at', { ascending: false }).limit(100),
@@ -371,6 +374,8 @@ export default function App() {
           supabase.from('learning_plans').select('plan').eq('user_id', user.id).maybeSingle(),
           supabase.from('activity_attempts').select('id,activity_type,skill,prompt,learner_answer,correction,score,attempted_at').eq('user_id', user.id).order('attempted_at', { ascending: false }).limit(20),
           supabase.from('learner_insights').select('skill,observation,recommendation,confidence').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5),
+          supabase.from('course_progress').select('*').eq('user_id', user.id).eq('course_id', 'core-english').maybeSingle(),
+          supabase.from('learning_review_items').select('*').eq('user_id', user.id).eq('status', 'active').order('next_review_at', { ascending: true }).limit(100),
         ])
         if (!active) return
         if (profileResult.data) {
@@ -435,13 +440,35 @@ export default function App() {
           setTrackProgress(restored)
           try { window.localStorage.setItem(TRACK_PROGRESS_KEY, JSON.stringify(restored)) } catch { /* local cache is optional */ }
         }
+        if (courseProgressResult.data) {
+          const row = courseProgressResult.data
+          const restoredCourse: SavedProgress = {
+            completedLessonIds: Array.isArray(row.completed_lesson_ids) ? row.completed_lesson_ids : [],
+            xp: Number(row.xp) || 0,
+            introDone: !!row.intro_done,
+            activeLessonId: row.active_lesson_id || null,
+            streakDays: Number(row.streak_days) || 0,
+            lastStudyDate: row.last_study_date || null,
+          }
+          setCourseProgress(restoredCourse)
+          try { window.localStorage.setItem('fala-course-progress-v1', JSON.stringify(restoredCourse)) } catch { /* cloud remains source of truth */ }
+        } else {
+          setCourseProgress(readLocal<SavedProgress | null>('fala-course-progress-v1', null))
+        }
+        if (reviewItemsResult.data) {
+          setLearningReviewItems(reviewItemsResult.data as LearningReviewItem[])
+          try { window.localStorage.setItem('fala-learning-review-v1', JSON.stringify(reviewItemsResult.data)) } catch { /* cloud remains source of truth */ }
+        }
         const savedPlan = learningPlanResult.data?.plan as LearningPlan | undefined
         setLearningPlan(savedPlan?.headline ? savedPlan : null)
       } catch (error) {
         console.error('FALA account sync failed', error)
         setToast('Não foi possível carregar todos os dados sincronizados.')
       } finally {
-        if (active) setCloudLoading(false)
+        if (active) {
+          setCloudLoading(false)
+          setCourseProgressLoaded(true)
+        }
       }
     })()
     return () => { active = false }
